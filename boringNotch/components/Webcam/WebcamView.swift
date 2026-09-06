@@ -27,9 +27,6 @@ private let maximumPreviewScale: CGFloat = 3
 private let mirrorSlotSize = CGSize(width: 215, height: 130)
 /// Horizontal travel, in points, that covers the whole zoom range.
 private let zoomDragTravel: CGFloat = 150
-/// Resistance applied to drag past either end of the range, so the gesture
-/// slows to a stop instead of hitting an invisible wall.
-private let zoomOvershootResistance: CGFloat = 0.2
 private let zoomIndicatorLinger: Duration = .milliseconds(900)
 
 struct CameraPreviewView: View {
@@ -138,34 +135,21 @@ struct CameraPreviewView: View {
                 let range = maximumZoom - minimumZoom
                 // Inverted: dragging left pulls the ruler's marker to the
                 // right (zooms in), like pinching the image toward you.
-                zoom = resisted(zoomAtDragStart - value.translation.width / zoomDragTravel * range)
+                // Hard clamped, so the ruler cannot travel past either end.
+                zoom = min(max(zoomAtDragStart - value.translation.width / zoomDragTravel * range,
+                               minimumZoom), maximumZoom)
                 revealZoomIndicator()
             }
             .onEnded { _ in
                 isDraggingZoom = false
                 guard webcamManager.isSessionRunning else { return }
 
-                zoomAtDragStart = min(max(zoom, minimumZoom), maximumZoom)
-                if zoom != zoomAtDragStart {
-                    withAnimation(.spring(duration: 0.3, bounce: 0.12)) {
-                        zoom = zoomAtDragStart
-                    }
-                }
+                zoomAtDragStart = zoom
                 // Stays up while the pointer is still over the preview.
                 if !isHoveringPreview {
                     scheduleZoomIndicatorHide()
                 }
             }
-    }
-
-    private func resisted(_ value: CGFloat) -> CGFloat {
-        if value > maximumZoom {
-            return maximumZoom + (value - maximumZoom) * zoomOvershootResistance
-        }
-        if value < minimumZoom {
-            return minimumZoom - (minimumZoom - value) * zoomOvershootResistance
-        }
-        return value
     }
 
     private func revealZoomIndicator() {
@@ -282,38 +266,78 @@ private struct ZoomIndicator: View {
     }
 }
 
+/// Hosts the capture preview as a sublayer of a clipping container rather than
+/// as the view's own backing layer. Scaling a backing layer would scale the
+/// whole view; scaling a clipped sublayer crops into the video instead, and the
+/// compositor samples the full-resolution frame while doing it.
+///
+/// Sizing happens on every frame change rather than only when SwiftUI pushes
+/// new state, because the first state update lands before the view has been
+/// given a real size — leaving the layer at zero, and the mirror black, until
+/// something else happened to trigger another update.
+final class CameraPreviewContainerView: NSView {
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var scale: CGFloat = 1
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        let container = CALayer()
+        container.masksToBounds = true
+        layer = container
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(previewLayer newLayer: AVCaptureVideoPreviewLayer, scale newScale: CGFloat) {
+        if previewLayer !== newLayer {
+            previewLayer?.removeFromSuperlayer()
+            newLayer.videoGravity = .resizeAspectFill
+            layer?.addSublayer(newLayer)
+            previewLayer = newLayer
+        }
+        scale = newScale
+        layOutPreviewLayer()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        layOutPreviewLayer()
+    }
+
+    override func layout() {
+        super.layout()
+        layOutPreviewLayer()
+    }
+
+    private func layOutPreviewLayer() {
+        guard let previewLayer, bounds.width > 0, bounds.height > 0 else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        previewLayer.bounds = CGRect(origin: .zero, size: bounds.size)
+        previewLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        // Negative x keeps the mirror flip that the view used to apply itself.
+        previewLayer.transform = CATransform3DMakeScale(-scale, scale, 1)
+        CATransaction.commit()
+    }
+}
+
 struct CameraPreviewLayerView: NSViewRepresentable {
     let previewLayer: AVCaptureVideoPreviewLayer
     var scale: CGFloat = 1
 
-    /// The preview layer is a sublayer of a clipping container rather than the
-    /// view's own backing layer. Scaling a backing layer would scale the whole
-    /// view; scaling a clipped sublayer crops into the video instead, and the
-    /// compositor samples the full-resolution frame while doing it.
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.wantsLayer = true
-
-        let container = CALayer()
-        container.masksToBounds = true
-        view.layer = container
-
-        previewLayer.videoGravity = .resizeAspectFill
-        container.addSublayer(previewLayer)
-
+    func makeNSView(context: Context) -> CameraPreviewContainerView {
+        let view = CameraPreviewContainerView()
+        view.configure(previewLayer: previewLayer, scale: scale)
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        previewLayer.bounds = CGRect(origin: .zero, size: nsView.bounds.size)
-        previewLayer.position = CGPoint(x: nsView.bounds.midX, y: nsView.bounds.midY)
-        // Negative x keeps the mirror flip that the view used to apply itself.
-        previewLayer.transform = CATransform3DMakeScale(-scale, scale, 1)
-
-        CATransaction.commit()
+    func updateNSView(_ nsView: CameraPreviewContainerView, context: Context) {
+        nsView.configure(previewLayer: previewLayer, scale: scale)
     }
 }
 
