@@ -10,7 +10,13 @@ import Defaults
 import SwiftUI
 
 private let minimumZoom: CGFloat = 0.5
-private let maximumZoom: CGFloat = 4
+private let maximumZoom: CGFloat = 3
+/// The mirror's on-screen box, fixed regardless of zoom, mirror shape, or the
+/// connected camera's own aspect ratio — like Photo Booth's window, which
+/// never resizes itself; only the picture inside it moves and crops.
+/// Matches CalendarView's own frame so swapping between the two causes no
+/// layout jump.
+private let mirrorSlotSize = CGSize(width: 215, height: 130)
 /// Horizontal travel, in points, that covers the whole zoom range.
 private let zoomDragTravel: CGFloat = 150
 /// Resistance applied to drag past either end of the range, so the gesture
@@ -31,78 +37,77 @@ struct CameraPreviewView: View {
     @State private var zoomIndicatorTask: Task<Void, Never>?
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                if let previewLayer = webcamManager.previewLayer {
-                    CameraPreviewLayerView(previewLayer: previewLayer)
-                        .scaleEffect(x: -zoom, y: zoom)
-                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .opacity(webcamManager.isSessionRunning ? 1 : 0)
-                }
+        ZStack {
+            if let previewLayer = webcamManager.previewLayer {
+                CameraPreviewLayerView(previewLayer: previewLayer)
+                    .scaleEffect(x: -zoom, y: zoom)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                    .frame(width: contentSize.width, height: contentSize.height)
+                    .opacity(webcamManager.isSessionRunning ? 1 : 0)
+            }
 
-                if !webcamManager.isSessionRunning {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(Color(red: 20/255, green: 20/255, blue: 20/255))
-                            .strokeBorder(.white.opacity(0.04), lineWidth: 1)
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                        VStack(spacing: 8) {
-                            Image(systemName: webcamManager.authorizationStatus == .denied ? "exclamationmark.triangle" : "web.camera")
-                                .foregroundStyle(.gray)
-                                .font(.system(size: min(geometry.size.width, geometry.size.height) / 3.5))
-                            Text(webcamManager.authorizationStatus == .denied ? "Access Denied" : "Mirror")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                        }
+            if !webcamManager.isSessionRunning {
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(Color(red: 20/255, green: 20/255, blue: 20/255))
+                        .strokeBorder(.white.opacity(0.04), lineWidth: 1)
+                        .frame(width: contentSize.width, height: contentSize.height)
+                    VStack(spacing: 8) {
+                        Image(systemName: webcamManager.authorizationStatus == .denied ? "exclamationmark.triangle" : "web.camera")
+                            .foregroundStyle(.gray)
+                            .font(.system(size: min(contentSize.width, contentSize.height) / 3.5))
+                        Text(webcamManager.authorizationStatus == .denied ? "Access Denied" : "Mirror")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
                     }
                 }
-                if webcamManager.isSessionRunning {
-                    ZoomIndicator(zoom: zoom, minimumZoom: minimumUsableZoom)
-                        .padding(.bottom, geometry.size.height * 0.08)
-                        .frame(width: geometry.size.width, height: geometry.size.height,
-                               alignment: .bottom)
-                        .opacity(isShowingZoomIndicator ? 1 : 0)
-                        .scaleEffect(isShowingZoomIndicator || reduceMotion ? 1 : 0.95)
-                        .allowsHitTesting(false)
-                }
             }
-            .onTapGesture {
-                handleCameraTap()
-            }
-            // Only attached once there is a picture to zoom, so it can never
-            // swallow the click that turns the mirror on.
-            .simultaneousGesture(zoomDrag, isEnabled: webcamManager.isSessionRunning)
-            .onHover { isHovering in
-                isHoveringPreview = isHovering
-                guard webcamManager.isSessionRunning else { return }
-                // Surfaced on hover so the drag affordance is discoverable.
-                if isHovering {
-                    revealZoomIndicator()
-                } else if !isDraggingZoom {
-                    scheduleZoomIndicatorHide()
-                }
-            }
-            .onChange(of: minimumUsableZoom) { _, floor in
-                // A camera with a different aspect ratio can raise the floor.
-                if zoom < floor {
-                    zoom = floor
-                    zoomAtDragStart = floor
-                }
-            }
-            .onDisappear {
-                zoomIndicatorTask?.cancel()
-                webcamManager.stopSession()
+            if webcamManager.isSessionRunning {
+                ZoomIndicator(zoom: zoom, minimumZoom: minimumUsableZoom)
+                    .padding(.bottom, contentSize.height * 0.08)
+                    .frame(width: contentSize.width, height: contentSize.height, alignment: .bottom)
+                    .opacity(isShowingZoomIndicator ? 1 : 0)
+                    .scaleEffect(isShowingZoomIndicator || reduceMotion ? 1 : 0.95)
+                    .allowsHitTesting(false)
             }
         }
-        .aspectRatio(mirrorAspectRatio, contentMode: .fit)
+        .frame(width: mirrorSlotSize.width, height: mirrorSlotSize.height)
+        .onTapGesture {
+            handleCameraTap()
+        }
+        // Only attached once there is a picture to zoom, so it can never
+        // swallow the click that turns the mirror on.
+        .simultaneousGesture(zoomDrag, isEnabled: webcamManager.isSessionRunning)
+        .onHover { isHovering in
+            isHoveringPreview = isHovering
+            guard webcamManager.isSessionRunning else { return }
+            // Surfaced on hover so the drag affordance is discoverable.
+            if isHovering {
+                revealZoomIndicator()
+            } else if !isDraggingZoom {
+                scheduleZoomIndicatorHide()
+            }
+        }
+        .onChange(of: minimumUsableZoom) { _, floor in
+            // A camera with a different aspect ratio can raise the floor.
+            if zoom < floor {
+                zoom = floor
+                zoomAtDragStart = floor
+            }
+        }
+        .onDisappear {
+            zoomIndicatorTask?.cancel()
+            webcamManager.stopSession()
+        }
     }
 
-    /// Rectangular mirrors are sized to the camera's own aspect ratio, the
-    /// same way Photo Booth shows its preview undistorted and uncropped.
-    /// Circular mirrors stay square, since a circle needs one.
-    private var mirrorAspectRatio: CGFloat {
-        Defaults[.mirrorShape] == .rectangle ? webcamManager.videoAspectRatio : 1
+    /// The rectangular mirror fills the whole slot. The circular one is
+    /// squared off to the slot's shorter side and centered, so it reads as
+    /// an actual circle rather than a stretched oval.
+    private var contentSize: CGSize {
+        guard Defaults[.mirrorShape] == .circle else { return mirrorSlotSize }
+        let side = min(mirrorSlotSize.width, mirrorSlotSize.height)
+        return CGSize(width: side, height: side)
     }
 
     private var cornerRadius: CGFloat {
@@ -111,19 +116,19 @@ struct CameraPreviewView: View {
             : 100
     }
 
-    /// The rectangular mirror's frame already matches the camera's aspect
-    /// ratio, so at zoom 1 the picture fills it with no crop and zooming out
-    /// just letterboxes symmetrically — no floor needed beyond the global
-    /// minimum. The circular mirror stays square while the camera usually
-    /// isn't, so its fill crops one axis at zoom 1; zooming out from there
-    /// is capped at the point where that axis reaches its own edge, past
-    /// which the picture would no longer reach two sides of the circle.
+    /// The box's aspect ratio rarely matches the camera's own, so at zoom 1
+    /// the aspect-fill picture already crops one axis to cover the box.
+    /// Zooming out shrinks that cover toward a plain "contain" fit; going
+    /// past that point would pull the picture off two edges. This is the
+    /// zoom where cover and contain coincide, generalized from the square
+    /// case to the box's actual (possibly non-square) aspect ratio.
     private var minimumUsableZoom: CGFloat {
-        guard Defaults[.mirrorShape] != .rectangle else { return minimumZoom }
         let aspect = webcamManager.videoAspectRatio
-        guard aspect > 0 else { return 1 }
-        let longOverShort = max(aspect, 1 / aspect)
-        return max(minimumZoom, 1 / longOverShort)
+        guard aspect > 0 else { return minimumZoom }
+        let boxAspect = contentSize.width / contentSize.height
+        let ratio = boxAspect / aspect
+        let floor = min(ratio, 1 / ratio)
+        return max(minimumZoom, floor)
     }
 
     /// Zoom tracks the pointer one-to-one while dragging, so it is deliberately
