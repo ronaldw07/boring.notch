@@ -17,10 +17,12 @@ let visualizerBandCount = 4
 private let fftSize = 1024
 private let halfFFTSize = fftSize / 2
 private let minimumBandFrequency: Float = 40
-private let maximumBandFrequency: Float = 8000
-private let noiseFloorDecibels: Float = -55
-private let peakDecibels: Float = -10
-private let releaseCoefficient: Float = 0.80
+private let maximumBandFrequency: Float = 12000
+private let noiseFloorDecibels: Float = -70
+private let minimumDynamicRange: Float = 25
+private let tiltDecibelsPerOctave: Float = 4.5
+private let levelReleaseTime: Float = 0.12
+private let referenceReleaseTime: Float = 2.0
 private let publishInterval: CFAbsoluteTime = 1.0 / 30.0
 private let fallbackSampleRate: Double = 48000
 
@@ -33,58 +35,78 @@ private final class SpectrumAnalyzer {
     private var pending: [Float] = []
     private var smoothed: [Float]
     private var bandRanges: [Range<Int>] = []
+    private var bandTilts: [Float]
+    private var referenceDecibels: Float = noiseFloorDecibels + minimumDynamicRange
     private var sampleRate: Double = fallbackSampleRate
+    private var lastAnalysis: CFAbsoluteTime = 0
     private var lastEmission: CFAbsoluteTime = 0
 
     init(bandCount: Int) {
         self.bandCount = bandCount
         smoothed = [Float](repeating: 0, count: bandCount)
+        bandTilts = [Float](repeating: 0, count: bandCount)
         log2n = vDSP_Length(log2(Float(fftSize)))
         setup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))!
         vDSP_hann_window(&window, vDSP_Length(fftSize), Int32(vDSP_HANN_NORM))
         pending.reserveCapacity(fftSize * 2)
-        updateBandRanges()
+        updateBands()
     }
 
     deinit {
         vDSP_destroy_fftsetup(setup)
     }
 
-    /// Returns band levels once a full frame has accumulated and the publish
-    /// interval has elapsed, otherwise nil.
+    /// Keeps a sliding window of the most recent samples so successive FFTs
+    /// overlap, then returns band levels no faster than the publish interval.
     func consume(_ samples: UnsafeBufferPointer<Float>, sampleRate rate: Double) -> [Float]? {
         if rate > 0, rate != sampleRate {
             sampleRate = rate
-            updateBandRanges()
+            updateBands()
         }
 
         pending.append(contentsOf: samples)
-        guard pending.count >= fftSize else { return nil }
-
-        let frame = Array(pending.suffix(fftSize))
-        pending.removeAll(keepingCapacity: true)
-
-        let levels = analyze(frame)
+        if pending.count > fftSize {
+            pending.removeFirst(pending.count - fftSize)
+        }
+        guard pending.count == fftSize else { return nil }
 
         let now = CFAbsoluteTimeGetCurrent()
+        let elapsed = lastAnalysis == 0
+            ? Float(publishInterval)
+            : Float(min(now - lastAnalysis, 0.25))
+        lastAnalysis = now
+
+        let levels = analyze(pending, elapsed: elapsed)
+
         guard now - lastEmission >= publishInterval else { return nil }
         lastEmission = now
         return levels
     }
 
-    private func updateBandRanges() {
+    private func updateBands() {
         let binWidth = Float(sampleRate) / Float(fftSize)
-        let ratio = maximumBandFrequency / minimumBandFrequency
-        bandRanges = (0 ..< bandCount).map { index in
+        let ceiling = min(maximumBandFrequency, Float(sampleRate) / 2)
+        let ratio = ceiling / minimumBandFrequency
+
+        var ranges: [Range<Int>] = []
+        var tilts: [Float] = []
+        for index in 0 ..< bandCount {
             let lower = minimumBandFrequency * pow(ratio, Float(index) / Float(bandCount))
             let upper = minimumBandFrequency * pow(ratio, Float(index + 1) / Float(bandCount))
             let start = max(1, Int(lower / binWidth))
             let end = min(halfFFTSize, max(start + 1, Int(upper / binWidth)))
-            return start ..< end
+            ranges.append(start ..< end)
+
+            // Music sheds roughly 4.5 dB per octave as frequency rises, so the
+            // upper bands would sit pinned to the floor without this tilt.
+            let center = sqrt(lower * upper)
+            tilts.append(tiltDecibelsPerOctave * log2(center / minimumBandFrequency))
         }
+        bandRanges = ranges
+        bandTilts = tilts
     }
 
-    private func analyze(_ frame: [Float]) -> [Float] {
+    private func analyze(_ frame: [Float], elapsed: Float) -> [Float] {
         var windowed = [Float](repeating: 0, count: fftSize)
         vDSP_vmul(frame, 1, window, 1, &windowed, 1, vDSP_Length(fftSize))
 
@@ -111,19 +133,34 @@ private final class SpectrumAnalyzer {
         var scale = 1 / Float(2 * fftSize)
         vDSP_vsmul(magnitudes, 1, &scale, &magnitudes, 1, vDSP_Length(halfFFTSize))
 
-        return bandRanges.enumerated().map { index, range in
-            var mean: Float = 0
+        var loudest = noiseFloorDecibels
+        var bandDecibels = [Float](repeating: 0, count: bandCount)
+        for (index, range) in bandRanges.enumerated() {
+            var rootMeanSquare: Float = 0
             magnitudes.withUnsafeBufferPointer { pointer in
-                vDSP_meanv(pointer.baseAddress! + range.lowerBound, 1, &mean, vDSP_Length(range.count))
+                vDSP_rmsqv(pointer.baseAddress! + range.lowerBound, 1,
+                           &rootMeanSquare, vDSP_Length(range.count))
             }
-            let decibels = 20 * log10(max(mean, .leastNormalMagnitude))
-            let normalized = (decibels - noiseFloorDecibels) / (peakDecibels - noiseFloorDecibels)
-            let level = min(max(normalized, 0), 1)
+            let value = 20 * log10(max(rootMeanSquare, .leastNormalMagnitude)) + bandTilts[index]
+            bandDecibels[index] = value
+            loudest = max(loudest, value)
+        }
 
+        // Track the loudest recent band so a quiet track and a heavily mastered
+        // one both use the full height of the bars.
+        let referenceDecay = exp(-elapsed / referenceReleaseTime)
+        referenceDecibels = loudest > referenceDecibels
+            ? loudest
+            : referenceDecibels * referenceDecay + loudest * (1 - referenceDecay)
+        let span = max(referenceDecibels - noiseFloorDecibels, minimumDynamicRange)
+
+        let levelDecay = exp(-elapsed / levelReleaseTime)
+        return bandDecibels.enumerated().map { index, value in
+            let level = min(max((value - noiseFloorDecibels) / span, 0), 1)
             let previous = smoothed[index]
             let next = level > previous
                 ? level
-                : previous * releaseCoefficient + level * (1 - releaseCoefficient)
+                : previous * levelDecay + level * (1 - levelDecay)
             smoothed[index] = next
             return next
         }
