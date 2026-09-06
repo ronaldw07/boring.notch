@@ -9,7 +9,7 @@ import AVFoundation
 import Defaults
 import SwiftUI
 
-private let minimumZoom: CGFloat = 1
+private let minimumZoom: CGFloat = 0.5
 private let maximumZoom: CGFloat = 4
 /// Horizontal travel, in points, that covers the whole zoom range.
 private let zoomDragTravel: CGFloat = 150
@@ -23,8 +23,8 @@ struct CameraPreviewView: View {
     @ObservedObject var webcamManager: WebcamManager
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var zoom: CGFloat = minimumZoom
-    @State private var zoomAtDragStart: CGFloat = minimumZoom
+    @State private var zoom: CGFloat = 1
+    @State private var zoomAtDragStart: CGFloat = 1
     @State private var isShowingZoomIndicator: Bool = false
     @State private var isHoveringPreview: Bool = false
     @State private var isDraggingZoom: Bool = false
@@ -58,7 +58,7 @@ struct CameraPreviewView: View {
                     }
                 }
                 if webcamManager.isSessionRunning {
-                    ZoomIndicator(zoom: zoom)
+                    ZoomIndicator(zoom: zoom, minimumZoom: minimumUsableZoom)
                         .padding(.bottom, geometry.size.width * 0.08)
                         .frame(width: geometry.size.width, height: geometry.size.width,
                                alignment: .bottom)
@@ -83,12 +83,29 @@ struct CameraPreviewView: View {
                     scheduleZoomIndicatorHide()
                 }
             }
+            .onChange(of: minimumUsableZoom) { _, floor in
+                // A camera with a different aspect ratio can raise the floor.
+                if zoom < floor {
+                    zoom = floor
+                    zoomAtDragStart = floor
+                }
+            }
             .onDisappear {
                 zoomIndicatorTask?.cancel()
                 webcamManager.stopSession()
             }
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+
+    /// A square preview showing an aspect-fill picture can only zoom out until
+    /// the short side of the frame reaches the edge; past that the corners
+    /// would be empty. Never go below `minimumZoom` either.
+    private var minimumUsableZoom: CGFloat {
+        let aspect = webcamManager.videoAspectRatio
+        guard aspect > 0 else { return 1 }
+        let longOverShort = max(aspect, 1 / aspect)
+        return max(minimumZoom, 1 / longOverShort)
     }
 
     /// Zoom tracks the pointer one-to-one while dragging, so it is deliberately
@@ -99,7 +116,7 @@ struct CameraPreviewView: View {
                 guard webcamManager.isSessionRunning else { return }
 
                 isDraggingZoom = true
-                let range = maximumZoom - minimumZoom
+                let range = maximumZoom - minimumUsableZoom
                 zoom = resisted(zoomAtDragStart + value.translation.width / zoomDragTravel * range)
                 revealZoomIndicator()
             }
@@ -107,7 +124,7 @@ struct CameraPreviewView: View {
                 isDraggingZoom = false
                 guard webcamManager.isSessionRunning else { return }
 
-                zoomAtDragStart = min(max(zoom, minimumZoom), maximumZoom)
+                zoomAtDragStart = min(max(zoom, minimumUsableZoom), maximumZoom)
                 if zoom != zoomAtDragStart {
                     withAnimation(.spring(duration: 0.3, bounce: 0.12)) {
                         zoom = zoomAtDragStart
@@ -121,11 +138,12 @@ struct CameraPreviewView: View {
     }
 
     private func resisted(_ value: CGFloat) -> CGFloat {
+        let floor = minimumUsableZoom
         if value > maximumZoom {
             return maximumZoom + (value - maximumZoom) * zoomOvershootResistance
         }
-        if value < minimumZoom {
-            return minimumZoom - (minimumZoom - value) * zoomOvershootResistance
+        if value < floor {
+            return floor - (floor - value) * zoomOvershootResistance
         }
         return value
     }
@@ -169,13 +187,22 @@ struct CameraPreviewView: View {
 }
 
 /// Zoom factor pill over a tick ruler, echoing the Continuity Camera control.
+/// The ruler slides under a fixed centre marker as the zoom changes.
 private struct ZoomIndicator: View {
     let zoom: CGFloat
+    let minimumZoom: CGFloat
 
-    private static let tickCount = 21
+    private static let tickCount = 41
+    private static let tickSpacing: CGFloat = 5
+    private static let rulerHeight: CGFloat = 10
+
+    private static var contentWidth: CGFloat {
+        CGFloat(tickCount - 1) * tickSpacing
+    }
 
     private var progress: CGFloat {
         let range = maximumZoom - minimumZoom
+        guard range > 0 else { return 0 }
         return min(max((zoom - minimumZoom) / range, 0), 1)
     }
 
@@ -187,7 +214,7 @@ private struct ZoomIndicator: View {
     }
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .monospacedDigit()
@@ -196,18 +223,40 @@ private struct ZoomIndicator: View {
                 .padding(.vertical, 3)
                 .background(.black.opacity(0.55), in: Capsule())
 
-            HStack(spacing: 0) {
-                ForEach(0 ..< Self.tickCount, id: \.self) { index in
-                    let isMajor = index % 5 == 0
-                    let isReached = CGFloat(index) / CGFloat(Self.tickCount - 1) <= progress
-                    Capsule()
-                        .fill(.white.opacity(isReached ? (isMajor ? 0.95 : 0.7) : 0.25))
-                        .frame(width: 1, height: isMajor ? 7 : 4)
-                        .frame(maxWidth: .infinity)
+            ZStack {
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        ForEach(0 ..< Self.tickCount, id: \.self) { index in
+                            let isMajor = index % 4 == 0
+                            Capsule()
+                                .fill(.white.opacity(isMajor ? 0.9 : 0.45))
+                                .frame(width: 1, height: isMajor ? 8 : 5)
+                                .frame(width: Self.tickSpacing, height: Self.rulerHeight)
+                        }
+                    }
+                    .offset(x: geometry.size.width / 2
+                        - progress * Self.contentWidth
+                        - Self.tickSpacing / 2)
                 }
+                .frame(height: Self.rulerHeight)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .white, location: 0.28),
+                            .init(color: .white, location: 0.72),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+
+                Capsule()
+                    .fill(.yellow)
+                    .frame(width: 1.5, height: Self.rulerHeight)
             }
-            .frame(height: 7)
-            .padding(.horizontal, 10)
+            .frame(height: Self.rulerHeight)
         }
         .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
     }

@@ -35,6 +35,11 @@ class WebcamManager: NSObject, ObservableObject {
         }
     }
 
+    /// Width over height of the active camera format. The mirror uses it to
+    /// work out how far it can zoom out before the square preview stops being
+    /// covered by the picture.
+    @Published var videoAspectRatio: CGFloat = 16.0 / 9.0
+
     private let sessionQueue = DispatchQueue(label: "BoringNotch.WebcamManager.SessionQueue", qos: .userInitiated)
     
     private var isCleaningUp: Bool = false
@@ -197,6 +202,14 @@ class WebcamManager: NSObject, ObservableObject {
                 }
                 
                 NSLog("Using camera: \(videoDevice.localizedName)")
+
+                let dimensions = CMVideoFormatDescriptionGetDimensions(videoDevice.activeFormat.formatDescription)
+                if dimensions.width > 0, dimensions.height > 0 {
+                    let aspect = CGFloat(dimensions.width) / CGFloat(dimensions.height)
+                    DispatchQueue.main.async {
+                        self.videoAspectRatio = aspect
+                    }
+                }
                 
                 // Lock device for configuration
                 try videoDevice.lockForConfiguration()
