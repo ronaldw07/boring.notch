@@ -63,7 +63,7 @@ struct CameraPreviewView: View {
                 }
             }
             if webcamManager.isSessionRunning {
-                ZoomIndicator(zoom: zoom, minimumZoom: minimumUsableZoom)
+                ZoomIndicator(zoom: zoom, minimumZoom: minimumZoom)
                     .padding(.bottom, contentSize.height * 0.08)
                     .frame(width: contentSize.width, height: contentSize.height, alignment: .bottom)
                     .opacity(isShowingZoomIndicator ? 1 : 0)
@@ -88,13 +88,6 @@ struct CameraPreviewView: View {
                 scheduleZoomIndicatorHide()
             }
         }
-        .onChange(of: minimumUsableZoom) { _, floor in
-            // A camera with a different aspect ratio can raise the floor.
-            if zoom < floor {
-                zoom = floor
-                zoomAtDragStart = floor
-            }
-        }
         .onDisappear {
             zoomIndicatorTask?.cancel()
             webcamManager.stopSession()
@@ -116,21 +109,6 @@ struct CameraPreviewView: View {
             : 100
     }
 
-    /// The box's aspect ratio rarely matches the camera's own, so at zoom 1
-    /// the aspect-fill picture already crops one axis to cover the box.
-    /// Zooming out shrinks that cover toward a plain "contain" fit; going
-    /// past that point would pull the picture off two edges. This is the
-    /// zoom where cover and contain coincide, generalized from the square
-    /// case to the box's actual (possibly non-square) aspect ratio.
-    private var minimumUsableZoom: CGFloat {
-        let aspect = webcamManager.videoAspectRatio
-        guard aspect > 0 else { return minimumZoom }
-        let boxAspect = contentSize.width / contentSize.height
-        let ratio = boxAspect / aspect
-        let floor = min(ratio, 1 / ratio)
-        return max(minimumZoom, floor)
-    }
-
     /// Zoom tracks the pointer one-to-one while dragging, so it is deliberately
     /// not animated. Only the settle back into range is.
     private var zoomDrag: some Gesture {
@@ -139,7 +117,7 @@ struct CameraPreviewView: View {
                 guard webcamManager.isSessionRunning else { return }
 
                 isDraggingZoom = true
-                let range = maximumZoom - minimumUsableZoom
+                let range = maximumZoom - minimumZoom
                 // Inverted: dragging left pulls the ruler's marker to the
                 // right (zooms in), like pinching the image toward you.
                 zoom = resisted(zoomAtDragStart - value.translation.width / zoomDragTravel * range)
@@ -149,7 +127,7 @@ struct CameraPreviewView: View {
                 isDraggingZoom = false
                 guard webcamManager.isSessionRunning else { return }
 
-                zoomAtDragStart = min(max(zoom, minimumUsableZoom), maximumZoom)
+                zoomAtDragStart = min(max(zoom, minimumZoom), maximumZoom)
                 if zoom != zoomAtDragStart {
                     withAnimation(.spring(duration: 0.3, bounce: 0.12)) {
                         zoom = zoomAtDragStart
@@ -163,12 +141,11 @@ struct CameraPreviewView: View {
     }
 
     private func resisted(_ value: CGFloat) -> CGFloat {
-        let floor = minimumUsableZoom
         if value > maximumZoom {
             return maximumZoom + (value - maximumZoom) * zoomOvershootResistance
         }
-        if value < floor {
-            return floor - (floor - value) * zoomOvershootResistance
+        if value < minimumZoom {
+            return minimumZoom - (minimumZoom - value) * zoomOvershootResistance
         }
         return value
     }
