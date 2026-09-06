@@ -9,8 +9,16 @@ import AVFoundation
 import Defaults
 import SwiftUI
 
+/// Zoom factors shown on the ruler. These are labels, not scale multipliers:
+/// 0.5x names the widest view the camera can give, the same way iPhone's 0.5x
+/// names a lens rather than half of anything. See `previewScale`.
 private let minimumZoom: CGFloat = 0.5
 private let maximumZoom: CGFloat = 3
+/// What the widest label actually scales the preview layer by. The layer is
+/// already aspect-filling its box at 1.0, so this cannot go below 1 — there is
+/// no more picture out there, only black.
+private let minimumPreviewScale: CGFloat = 1
+private let maximumPreviewScale: CGFloat = 3
 /// The mirror's on-screen box, fixed regardless of zoom, mirror shape, or the
 /// connected camera's own aspect ratio — like Photo Booth's window, which
 /// never resizes itself; only the picture inside it moves and crops.
@@ -29,8 +37,8 @@ struct CameraPreviewView: View {
     @ObservedObject var webcamManager: WebcamManager
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var zoom: CGFloat = 1
-    @State private var zoomAtDragStart: CGFloat = 1
+    @State private var zoom: CGFloat = minimumZoom
+    @State private var zoomAtDragStart: CGFloat = minimumZoom
     @State private var isShowingZoomIndicator: Bool = false
     @State private var isHoveringPreview: Bool = false
     @State private var isDraggingZoom: Bool = false
@@ -39,8 +47,7 @@ struct CameraPreviewView: View {
     var body: some View {
         ZStack {
             if let previewLayer = webcamManager.previewLayer {
-                CameraPreviewLayerView(previewLayer: previewLayer)
-                    .scaleEffect(x: -zoom, y: zoom)
+                CameraPreviewLayerView(previewLayer: previewLayer, scale: previewScale)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     .frame(width: contentSize.width, height: contentSize.height)
                     .opacity(webcamManager.isSessionRunning ? 1 : 0)
@@ -101,6 +108,17 @@ struct CameraPreviewView: View {
         guard Defaults[.mirrorShape] == .circle else { return mirrorSlotSize }
         let side = min(mirrorSlotSize.width, mirrorSlotSize.height)
         return CGSize(width: side, height: side)
+    }
+
+    /// Turns the ruler's label into the factor the video layer is actually
+    /// cropped by. macOS exposes no `videoZoomFactor` on a capture device, and
+    /// an aspect-filling layer is already showing everything the camera has at
+    /// 1.0, so the widest label maps to 1.0 rather than to itself.
+    private var previewScale: CGFloat {
+        let span = maximumZoom - minimumZoom
+        guard span > 0 else { return minimumPreviewScale }
+        let position = (zoom - minimumZoom) / span
+        return minimumPreviewScale + position * (maximumPreviewScale - minimumPreviewScale)
     }
 
     private var cornerRadius: CGFloat {
@@ -266,20 +284,35 @@ private struct ZoomIndicator: View {
 
 struct CameraPreviewLayerView: NSViewRepresentable {
     let previewLayer: AVCaptureVideoPreviewLayer
+    var scale: CGFloat = 1
 
+    /// The preview layer is a sublayer of a clipping container rather than the
+    /// view's own backing layer. Scaling a backing layer would scale the whole
+    /// view; scaling a clipped sublayer crops into the video instead, and the
+    /// compositor samples the full-resolution frame while doing it.
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
-        previewLayer.frame = view.bounds
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer = previewLayer
         view.wantsLayer = true
+
+        let container = CALayer()
+        container.masksToBounds = true
+        view.layer = container
+
+        previewLayer.videoGravity = .resizeAspectFill
+        container.addSublayer(previewLayer)
+
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        previewLayer.frame = nsView.bounds
+
+        previewLayer.bounds = CGRect(origin: .zero, size: nsView.bounds.size)
+        previewLayer.position = CGPoint(x: nsView.bounds.midX, y: nsView.bounds.midY)
+        // Negative x keeps the mirror flip that the view used to apply itself.
+        previewLayer.transform = CATransform3DMakeScale(-scale, scale, 1)
+
         CATransaction.commit()
     }
 }
