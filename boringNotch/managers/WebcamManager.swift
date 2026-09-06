@@ -82,6 +82,43 @@ class WebcamManager: NSObject, ObservableObject {
 
     // MARK: - Camera Management
     
+    /// Single entry point for the mirror control. Resolves authorization first
+    /// and starts straight away once it is granted, so one click is always
+    /// enough. `onDenied` is called on the main thread when access is refused.
+    func toggleSession(onDenied: @escaping () -> Void) {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+
+        DispatchQueue.main.async {
+            self.authorizationStatus = status
+
+            switch status {
+            case .authorized:
+                if self.isSessionRunning {
+                    self.stopSession()
+                } else {
+                    self.startSession()
+                }
+            case .notDetermined:
+                AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        self.authorizationStatus = granted ? .authorized : .denied
+                        if granted {
+                            self.checkCameraAvailability()
+                            self.startSession()
+                        } else {
+                            onDenied()
+                        }
+                    }
+                }
+            case .denied, .restricted:
+                onDenied()
+            @unknown default:
+                break
+            }
+        }
+    }
+
     /// Checks current authorization status and requests access if needed
     func checkAndRequestVideoAuthorization() {
         let status = AVCaptureDevice.authorizationStatus(for: .video)

@@ -22,9 +22,6 @@ struct CameraPreviewView: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject var webcamManager: WebcamManager
 
-    // Track if authorization request is in progress to avoid multiple requests
-    @State private var isRequestingAuthorization: Bool = false
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var zoom: CGFloat = minimumZoom
     @State private var zoomAtDragStart: CGFloat = minimumZoom
@@ -73,7 +70,9 @@ struct CameraPreviewView: View {
             .onTapGesture {
                 handleCameraTap()
             }
-            .simultaneousGesture(zoomDrag)
+            // Only attached once there is a picture to zoom, so it can never
+            // swallow the click that turns the mirror on.
+            .simultaneousGesture(zoomDrag, isEnabled: webcamManager.isSessionRunning)
             .onHover { isHovering in
                 isHoveringPreview = isHovering
                 guard webcamManager.isSessionRunning else { return }
@@ -153,40 +152,18 @@ struct CameraPreviewView: View {
 
 
     private func handleCameraTap() {
-        if isRequestingAuthorization {
-            return // Prevent multiple authorization requests
-        }
-        
-        switch webcamManager.authorizationStatus {
-        case .authorized:
-            if webcamManager.isSessionRunning {
-                webcamManager.stopSession()
-            } else if webcamManager.cameraAvailable {
-                webcamManager.startSession()
-            }
-        case .denied, .restricted:
-            DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "Camera Access Required"
-                alert.informativeText = "Please allow camera access in System Settings to use the mirror feature."
-                alert.addButton(withTitle: "Open System Settings")
-                alert.addButton(withTitle: "Cancel")
+        webcamManager.toggleSession {
+            let alert = NSAlert()
+            alert.messageText = "Camera Access Required"
+            alert.informativeText = "Please allow camera access in System Settings to use the mirror feature."
+            alert.addButton(withTitle: "Open System Settings")
+            alert.addButton(withTitle: "Cancel")
 
-                if alert.runModal() == .alertFirstButtonReturn {
-                    if let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
-                        NSWorkspace.shared.open(settingsURL)
-                    }
+            if alert.runModal() == .alertFirstButtonReturn {
+                if let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
+                    NSWorkspace.shared.open(settingsURL)
                 }
             }
-        case .notDetermined:
-            isRequestingAuthorization = true
-            webcamManager.checkAndRequestVideoAuthorization()
-            // Reset the request flag after a reasonable delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                isRequestingAuthorization = false
-            }
-        @unknown default:
-            break
         }
     }
 }
