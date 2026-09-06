@@ -9,7 +9,8 @@ import Cocoa
 import Combine
 import SwiftUI
 
-private let minimumBarScale: CGFloat = 0.35
+/// Height the bars collapse to when paused or when the audio is silent.
+private let minimumBarScale: CGFloat = 0.22
 
 class AudioSpectrum: NSView {
     private var barLayers: [CAShapeLayer] = []
