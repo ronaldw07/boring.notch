@@ -146,6 +146,15 @@ struct ContentView: View {
                                 handleUpGesture(translation: translation, phase: phase)
                             }
                     }
+                    .conditionalModifier(Defaults[.enableGestures]) { view in
+                        view
+                            .panGesture(direction: .left) { _, phase in
+                                handleSideGesture(to: .shelf, phase: phase)
+                            }
+                            .panGesture(direction: .right) { _, phase in
+                                handleSideGesture(to: .home, phase: phase)
+                            }
+                    }
                     .onReceive(NotificationCenter.default.publisher(for: .sharingDidFinish)) { _ in
                         if vm.notchState == .open && !isHovering && !vm.isBatteryPopoverActive {
                             hoverTask?.cancel()
@@ -580,6 +589,24 @@ struct ContentView: View {
                 gestureProgress = .zero
             }
             doOpen()
+        }
+    }
+
+    /// Two-finger horizontal swipe over the open notch switches tabs. The
+    /// panel can never become key, so a keyboard shortcut would either need
+    /// Accessibility permission or have to steal focus from whatever is being
+    /// typed in; a scroll gesture needs neither.
+    private func handleSideGesture(to view: NotchViews, phase: NSEvent.Phase) {
+        guard vm.notchState == .open,
+              !vm.isHoveringCalendar,
+              phase == .began,
+              coordinator.currentView != view else { return }
+
+        if Defaults[.enableHaptics] {
+            haptics.toggle()
+        }
+        withAnimation(animationSpring) {
+            coordinator.currentView = view
         }
     }
 
