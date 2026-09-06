@@ -6,6 +6,7 @@
 //
 import AppKit
 import Cocoa
+import Combine
 import SwiftUI
 
 private let minimumBarScale: CGFloat = 0.35
@@ -60,6 +61,7 @@ class AudioSpectrum: NSView {
     /// attack/release smoothing, so implicit layer animation is disabled here to
     /// avoid animating on top of a value that changes 30 times a second.
     func apply(levels: [CGFloat]) {
+        guard isPlaying else { return }
         stopAnimating()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -129,24 +131,61 @@ struct AudioSpectrumView: NSViewRepresentable {
     @Binding var isPlaying: Bool
     var bundleIdentifier: String?
 
-    @ObservedObject private var tap = AudioSpectrumTap.shared
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeNSView(context: Context) -> AudioSpectrum {
         let spectrum = AudioSpectrum()
-        spectrum.setPlaying(isPlaying, isLive: tap.isLive)
+        context.coordinator.bind(to: spectrum)
         return spectrum
     }
 
     func updateNSView(_ nsView: AudioSpectrum, context: Context) {
-        if isPlaying {
-            tap.activate(for: bundleIdentifier)
-        } else {
-            tap.deactivate()
+        context.coordinator.update(isPlaying: isPlaying, bundleIdentifier: bundleIdentifier)
+    }
+
+    /// Levels arrive 60 times a second. They are piped straight into the layer
+    /// rather than through SwiftUI state, so the notch is not re-rendered at
+    /// audio rate, and the tap is never mutated from inside a view update.
+    @MainActor
+    final class Coordinator {
+        private var cancellables = Set<AnyCancellable>()
+        private weak var view: AudioSpectrum?
+        private var isPlaying = false
+        private var bundleIdentifier: String?
+
+        func bind(to view: AudioSpectrum) {
+            self.view = view
+            let tap = AudioSpectrumTap.shared
+
+            tap.$levels
+                .sink { [weak view] levels in view?.apply(levels: levels) }
+                .store(in: &cancellables)
+
+            tap.$isLive
+                .sink { [weak self, weak view] isLive in
+                    guard let self else { return }
+                    view?.setPlaying(self.isPlaying, isLive: isLive)
+                }
+                .store(in: &cancellables)
         }
 
-        nsView.setPlaying(isPlaying, isLive: tap.isLive)
-        if isPlaying, tap.isLive {
-            nsView.apply(levels: tap.levels)
+        func update(isPlaying: Bool, bundleIdentifier: String?) {
+            guard isPlaying != self.isPlaying || bundleIdentifier != self.bundleIdentifier else { return }
+            self.isPlaying = isPlaying
+            self.bundleIdentifier = bundleIdentifier
+
+            view?.setPlaying(isPlaying, isLive: AudioSpectrumTap.shared.isLive)
+
+            // Deferred so the tap's published state never changes mid-update.
+            Task { @MainActor in
+                if isPlaying {
+                    AudioSpectrumTap.shared.activate(for: bundleIdentifier)
+                } else {
+                    AudioSpectrumTap.shared.deactivate()
+                }
+            }
         }
     }
 }

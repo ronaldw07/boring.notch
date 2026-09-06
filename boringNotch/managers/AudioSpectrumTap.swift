@@ -25,7 +25,11 @@ private let levelReleaseTime: Float = 0.06
 private let referenceReleaseTime: Float = 2.0
 /// Headroom above the loudest recent band, so peaks stop short of full height
 /// instead of pinning the tallest bar to the top every frame.
-private let referenceHeadroomDecibels: Float = 6
+private let referenceHeadroomDecibels: Float = 8
+/// Levels are raised to this power before display. Above 1 it pulls quiet bands
+/// down harder than loud ones, which both shortens the bars and widens the gap
+/// between them.
+private let contrastExponent: Float = 1.8
 private let publishInterval: CFAbsoluteTime = 1.0 / 60.0
 private let fallbackSampleRate: Double = 48000
 
@@ -160,7 +164,8 @@ private final class SpectrumAnalyzer {
 
         let levelDecay = exp(-elapsed / levelReleaseTime)
         return bandDecibels.enumerated().map { index, value in
-            let level = min(max((value - noiseFloorDecibels) / span, 0), 1)
+            let normalized = min(max((value - noiseFloorDecibels) / span, 0), 1)
+            let level = pow(normalized, contrastExponent)
             let previous = smoothed[index]
             let next = level > previous
                 ? level
@@ -215,6 +220,10 @@ final class AudioSpectrumTap: ObservableObject {
     }
 
     func deactivate() {
+        // Must stay a no-op when nothing is running: this is called from view
+        // updates, and publishing unconditionally would re-trigger them.
+        guard tappedBundleIdentifier != nil || isLive || ioProcID != nil else { return }
+
         if let ioProcID, aggregateID != AudioObjectID(kAudioObjectUnknown) {
             AudioDeviceStop(aggregateID, ioProcID)
             AudioDeviceDestroyIOProcID(aggregateID, ioProcID)
