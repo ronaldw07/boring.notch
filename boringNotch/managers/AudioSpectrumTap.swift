@@ -21,9 +21,12 @@ private let maximumBandFrequency: Float = 12000
 private let noiseFloorDecibels: Float = -70
 private let minimumDynamicRange: Float = 25
 private let tiltDecibelsPerOctave: Float = 4.5
-private let levelReleaseTime: Float = 0.12
+private let levelReleaseTime: Float = 0.06
 private let referenceReleaseTime: Float = 2.0
-private let publishInterval: CFAbsoluteTime = 1.0 / 30.0
+/// Headroom above the loudest recent band, so peaks stop short of full height
+/// instead of pinning the tallest bar to the top every frame.
+private let referenceHeadroomDecibels: Float = 6
+private let publishInterval: CFAbsoluteTime = 1.0 / 60.0
 private let fallbackSampleRate: Double = 48000
 
 /// Windowed real FFT reduced to log-spaced bands. Only touched on the audio queue.
@@ -152,7 +155,8 @@ private final class SpectrumAnalyzer {
         referenceDecibels = loudest > referenceDecibels
             ? loudest
             : referenceDecibels * referenceDecay + loudest * (1 - referenceDecay)
-        let span = max(referenceDecibels - noiseFloorDecibels, minimumDynamicRange)
+        let span = max(referenceDecibels + referenceHeadroomDecibels - noiseFloorDecibels,
+                       minimumDynamicRange)
 
         let levelDecay = exp(-elapsed / levelReleaseTime)
         return bandDecibels.enumerated().map { index, value in
