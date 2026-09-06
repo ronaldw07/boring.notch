@@ -36,21 +36,21 @@ struct CameraPreviewView: View {
                 if let previewLayer = webcamManager.previewLayer {
                     CameraPreviewLayerView(previewLayer: previewLayer)
                         .scaleEffect(x: -zoom, y: zoom)
-                        .clipShape(RoundedRectangle(cornerRadius: Defaults[.mirrorShape] == .rectangle ? !Defaults[.cornerRadiusScaling] ? MusicPlayerImageSizes.cornerRadiusInset.closed : MusicPlayerImageSizes.cornerRadiusInset.opened : 100))
-                        .frame(width: geometry.size.width, height: geometry.size.width)
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                        .frame(width: geometry.size.width, height: geometry.size.height)
                         .opacity(webcamManager.isSessionRunning ? 1 : 0)
                 }
 
                 if !webcamManager.isSessionRunning {
                     ZStack {
-                        RoundedRectangle(cornerRadius: Defaults[.mirrorShape] == .rectangle ? !Defaults[.cornerRadiusScaling] ? MusicPlayerImageSizes.cornerRadiusInset.closed : 12 : 100)
+                        RoundedRectangle(cornerRadius: cornerRadius)
                             .fill(Color(red: 20/255, green: 20/255, blue: 20/255))
                             .strokeBorder(.white.opacity(0.04), lineWidth: 1)
-                            .frame(width: geometry.size.width, height: geometry.size.width)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
                         VStack(spacing: 8) {
                             Image(systemName: webcamManager.authorizationStatus == .denied ? "exclamationmark.triangle" : "web.camera")
                                 .foregroundStyle(.gray)
-                                .font(.system(size: geometry.size.width/3.5))
+                                .font(.system(size: min(geometry.size.width, geometry.size.height) / 3.5))
                             Text(webcamManager.authorizationStatus == .denied ? "Access Denied" : "Mirror")
                                 .font(.caption2)
                                 .foregroundColor(.gray)
@@ -59,8 +59,8 @@ struct CameraPreviewView: View {
                 }
                 if webcamManager.isSessionRunning {
                     ZoomIndicator(zoom: zoom, minimumZoom: minimumUsableZoom)
-                        .padding(.bottom, geometry.size.width * 0.08)
-                        .frame(width: geometry.size.width, height: geometry.size.width,
+                        .padding(.bottom, geometry.size.height * 0.08)
+                        .frame(width: geometry.size.width, height: geometry.size.height,
                                alignment: .bottom)
                         .opacity(isShowingZoomIndicator ? 1 : 0)
                         .scaleEffect(isShowingZoomIndicator || reduceMotion ? 1 : 0.95)
@@ -95,13 +95,31 @@ struct CameraPreviewView: View {
                 webcamManager.stopSession()
             }
         }
-        .aspectRatio(1, contentMode: .fit)
+        .aspectRatio(mirrorAspectRatio, contentMode: .fit)
     }
 
-    /// A square preview showing an aspect-fill picture can only zoom out until
-    /// the short side of the frame reaches the edge; past that the corners
-    /// would be empty. Never go below `minimumZoom` either.
+    /// Rectangular mirrors are sized to the camera's own aspect ratio, the
+    /// same way Photo Booth shows its preview undistorted and uncropped.
+    /// Circular mirrors stay square, since a circle needs one.
+    private var mirrorAspectRatio: CGFloat {
+        Defaults[.mirrorShape] == .rectangle ? webcamManager.videoAspectRatio : 1
+    }
+
+    private var cornerRadius: CGFloat {
+        Defaults[.mirrorShape] == .rectangle
+            ? (!Defaults[.cornerRadiusScaling] ? MusicPlayerImageSizes.cornerRadiusInset.closed : MusicPlayerImageSizes.cornerRadiusInset.opened)
+            : 100
+    }
+
+    /// The rectangular mirror's frame already matches the camera's aspect
+    /// ratio, so at zoom 1 the picture fills it with no crop and zooming out
+    /// just letterboxes symmetrically — no floor needed beyond the global
+    /// minimum. The circular mirror stays square while the camera usually
+    /// isn't, so its fill crops one axis at zoom 1; zooming out from there
+    /// is capped at the point where that axis reaches its own edge, past
+    /// which the picture would no longer reach two sides of the circle.
     private var minimumUsableZoom: CGFloat {
+        guard Defaults[.mirrorShape] != .rectangle else { return minimumZoom }
         let aspect = webcamManager.videoAspectRatio
         guard aspect > 0 else { return 1 }
         let longOverShort = max(aspect, 1 / aspect)
@@ -117,7 +135,9 @@ struct CameraPreviewView: View {
 
                 isDraggingZoom = true
                 let range = maximumZoom - minimumUsableZoom
-                zoom = resisted(zoomAtDragStart + value.translation.width / zoomDragTravel * range)
+                // Inverted: dragging left pulls the ruler's marker to the
+                // right (zooms in), like pinching the image toward you.
+                zoom = resisted(zoomAtDragStart - value.translation.width / zoomDragTravel * range)
                 revealZoomIndicator()
             }
             .onEnded { _ in
