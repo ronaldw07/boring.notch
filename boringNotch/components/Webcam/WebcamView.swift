@@ -29,6 +29,8 @@ struct CameraPreviewView: View {
     @State private var zoom: CGFloat = minimumZoom
     @State private var zoomAtDragStart: CGFloat = minimumZoom
     @State private var isShowingZoomIndicator: Bool = false
+    @State private var isHoveringPreview: Bool = false
+    @State private var isDraggingZoom: Bool = false
     @State private var zoomIndicatorTask: Task<Void, Never>?
 
     var body: some View {
@@ -72,6 +74,16 @@ struct CameraPreviewView: View {
                 handleCameraTap()
             }
             .simultaneousGesture(zoomDrag)
+            .onHover { isHovering in
+                isHoveringPreview = isHovering
+                guard webcamManager.isSessionRunning else { return }
+                // Surfaced on hover so the drag affordance is discoverable.
+                if isHovering {
+                    revealZoomIndicator()
+                } else if !isDraggingZoom {
+                    scheduleZoomIndicatorHide()
+                }
+            }
             .onDisappear {
                 zoomIndicatorTask?.cancel()
                 webcamManager.stopSession()
@@ -87,11 +99,13 @@ struct CameraPreviewView: View {
             .onChanged { value in
                 guard webcamManager.isSessionRunning else { return }
 
+                isDraggingZoom = true
                 let range = maximumZoom - minimumZoom
                 zoom = resisted(zoomAtDragStart + value.translation.width / zoomDragTravel * range)
                 revealZoomIndicator()
             }
             .onEnded { _ in
+                isDraggingZoom = false
                 guard webcamManager.isSessionRunning else { return }
 
                 zoomAtDragStart = min(max(zoom, minimumZoom), maximumZoom)
@@ -100,7 +114,10 @@ struct CameraPreviewView: View {
                         zoom = zoomAtDragStart
                     }
                 }
-                scheduleZoomIndicatorHide()
+                // Stays up while the pointer is still over the preview.
+                if !isHoveringPreview {
+                    scheduleZoomIndicatorHide()
+                }
             }
     }
 
