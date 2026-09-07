@@ -22,6 +22,9 @@ private let expandCurve = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.35
 /// plus its 2pt padding. The scroll thumb's track starts below this so the
 /// two never fight for the same hit area.
 private let expandButtonInset: CGFloat = 24
+/// Clears the button's footprint plus a small gap, so the first row starts
+/// below it instead of directly under it.
+private let listTopInset: CGFloat = expandButtonInset + 4
 
 private struct ScrollOffsetKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
@@ -69,7 +72,8 @@ struct ClipboardView: View {
                                     }
                                 }
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, listVerticalPadding)
+                                .padding(.top, listTopInset)
+                                .padding(.bottom, listVerticalPadding)
                                 .background(
                                     GeometryReader { content in
                                         Color.clear
@@ -191,7 +195,7 @@ struct ClipboardView: View {
     private func expandShortfall() -> CGFloat {
         let targetContentHeight = CGFloat(expandedRowCount) * rowHeight
             + CGFloat(expandedRowCount - 1) * rowSpacing
-            + listVerticalPadding * 2
+            + listTopInset + listVerticalPadding
         let shortfall = max(0, targetContentHeight - collapsedViewportHeight)
 
         guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return shortfall }

@@ -245,7 +245,27 @@ final class ClipboardManager: ObservableObject {
 
     private static func load(from url: URL?) -> [ClipboardItem] {
         guard let url, let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([ClipboardItem].self, from: data)) ?? []
+
+        // The common case: every entry still matches the current shape.
+        if let items = try? JSONDecoder().decode([ClipboardItem].self, from: data) {
+            return items
+        }
+
+        // A whole-array decode fails the moment a single entry doesn't match
+        // — e.g. after an update changes a case's associated data. That used
+        // to mean losing the entire history over one incompatible entry, the
+        // very next time anything was copied or deleted triggered a save()
+        // that overwrote the file with nothing. Decoding item by item keeps
+        // everything that still parses and drops only what doesn't.
+        guard let rawItems = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+
+        let decoder = JSONDecoder()
+        return rawItems.compactMap { raw in
+            guard let itemData = try? JSONSerialization.data(withJSONObject: raw) else { return nil }
+            return try? decoder.decode(ClipboardItem.self, from: itemData)
+        }
     }
 
     private func save() {
