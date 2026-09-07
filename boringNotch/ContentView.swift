@@ -539,7 +539,7 @@ struct ContentView: View {
     private func handleHover(_ hovering: Bool) {
         if coordinator.firstLaunch { return }
         hoverTask?.cancel()
-
+        
         if hovering {
             withAnimation(animationSpring) {
                 isHovering = true

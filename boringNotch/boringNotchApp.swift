@@ -53,7 +53,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var windows: [String: NSWindow] = [:] // UUID -> NSWindow
     var viewModels: [String: BoringViewModel] = [:] // UUID -> BoringViewModel
-    private var openNotches: Set<ObjectIdentifier> = []
     var window: NSWindow?
     let vm: BoringViewModel = .init()
     @ObservedObject var coordinator = BoringViewCoordinator.shared
@@ -269,71 +268,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         positionWindow(window, on: screen)
     }
 
-    /// The tab shortcuts are bare digits, so they may only be registered with
-    /// the system while there is a notch open to steer. Tracked per view model
-    /// rather than as a flag because "show on all displays" gives every screen
-    /// its own, and the digits have to keep working until the last one closes.
-    private func observeNotchStateForTabShortcuts(viewModel: BoringViewModel) {
-        viewModel.$notchState
-            .removeDuplicates()
-            .sink { [weak self, weak viewModel] state in
-                guard let self, let viewModel else { return }
-
-                let key = ObjectIdentifier(viewModel)
-                if state == .open {
-                    self.openNotches.insert(key)
-                } else {
-                    self.openNotches.remove(key)
-                }
-                self.updateTabShortcutRegistration()
-            }
-            .store(in: &viewModel.cancellables)
-    }
-
-    private func updateTabShortcutRegistration() {
-        let names: [KeyboardShortcuts.Name] = [.showHomeTab, .showShelfTab, .showClipboardTab]
-        if openNotches.isEmpty {
-            KeyboardShortcuts.disable(names)
-        } else {
-            KeyboardShortcuts.enable(names)
-        }
-    }
-
-    private func setupTabShortcuts() {
-        KeyboardShortcuts.onKeyDown(for: .showHomeTab) { [weak self] in
-            self?.switchTab(to: .home)
-        }
-        KeyboardShortcuts.onKeyDown(for: .showShelfTab) { [weak self] in
-            self?.switchTab(to: .shelf)
-        }
-        KeyboardShortcuts.onKeyDown(for: .showClipboardTab) { [weak self] in
-            self?.switchTab(to: .clipboard)
-        }
-
-        // Registration is driven by notch state, but onKeyDown above registers
-        // as a side effect of installing the handler, so the disable has to
-        // come after it rather than before.
-        updateTabShortcutRegistration()
-    }
-
-    /// Whether the pointer is over an open panel is read from the mouse at the
-    /// moment the key is pressed, rather than from a hover flag kept in sync by
-    /// the view. A flag that silently fails to update leaves the shortcuts
-    /// permanently dead; this cannot get stale.
-    private func switchTab(to view: NotchViews) {
-        let pointer = NSEvent.mouseLocation
-        let candidates = Defaults[.showOnAllDisplays] ? Array(viewModels.values) : [vm]
-
-        let isPointerOverOpenNotch = candidates.contains { viewModel in
-            viewModel.notchState == .open && (viewModel.notchRect()?.contains(pointer) ?? false)
-        }
-        guard isPointerOverOpenNotch else { return }
-
-        withAnimation(.smooth) {
-            coordinator.currentView = view
-        }
-    }
-
     private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {
         viewModel.$windowExtraHeight
             .removeDuplicates()
@@ -463,8 +397,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.onScreenUnlocked(notification)
                 }
         }
-
-        setupTabShortcuts()
 
         KeyboardShortcuts.onKeyDown(for: .toggleSneakPeek) { [weak self] in
             guard let self = self else { return }
@@ -611,7 +543,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let viewModel = BoringViewModel(screenUUID: uuid)
                     let window = createBoringNotchWindow(for: screen, with: viewModel)
                     observeExtraContentHeight(for: window, viewModel: viewModel)
-                    observeNotchStateForTabShortcuts(viewModel: viewModel)
 
                     windows[uuid] = window
                     viewModels[uuid] = viewModel
@@ -649,7 +580,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window = createBoringNotchWindow(for: selectedScreen, with: vm)
                 if let window {
                     observeExtraContentHeight(for: window, viewModel: vm)
-                    observeNotchStateForTabShortcuts(viewModel: vm)
                 }
             }
 

@@ -30,7 +30,6 @@ class BoringViewModel: NSObject, ObservableObject {
 
     @Published var edgeAutoOpenActive: Bool = false
     @Published var isHoveringCalendar: Bool = false
-
     @Published var isBatteryPopoverActive: Bool = false
 
     @Published var screenUUID: String?
@@ -191,22 +190,6 @@ class BoringViewModel: NSObject, ObservableObject {
         }
     }
     
-    /// The panel's rect on screen, including whatever height an expanded tab
-    /// has added. `isMouseHovering` predates that growth and measures against
-    /// `notchSize` alone, so it stops matching the real bounds exactly when
-    /// the clipboard is expanded.
-    func notchRect() -> CGRect? {
-        guard let frame = getScreenFrame(screenUUID) else { return nil }
-
-        let height = notchSize.height + extraContentHeight
-        return CGRect(
-            x: frame.midX - notchSize.width / 2,
-            y: frame.maxY - height,
-            width: notchSize.width,
-            height: height
-        )
-    }
-
     func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {
         let screenFrame = getScreenFrame(screenUUID)
         if let frame = screenFrame {
