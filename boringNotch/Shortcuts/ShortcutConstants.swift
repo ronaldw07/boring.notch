@@ -17,9 +17,10 @@ extension KeyboardShortcuts.Name {
     static let toggleNotchOpen = Self("toggleNotchOpen", default: .init(.i, modifiers: [.command, .shift]))
 
     // Bare digits, which is only safe because AppDelegate registers these
-    // three with the system while the pointer is over an open notch and
-    // unregisters them the moment it leaves — otherwise they would swallow
-    // every 1, 2 and 3 typed anywhere on the machine.
+    // three with the system while a notch is open and unregisters them when
+    // the last one closes — otherwise they would swallow every 1, 2 and 3
+    // typed anywhere on the machine. Whether the pointer is actually over the
+    // panel is then checked at the moment the key is pressed.
     static let showHomeTab = Self("showHomeTab", default: .init(.one))
     static let showShelfTab = Self("showShelfTab", default: .init(.two))
     static let showClipboardTab = Self("showClipboardTab", default: .init(.three))
