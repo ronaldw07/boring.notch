@@ -1740,6 +1740,20 @@ struct Shortcuts: View {
             Section {
                 KeyboardShortcuts.Recorder("Toggle Notch Open:", name: .toggleNotchOpen)
             }
+            Section {
+                KeyboardShortcuts.Recorder("Home:", name: .showHomeTab)
+                KeyboardShortcuts.Recorder("Shelf:", name: .showShelfTab)
+                KeyboardShortcuts.Recorder("Clipboard:", name: .showClipboardTab)
+            } header: {
+                Text("Tabs")
+            } footer: {
+                Text(
+                    "Only active while the notch is open. Give them a modifier if a bare number key gets in the way of typing."
+                )
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            }
         }
         .accentColor(.effectiveAccent)
         .navigationTitle("Shortcuts")
