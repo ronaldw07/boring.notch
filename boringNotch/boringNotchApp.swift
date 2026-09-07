@@ -269,7 +269,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {
-        viewModel.$extraContentHeight
+        viewModel.$windowExtraHeight
             .removeDuplicates()
             .sink { [weak self, weak window, weak viewModel] extraHeight in
                 guard let self, let window else { return }

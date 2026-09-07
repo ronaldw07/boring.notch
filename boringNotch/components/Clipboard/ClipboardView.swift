@@ -14,6 +14,10 @@ private let listVerticalPadding: CGFloat = 8
 /// Rows visible when the expand button is on. The window is grown to fit
 /// exactly this many, so it's a real target height, not a minimum.
 private let expandedRowCount = 10
+/// Ease-out quint. Decelerating suits a panel unfolding; a spring would
+/// overshoot and momentarily push the notch's bottom radius past its rest
+/// position.
+private let expandCurve = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)
 
 private struct ScrollOffsetKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
@@ -33,6 +37,10 @@ struct ClipboardView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
+    /// The viewport as it is at rest. Expanding measures against this rather
+    /// than the live height, so a second press mid-animation can't compound
+    /// the growth it already applied.
+    @State private var collapsedViewportHeight: CGFloat = 0
     @State private var scrollTarget: CGFloat?
 
     @State private var isExpanded = false
@@ -76,7 +84,6 @@ struct ClipboardView: View {
                             }
                         }
                     }
-                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewportHeight = $0 }
 
                     if contentHeight > viewportHeight {
                         scrollThumb
@@ -85,7 +92,21 @@ struct ClipboardView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .bottomTrailing) { expandButton }
+        // Measured out here rather than on the populated branch's ZStack, so
+        // the height is known even while the list is empty — otherwise the
+        // first expand after a fresh launch has nothing to measure against.
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
+            viewportHeight = height
+            if !isExpanded {
+                collapsedViewportHeight = height
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // Nothing to expand into when there's no history.
+            if !clipboard.items.isEmpty {
+                expandButton
+            }
+        }
         .onAppear {
             // Forces the tab to always open at the exact same size as Home
             // or Shelf, no matter what state a previous visit left behind.
@@ -93,14 +114,16 @@ struct ClipboardView: View {
             // button below, never as a side effect of switching tabs.
             isExpanded = false
             vm.extraContentHeight = 0
+            vm.windowExtraHeight = 0
         }
         .onDisappear {
             // Leaving the tab collapses the window back down; nothing else
-            // resets extraContentHeight, and it would otherwise stay tall
-            // while showing Home or Shelf.
+            // resets these, and they would otherwise stay tall while showing
+            // Home or Shelf. No animation — the tab is already gone.
             if isExpanded {
                 isExpanded = false
                 vm.extraContentHeight = 0
+                vm.windowExtraHeight = 0
             }
         }
     }
@@ -125,20 +148,45 @@ struct ClipboardView: View {
         .padding(6)
     }
 
+    @MainActor
     private func toggleExpanded() {
         isExpanded.toggle()
 
-        // Only the shortfall needs to come from the window — whatever
-        // already fits on screen is free.
+        guard isExpanded else {
+            // Shrink the window only once the panel has finished animating
+            // closed. The window is the content's clip bounds, so resizing it
+            // up front slices the bottom off the panel for the whole
+            // animation.
+            withAnimation(expandCurve, completionCriteria: .removed) {
+                vm.extraContentHeight = 0
+            } completion: {
+                vm.windowExtraHeight = 0
+            }
+            return
+        }
+
+        // Grow the window first: it's transparent, so an instant resize is
+        // invisible, and the panel needs somewhere to animate into.
+        let shortfall = expandShortfall()
+        vm.windowExtraHeight = shortfall
+        withAnimation(expandCurve) {
+            vm.extraContentHeight = shortfall
+        }
+    }
+
+    /// Only the shortfall needs to come from the window — whatever already
+    /// fits on screen is free. Capped against the screen so the layout can
+    /// never ask for a height the window is then clamped out of giving it,
+    /// which would put the two out of sync and overflow the panel again.
+    @MainActor
+    private func expandShortfall() -> CGFloat {
         let targetContentHeight = CGFloat(expandedRowCount) * rowHeight
             + CGFloat(expandedRowCount - 1) * rowSpacing
             + listVerticalPadding * 2
-        let currentContentHeight = viewportHeight
-        let shortfall = max(0, targetContentHeight - currentContentHeight)
+        let shortfall = max(0, targetContentHeight - collapsedViewportHeight)
 
-        withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)) {
-            vm.extraContentHeight = isExpanded ? shortfall : 0
-        }
+        guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return shortfall }
+        return min(shortfall, max(0, screenHeight - windowSize.height))
     }
 
     // MARK: - Scroll thumb
