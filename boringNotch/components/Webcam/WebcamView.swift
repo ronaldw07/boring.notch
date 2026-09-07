@@ -174,6 +174,10 @@ struct CameraPreviewView: View {
 
 
     private func handleCameraTap() {
+        // Start only. Closing the mirror belongs to the header button, so a
+        // stray click on the picture can't kill the feed.
+        guard !webcamManager.isSessionRunning else { return }
+
         webcamManager.toggleSession {
             let alert = NSAlert()
             alert.messageText = "Camera Access Required"
