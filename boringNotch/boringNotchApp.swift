@@ -243,10 +243,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// content's own animation on `extraContentHeight` carries the visible
     /// smoothness instead.
     @MainActor
-    private func resizeWindow(_ window: NSWindow, extraHeight: CGFloat) {
-        guard let screen = window.screen ?? NSScreen.main else { return }
+    private func resizeWindow(_ window: NSWindow, extraHeight: CGFloat, screenUUID: String?) {
+        // window.screen is unreliable for this custom SkyLight-backed panel —
+        // it can resolve to the wrong display on a multi-monitor setup,
+        // which is how a resize ends up computed against the wrong screen's
+        // geometry and lands off the top of the actual one. Resolve by the
+        // UUID the window was created for instead, same as the rest of the
+        // app already does.
+        guard let screen = screenUUID.flatMap({ NSScreen.screen(withUUID: $0) })
+            ?? window.screen ?? NSScreen.main else { return }
 
-        let newHeight = windowSize.height + extraHeight
+        // Clamped so a bad height calculation upstream can never push the
+        // window taller than the screen itself, which is what "goes above
+        // the screen" looks like — the top pins to the screen top no matter
+        // what, so an oversized height only ever overshoots the bottom.
+        let newHeight = min(windowSize.height + extraHeight, screen.frame.height)
         let newFrame = NSRect(
             x: screen.frame.origin.x + (screen.frame.width / 2) - (windowSize.width / 2),
             y: screen.frame.origin.y + screen.frame.height - newHeight,
@@ -260,9 +271,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {
         viewModel.$extraContentHeight
             .removeDuplicates()
-            .sink { [weak self, weak window] extraHeight in
+            .sink { [weak self, weak window, weak viewModel] extraHeight in
                 guard let self, let window else { return }
-                self.resizeWindow(window, extraHeight: extraHeight)
+                self.resizeWindow(window, extraHeight: extraHeight, screenUUID: viewModel?.screenUUID)
             }
             .store(in: &viewModel.cancellables)
     }
