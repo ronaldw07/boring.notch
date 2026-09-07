@@ -1748,7 +1748,7 @@ struct Shortcuts: View {
                 Text("Tabs")
             } footer: {
                 Text(
-                    "Only active while the notch is open. Give them a modifier if a bare number key gets in the way of typing."
+                    "Only active while the pointer is over an open notch. Give them a modifier if a bare number key gets in the way of typing."
                 )
                 .multilineTextAlignment(.trailing)
                 .foregroundStyle(.secondary)

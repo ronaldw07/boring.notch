@@ -53,7 +53,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var windows: [String: NSWindow] = [:] // UUID -> NSWindow
     var viewModels: [String: BoringViewModel] = [:] // UUID -> BoringViewModel
-    private var openNotches: Set<ObjectIdentifier> = []
+    private var hoveredNotches: Set<ObjectIdentifier> = []
     var window: NSWindow?
     let vm: BoringViewModel = .init()
     @ObservedObject var coordinator = BoringViewCoordinator.shared
@@ -270,21 +270,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The tab shortcuts are bare digits, so they may only be registered with
-    /// the system while there is actually an open notch to steer. Tracked per
-    /// view model rather than as a flag because "show on all displays" gives
-    /// every screen its own, and the digits have to keep working until the
-    /// last one closes.
-    private func observeNotchStateForTabShortcuts(viewModel: BoringViewModel) {
-        viewModel.$notchState
+    /// the system while the pointer is actually over an open notch — that is
+    /// the one moment the user is demonstrably looking at the tabs rather
+    /// than typing somewhere else. Tracked per view model rather than as a
+    /// flag because "show on all displays" gives every screen its own.
+    private func observeHoverForTabShortcuts(viewModel: BoringViewModel) {
+        viewModel.$isMouseOverNotch
+            .combineLatest(viewModel.$notchState)
+            .map { isOver, state in isOver && state == .open }
             .removeDuplicates()
-            .sink { [weak self, weak viewModel] state in
+            .sink { [weak self, weak viewModel] isSteerable in
                 guard let self, let viewModel else { return }
 
                 let key = ObjectIdentifier(viewModel)
-                if state == .open {
-                    self.openNotches.insert(key)
+                if isSteerable {
+                    self.hoveredNotches.insert(key)
                 } else {
-                    self.openNotches.remove(key)
+                    self.hoveredNotches.remove(key)
                 }
                 self.updateTabShortcutRegistration()
             }
@@ -293,7 +295,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateTabShortcutRegistration() {
         let names: [KeyboardShortcuts.Name] = [.showHomeTab, .showShelfTab, .showClipboardTab]
-        if openNotches.isEmpty {
+        if hoveredNotches.isEmpty {
             KeyboardShortcuts.disable(names)
         } else {
             KeyboardShortcuts.enable(names)
@@ -318,7 +320,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func switchTab(to view: NotchViews) {
-        guard !openNotches.isEmpty else { return }
+        guard !hoveredNotches.isEmpty else { return }
         withAnimation(.smooth) {
             coordinator.currentView = view
         }
@@ -601,7 +603,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let viewModel = BoringViewModel(screenUUID: uuid)
                     let window = createBoringNotchWindow(for: screen, with: viewModel)
                     observeExtraContentHeight(for: window, viewModel: viewModel)
-                    observeNotchStateForTabShortcuts(viewModel: viewModel)
+                    observeHoverForTabShortcuts(viewModel: viewModel)
 
                     windows[uuid] = window
                     viewModels[uuid] = viewModel
@@ -639,7 +641,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window = createBoringNotchWindow(for: selectedScreen, with: vm)
                 if let window {
                     observeExtraContentHeight(for: window, viewModel: vm)
-                    observeNotchStateForTabShortcuts(viewModel: vm)
+                    observeHoverForTabShortcuts(viewModel: vm)
                 }
             }
 

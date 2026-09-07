@@ -180,9 +180,12 @@ struct ContentView: View {
                         }
                     }
                     .onChange(of: vm.notchState) { _, newState in
-                        if newState == .closed && isHovering {
-                            withAnimation {
-                                isHovering = false
+                        if newState == .closed {
+                            vm.isMouseOverNotch = false
+                            if isHovering {
+                                withAnimation {
+                                    isHovering = false
+                                }
                             }
                         }
                     }
@@ -539,7 +542,13 @@ struct ContentView: View {
     private func handleHover(_ hovering: Bool) {
         if coordinator.firstLaunch { return }
         hoverTask?.cancel()
-        
+
+        // Set both ways without the debounce the visual state below uses: this
+        // gates the bare-digit tab shortcuts, and holding them registered for
+        // an extra beat after the pointer leaves would swallow a keystroke
+        // meant for whatever the user turned back to.
+        vm.isMouseOverNotch = hovering
+
         if hovering {
             withAnimation(animationSpring) {
                 isHovering = true

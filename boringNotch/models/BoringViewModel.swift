@@ -30,6 +30,12 @@ class BoringViewModel: NSObject, ObservableObject {
 
     @Published var edgeAutoOpenActive: Bool = false
     @Published var isHoveringCalendar: Bool = false
+
+    /// Whether the pointer is over the panel, reported by the view's own
+    /// hover tracking rather than derived from notchSize — a tab that expands
+    /// grows the panel past that size, so a frame calculation would stop
+    /// matching its real bounds. Gates the bare-digit tab shortcuts.
+    @Published var isMouseOverNotch: Bool = false
     @Published var isBatteryPopoverActive: Bool = false
 
     @Published var screenUUID: String?
@@ -221,6 +227,7 @@ class BoringViewModel: NSObject, ObservableObject {
         self.notchState = .closed
         self.extraContentHeight = 0
         self.windowExtraHeight = 0
+        self.isMouseOverNotch = false
         self.isBatteryPopoverActive = false
         self.coordinator.sneakPeek.show = false
         self.edgeAutoOpenActive = false
