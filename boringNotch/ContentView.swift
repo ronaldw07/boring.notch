@@ -151,10 +151,10 @@ struct ContentView: View {
                             // Scroll only: a drag recognizer here would sit above
                             // the mirror's own zoom drag and compete with it.
                             .panGesture(direction: .left, usesDragGesture: false) { _, phase in
-                                handleSideGesture(to: .shelf, phase: phase)
+                                handleSideGesture(step: 1, phase: phase)
                             }
                             .panGesture(direction: .right, usesDragGesture: false) { _, phase in
-                                handleSideGesture(to: .home, phase: phase)
+                                handleSideGesture(step: -1, phase: phase)
                             }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .sharingDidFinish)) { _ in
@@ -360,6 +360,8 @@ struct ContentView: View {
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
                         ShelfView()
+                    case .clipboard:
+                        ClipboardView()
                     }
                 }
                 .transition(
@@ -598,17 +600,24 @@ struct ContentView: View {
     /// panel can never become key, so a keyboard shortcut would either need
     /// Accessibility permission or have to steal focus from whatever is being
     /// typed in; a scroll gesture needs neither.
-    private func handleSideGesture(to view: NotchViews, phase: NSEvent.Phase) {
+    private func handleSideGesture(step: Int, phase: NSEvent.Phase) {
         guard vm.notchState == .open,
               !vm.isHoveringCalendar,
-              phase == .began,
-              coordinator.currentView != view else { return }
+              phase == .began else { return }
+
+        let order = tabs.map(\.view)
+        guard let index = order.firstIndex(of: coordinator.currentView) else { return }
+
+        // Stops at the ends rather than wrapping, so a swipe never lands
+        // somewhere across the whole row from where it started.
+        let destination = min(max(index + step, 0), order.count - 1)
+        guard destination != index else { return }
 
         if Defaults[.enableHaptics] {
             haptics.toggle()
         }
         withAnimation(animationSpring) {
-            coordinator.currentView = view
+            coordinator.currentView = order[destination]
         }
     }
 
