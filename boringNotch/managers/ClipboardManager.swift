@@ -68,6 +68,11 @@ final class ClipboardManager: ObservableObject {
         save()
     }
 
+    func delete(_ item: ClipboardItem) {
+        items.removeAll { $0.id == item.id }
+        save()
+    }
+
     // MARK: - Capture
 
     /// AppKit has no change notification for the pasteboard, so polling its

@@ -254,18 +254,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ?? window.screen ?? NSScreen.main else { return }
 
         // Clamped so a bad height calculation upstream can never push the
-        // window taller than the screen itself, which is what "goes above
-        // the screen" looks like — the top pins to the screen top no matter
-        // what, so an oversized height only ever overshoots the bottom.
+        // window taller than the screen itself.
         let newHeight = min(windowSize.height + extraHeight, screen.frame.height)
-        let newFrame = NSRect(
-            x: screen.frame.origin.x + (screen.frame.width / 2) - (windowSize.width / 2),
-            y: screen.frame.origin.y + screen.frame.height - newHeight,
-            width: windowSize.width,
-            height: newHeight
-        )
 
-        window.setFrame(newFrame, display: true)
+        // Resize first, keeping the current origin — then hand off to
+        // positionWindow, the same function every other window placement in
+        // the app already goes through, rather than a second parallel copy
+        // of that origin math that has now been wrong twice.
+        window.setFrame(
+            NSRect(origin: window.frame.origin, size: CGSize(width: windowSize.width, height: newHeight)),
+            display: false
+        )
+        positionWindow(window, on: screen)
     }
 
     private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {

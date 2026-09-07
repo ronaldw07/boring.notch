@@ -48,10 +48,12 @@ struct ClipboardView: View {
                             ScrollView(.vertical, showsIndicators: false) {
                                 LazyVStack(spacing: rowSpacing) {
                                     ForEach(clipboard.items) { item in
-                                        ClipboardRow(item: item, isConfirming: justCopiedID == item.id)
-                                            .id(item.id)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture { copy(item) }
+                                        ClipboardRow(item: item, isConfirming: justCopiedID == item.id) {
+                                            clipboard.delete(item)
+                                        }
+                                        .id(item.id)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { copy(item) }
                                     }
                                 }
                                 .padding(.horizontal, 6)
@@ -196,6 +198,7 @@ struct ClipboardView: View {
 private struct ClipboardRow: View {
     let item: ClipboardItem
     let isConfirming: Bool
+    let onDelete: () -> Void
 
     @State private var isHovering = false
 
@@ -230,6 +233,15 @@ private struct ClipboardRow: View {
                     RoundedRectangle(cornerRadius: 5)
                         .fill(.green.opacity(0.15))
                 )
+                .transition(.opacity)
+            } else if isHovering {
+                Button(action: onDelete) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.red)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
                 .transition(.opacity)
             }
         }
