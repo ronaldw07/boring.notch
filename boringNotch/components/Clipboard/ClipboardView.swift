@@ -99,10 +99,15 @@ struct ClipboardView: View {
 
     private var expandButton: some View {
         Button(action: toggleExpanded) {
-            Image(systemName: "arrow.down.right.and.arrow.up.left")
+            // Two distinct symbols rather than one rotated 180° — SF Symbols
+            // already has an outward pair for "expand" and an inward pair for
+            // "collapse", so the icon reads correctly instead of ambiguously
+            // spinning in place.
+            Image(systemName: isExpanded
+                ? "arrow.down.right.and.arrow.up.left"
+                : "arrow.up.left.and.arrow.down.right")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.white)
-                .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .frame(width: 22, height: 22)
                 .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
         }

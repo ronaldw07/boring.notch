@@ -361,7 +361,13 @@ struct ContentView: View {
                     case .shelf:
                         ShelfView()
                     case .clipboard:
+                        // Explicit rather than relying on ambient VStack/ZStack
+                        // proposal to reach ClipboardView — the expand button
+                        // grows the actual window by exactly this amount, and
+                        // the list needs to be handed that space directly
+                        // rather than trusting it to propagate through.
                         ClipboardView()
+                            .frame(height: vm.notchSize.height + vm.extraContentHeight)
                     }
                 }
                 .transition(
