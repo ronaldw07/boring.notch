@@ -118,7 +118,15 @@ struct ContentView: View {
                     )
                 
                 mainLayout
-                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
+                    // Top-aligned: a plain .frame(height:) centers a child that
+                    // reports taller than the proposal, so any overflow would
+                    // split evenly and push the header off the top of the
+                    // screen. Growth from a tab's extra content is added here
+                    // so it extends downward instead.
+                    .frame(
+                        height: vm.notchState == .open ? vm.notchSize.height + vm.extraContentHeight : nil,
+                        alignment: .top
+                    )
                     .conditionalModifier(true) { view in
                         let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
                         let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
@@ -361,13 +369,11 @@ struct ContentView: View {
                     case .shelf:
                         ShelfView()
                     case .clipboard:
-                        // Explicit rather than relying on ambient VStack/ZStack
-                        // proposal to reach ClipboardView — the expand button
-                        // grows the actual window by exactly this amount, and
-                        // the list needs to be handed that space directly
-                        // rather than trusting it to propagate through.
+                        // No explicit height: it fills whatever the notch's own
+                        // frame leaves after the header, same as Home and Shelf.
+                        // Asking for the full notch height *plus* the header's
+                        // is what made this overflow.
                         ClipboardView()
-                            .frame(height: vm.notchSize.height + vm.extraContentHeight)
                     }
                 }
                 .transition(
