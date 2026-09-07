@@ -19,9 +19,9 @@ private let expandedRowCount = 10
 /// position.
 private let expandCurve = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)
 /// Footprint of the expand button at the top-trailing corner: a 22pt button
-/// plus its 6pt padding. The scroll thumb's track starts below this so the
+/// plus its 2pt padding. The scroll thumb's track starts below this so the
 /// two never fight for the same hit area.
-private let expandButtonInset: CGFloat = 28
+private let expandButtonInset: CGFloat = 24
 
 private struct ScrollOffsetKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
@@ -149,7 +149,12 @@ struct ClipboardView: View {
                 .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
         }
         .buttonStyle(.plain)
-        .padding(6)
+        // Tucked close to the corner, right under where the battery
+        // indicator sits in the header above, rather than the header's
+        // usual 6pt content padding — that gap read as floating in the
+        // clipboard's own space rather than continuing the header's row.
+        .padding(.top, 2)
+        .padding(.trailing, 6)
     }
 
     @MainActor
