@@ -36,6 +36,13 @@ class BoringViewModel: NSObject, ObservableObject {
 
     @Published var notchSize: CGSize = getClosedNotchSize()
     @Published var closedNotchSize: CGSize = getClosedNotchSize()
+
+    /// Extra height a tab needs beyond the normal open size — e.g. the
+    /// clipboard's expanded list. The window itself is a fixed size created
+    /// once at launch, so growing past it means actually resizing that
+    /// window; AppDelegate observes this and does so, animated, keeping the
+    /// top edge pinned to the screen so growth reads as extending downward.
+    @Published var extraContentHeight: CGFloat = 0
     
     let webcamManager = WebcamManager.shared
     @Published var isCameraExpanded: Bool = false
@@ -205,6 +212,7 @@ class BoringViewModel: NSObject, ObservableObject {
         self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
         self.closedNotchSize = self.notchSize
         self.notchState = .closed
+        self.extraContentHeight = 0
         self.isBatteryPopoverActive = false
         self.coordinator.sneakPeek.show = false
         self.edgeAutoOpenActive = false

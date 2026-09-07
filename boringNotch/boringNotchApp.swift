@@ -231,6 +231,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Grows or shrinks a notch window to fit a tab's extra content height,
+    /// keeping the top edge pinned to the screen so the change reads as the
+    /// notch extending downward rather than moving.
+    @MainActor
+    private func resizeWindow(_ window: NSWindow, extraHeight: CGFloat, animate: Bool) {
+        guard let screen = window.screen ?? NSScreen.main else { return }
+
+        let newHeight = windowSize.height + extraHeight
+        let newFrame = NSRect(
+            x: window.frame.origin.x,
+            y: screen.frame.origin.y + screen.frame.height - newHeight,
+            width: windowSize.width,
+            height: newHeight
+        )
+
+        guard animate else {
+            window.setFrame(newFrame, display: true)
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.35
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
+            window.animator().setFrame(newFrame, display: true)
+        }
+    }
+
+    private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {
+        viewModel.$extraContentHeight
+            .removeDuplicates()
+            .sink { [weak self, weak window] extraHeight in
+                guard let self, let window else { return }
+                self.resizeWindow(window, extraHeight: extraHeight, animate: true)
+            }
+            .store(in: &viewModel.cancellables)
+    }
+
     private func createBoringNotchWindow(for screen: NSScreen, with viewModel: BoringViewModel) -> NSWindow {
         let rect = NSRect(x: 0, y: 0, width: windowSize.width, height: windowSize.height)
         let styleMask: NSWindow.StyleMask = [.borderless, .nonactivatingPanel, .utilityWindow, .hudWindow]
@@ -495,6 +532,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if windows[uuid] == nil {
                     let viewModel = BoringViewModel(screenUUID: uuid)
                     let window = createBoringNotchWindow(for: screen, with: viewModel)
+                    observeExtraContentHeight(for: window, viewModel: viewModel)
 
                     windows[uuid] = window
                     viewModels[uuid] = viewModel
@@ -530,6 +568,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             if window == nil {
                 window = createBoringNotchWindow(for: selectedScreen, with: vm)
+                if let window {
+                    observeExtraContentHeight(for: window, viewModel: vm)
+                }
             }
 
             if let window = window {

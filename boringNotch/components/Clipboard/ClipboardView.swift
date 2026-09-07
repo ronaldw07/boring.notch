@@ -8,13 +8,12 @@
 
 import SwiftUI
 
-/// Row height shrinks toward this as the bottom handle is pulled down, so
-/// more history fits in the same panel. The notch's open height is a fixed
-/// window size (see `openNotchSize`), not something this view can grow —
-/// pulling down densifies the existing space rather than expanding it.
-private let normalRowHeight: CGFloat = 38
-private let compactRowHeight: CGFloat = 24
-private let densityDragTravel: CGFloat = 70
+private let rowHeight: CGFloat = 38
+private let rowSpacing: CGFloat = 2
+private let listVerticalPadding: CGFloat = 8
+/// Rows visible when the expand button is on. The window is grown to fit
+/// exactly this many, so it's a real target height, not a minimum.
+private let expandedRowCount = 10
 
 private struct ScrollOffsetKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
@@ -27,6 +26,7 @@ private struct ContentHeightKey: PreferenceKey {
 }
 
 struct ClipboardView: View {
+    @EnvironmentObject var vm: BoringViewModel
     @ObservedObject private var clipboard = ClipboardManager.shared
     @State private var justCopiedID: UUID?
 
@@ -35,12 +35,7 @@ struct ClipboardView: View {
     @State private var viewportHeight: CGFloat = 0
     @State private var scrollTarget: CGFloat?
 
-    @State private var density: CGFloat = 0
-    @State private var densityAtDragStart: CGFloat = 0
-
-    private var rowHeight: CGFloat {
-        normalRowHeight - (normalRowHeight - compactRowHeight) * density
-    }
+    @State private var isExpanded = false
 
     var body: some View {
         Group {
@@ -51,17 +46,16 @@ struct ClipboardView: View {
                     GeometryReader { viewport in
                         ScrollViewReader { proxy in
                             ScrollView(.vertical, showsIndicators: false) {
-                                LazyVStack(spacing: 2) {
+                                LazyVStack(spacing: rowSpacing) {
                                     ForEach(clipboard.items) { item in
-                                        ClipboardRow(item: item, height: rowHeight,
-                                                     isConfirming: justCopiedID == item.id)
+                                        ClipboardRow(item: item, isConfirming: justCopiedID == item.id)
                                             .id(item.id)
                                             .contentShape(Rectangle())
                                             .onTapGesture { copy(item) }
                                     }
                                 }
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, listVerticalPadding)
                                 .background(
                                     GeometryReader { content in
                                         Color.clear
@@ -89,17 +83,59 @@ struct ClipboardView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .bottom) { densityHandle }
+        .overlay(alignment: .bottomTrailing) { expandButton }
+        .onDisappear {
+            // Leaving the tab collapses the window back down; nothing else
+            // resets extraContentHeight, and it would otherwise stay tall
+            // while showing Home or Shelf.
+            if isExpanded {
+                isExpanded = false
+                vm.extraContentHeight = 0
+            }
+        }
+    }
+
+    // MARK: - Expand
+
+    private var expandButton: some View {
+        Button(action: toggleExpanded) {
+            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+        }
+        .buttonStyle(.plain)
+        .padding(6)
+    }
+
+    private func toggleExpanded() {
+        isExpanded.toggle()
+
+        // Only the shortfall needs to come from the window — whatever
+        // already fits on screen is free.
+        let targetContentHeight = CGFloat(expandedRowCount) * rowHeight
+            + CGFloat(expandedRowCount - 1) * rowSpacing
+            + listVerticalPadding * 2
+        let currentContentHeight = viewportHeight
+        let shortfall = max(0, targetContentHeight - currentContentHeight)
+
+        withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)) {
+            vm.extraContentHeight = isExpanded ? shortfall : 0
+        }
     }
 
     // MARK: - Scroll thumb
 
     /// Scrubs the whole list from a pill on the trailing edge, the same
-    /// gesture as iOS's fast-scroll index.
+    /// gesture as iOS's fast-scroll index. Sized to the actual visible
+    /// fraction with only a small floor, so it visibly shrinks as more items
+    /// pile up rather than staying a fixed size regardless of history length.
     private var scrollThumb: some View {
         GeometryReader { geo in
             let trackHeight = geo.size.height
-            let thumbHeight = max(24, trackHeight * (viewportHeight / max(contentHeight, viewportHeight)))
+            let thumbHeight = max(8, trackHeight * (viewportHeight / max(contentHeight, viewportHeight)))
             let maxTravel = trackHeight - thumbHeight
             let scrollableHeight = max(contentHeight - viewportHeight, 1)
             let progress = min(max(-scrollOffset / scrollableHeight, 0), 1)
@@ -124,28 +160,6 @@ struct ClipboardView: View {
         guard !clipboard.items.isEmpty else { return nil }
         let index = min(Int(fraction * CGFloat(clipboard.items.count)), clipboard.items.count - 1)
         return clipboard.items[index].id
-    }
-
-    // MARK: - Density handle
-
-    /// Pulling down packs rows tighter so more of the history is visible at
-    /// once; pushing back up returns to the normal, easier-to-hit row size.
-    private var densityHandle: some View {
-        Capsule()
-            .fill(.white.opacity(0.25))
-            .frame(width: 32, height: 4)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle().inset(by: -8))
-            .gesture(
-                DragGesture(minimumDistance: 2)
-                    .onChanged { value in
-                        let delta = value.translation.height / densityDragTravel
-                        density = min(max(densityAtDragStart + delta, 0), 1)
-                    }
-                    .onEnded { _ in
-                        densityAtDragStart = density
-                    }
-            )
     }
 
     private var emptyState: some View {
@@ -176,12 +190,9 @@ struct ClipboardView: View {
 
 private struct ClipboardRow: View {
     let item: ClipboardItem
-    let height: CGFloat
     let isConfirming: Bool
 
     @State private var isHovering = false
-
-    private var isCompact: Bool { height < 32 }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -192,12 +203,10 @@ private struct ClipboardRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                if !isCompact {
-                    Text(subtitle)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.gray)
-                        .lineLimit(1)
-                }
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.gray)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 0)
@@ -220,7 +229,7 @@ private struct ClipboardRow: View {
             }
         }
         .padding(.horizontal, 8)
-        .frame(height: height)
+        .frame(height: rowHeight)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isHovering ? Color(nsColor: .secondarySystemFill) : .clear)
@@ -230,7 +239,7 @@ private struct ClipboardRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        let side = min(height - 8, 26)
+        let side: CGFloat = 26
         RoundedRectangle(cornerRadius: 6)
             .fill(Color(red: 28/255, green: 28/255, blue: 30/255))
             .frame(width: side * 1.3, height: side)
