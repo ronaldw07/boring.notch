@@ -271,7 +271,7 @@ class MusicManager: ObservableObject {
             // readout back by however long ago that poll was.
             self.elapsedTime = positionWhenPaused
             self.timestampDate = Date()
-        } else if !isPausedBacktrack(state), timeChanged || state.lastUpdated != self.timestampDate {
+        } else if shouldAdoptReportedPosition(state), timeChanged || state.lastUpdated != self.timestampDate {
             self.elapsedTime = state.currentTime
             self.timestampDate = state.lastUpdated
         }
@@ -578,16 +578,22 @@ class MusicManager: ObservableObject {
         }
     }
 
-    /// While paused, players keep re-reporting the position from just before
-    /// the pause, which is slightly behind the frozen readout. Adopting it
-    /// would tick the number backwards for no reason. Anything beyond this is
-    /// a real seek and is taken as-is.
-    private static let pausedBacktrackTolerance: TimeInterval = 1.5
+    /// Clock-rounding jitter in a source app's own paused-position report can
+    /// land a hair on either side of the frozen readout. A real seek while
+    /// paused moves the position by much more than this and is always taken
+    /// as-is.
+    private static let pausedJitterTolerance: TimeInterval = 0.4
 
+    /// While playing, every report is trusted, same as always. While paused,
+    /// a position is only trusted if it came from the source app itself
+    /// (`isCurrentTimeAuthoritative`) rather than a controller carrying the
+    /// last value forward between real reports — and even then, only if it
+    /// actually moved by more than clock jitter, in either direction.
     @MainActor
-    private func isPausedBacktrack(_ state: PlaybackState) -> Bool {
-        guard !state.isPlaying, state.currentTime < elapsedTime else { return false }
-        return elapsedTime - state.currentTime < Self.pausedBacktrackTolerance
+    private func shouldAdoptReportedPosition(_ state: PlaybackState) -> Bool {
+        guard !state.isPlaying else { return true }
+        guard state.isCurrentTimeAuthoritative else { return false }
+        return abs(state.currentTime - elapsedTime) >= Self.pausedJitterTolerance
     }
 
     // MARK: - Playback Position Estimation

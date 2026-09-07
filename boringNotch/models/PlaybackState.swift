@@ -20,6 +20,11 @@ struct PlaybackState {
     var artist: String = "Me"
     var album: String = "Self Love"
     var currentTime: Double = 0
+    /// Whether `currentTime` came from the source app/device itself, versus
+    /// being carried forward or guessed by a controller between real reports.
+    /// `MusicManager` uses this to know when it's safe to trust a position
+    /// update over its own extrapolation of the last authoritative one.
+    var isCurrentTimeAuthoritative: Bool = true
     var duration: Double = 0
     var playbackRate: Double = 1
     var isShuffled: Bool = false

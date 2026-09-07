@@ -188,7 +188,11 @@ struct MusicControlsView: View {
     }
 
     private var musicSlider: some View {
-        TimelineView(.animation(minimumInterval: musicManager.playbackRate > 0 ? 0.1 : nil)) { timeline in
+        // `nil` for minimumInterval means unthrottled, not stopped — that
+        // previously kicked in exactly when paused (playbackRate == 0),
+        // ticking this at full frame rate right when the readout most needed
+        // to hold still. `paused:` is the actual way to stop it.
+        TimelineView(.animation(minimumInterval: 0.1, paused: !musicManager.isPlaying)) { timeline in
             MusicSliderView(
                 sliderValue: $sliderValue,
                 duration: $musicManager.songDuration,
