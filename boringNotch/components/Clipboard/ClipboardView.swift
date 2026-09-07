@@ -18,6 +18,10 @@ private let expandedRowCount = 10
 /// overshoot and momentarily push the notch's bottom radius past its rest
 /// position.
 private let expandCurve = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)
+/// Footprint of the expand button at the top-trailing corner: a 22pt button
+/// plus its 6pt padding. The scroll thumb's track starts below this so the
+/// two never fight for the same hit area.
+private let expandButtonInset: CGFloat = 28
 
 private struct ScrollOffsetKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
@@ -101,7 +105,7 @@ struct ClipboardView: View {
                 collapsedViewportHeight = height
             }
         }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .topTrailing) {
             // Nothing to expand into when there's no history.
             if !clipboard.items.isEmpty {
                 expandButton
@@ -216,6 +220,11 @@ struct ClipboardView: View {
                 )
         }
         .frame(width: 10)
+        // Insets the track itself rather than offsetting the math below, so
+        // trackHeight, maxTravel and progress all read the already-inset
+        // geometry and can't drift out of sync with where the thumb is
+        // actually drawn.
+        .padding(.top, expandButtonInset)
         .padding(.trailing, 2)
     }
 
@@ -321,13 +330,30 @@ private struct ClipboardRow: View {
             .fill(Color(red: 28/255, green: 28/255, blue: 30/255))
             .frame(width: side * 1.3, height: side)
             .overlay {
-                if let data = item.imageData, let image = NSImage(data: data) {
-                    Image(nsImage: image)
+                switch item.kind {
+                case .file(let url):
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                         .resizable()
-                        .scaledToFill()
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                } else {
-                    Image(systemName: item.isImage ? "photo" : "doc.text")
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                case .link:
+                    Image(systemName: "link")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.gray)
+                case .image(let filename):
+                    if let url = ClipboardManager.shared.imageURL(forFilename: filename),
+                       let image = NSImage(contentsOf: url) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.gray)
+                    }
+                case .text:
+                    Image(systemName: "doc.text")
                         .font(.system(size: 11))
                         .foregroundStyle(.gray)
                 }
@@ -335,14 +361,29 @@ private struct ClipboardRow: View {
     }
 
     private var title: String {
-        guard let text = item.text else { return "Image" }
-        return text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\n", with: " ")
+        switch item.kind {
+        case .file(let url):
+            return url.lastPathComponent
+        case .link(let url):
+            return url.host ?? url.absoluteString
+        case .text(let text):
+            return text
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\n", with: " ")
+        case .image:
+            return "Image"
+        }
     }
 
     private var subtitle: String {
-        "\(item.isImage ? "Image" : "Text") · Copied \(Self.copiedDescription(item.copiedAt))"
+        let kindName: String
+        switch item.kind {
+        case .file: kindName = "File"
+        case .link: kindName = "Link"
+        case .image: kindName = "Image"
+        case .text: kindName = "Text"
+        }
+        return "\(kindName) · Copied \(Self.copiedDescription(item.copiedAt))"
     }
 
     /// Times today, "yesterday" for the day before, dates beyond that — the
