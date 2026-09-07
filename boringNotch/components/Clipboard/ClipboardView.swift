@@ -83,10 +83,20 @@ private struct ClipboardRow: View {
             Spacer(minLength: 0)
 
             if isConfirming {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.green)
-                    .transition(.opacity)
+                HStack(spacing: 3) {
+                    Text("Copied")
+                        .font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 8, weight: .bold))
+                }
+                .foregroundStyle(.green)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(.green.opacity(0.15))
+                )
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, 8)
