@@ -232,30 +232,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Grows or shrinks a notch window to fit a tab's extra content height,
-    /// keeping the top edge pinned to the screen so the change reads as the
-    /// notch extending downward rather than moving.
+    /// keeping it pinned to the top-center of its screen. x and y are always
+    /// recomputed fresh from the screen rather than reusing the window's
+    /// current frame, so the window can never drift off-center from an
+    /// earlier resize.
+    ///
+    /// This window is a custom SkyLight-backed panel (`BoringNotchSkyLightWindow`),
+    /// and animating its frame through `NSAnimationContext`/`.animator()` was
+    /// the source of that drift — it resizes instantly here, and the SwiftUI
+    /// content's own animation on `extraContentHeight` carries the visible
+    /// smoothness instead.
     @MainActor
-    private func resizeWindow(_ window: NSWindow, extraHeight: CGFloat, animate: Bool) {
+    private func resizeWindow(_ window: NSWindow, extraHeight: CGFloat) {
         guard let screen = window.screen ?? NSScreen.main else { return }
 
         let newHeight = windowSize.height + extraHeight
         let newFrame = NSRect(
-            x: window.frame.origin.x,
+            x: screen.frame.origin.x + (screen.frame.width / 2) - (windowSize.width / 2),
             y: screen.frame.origin.y + screen.frame.height - newHeight,
             width: windowSize.width,
             height: newHeight
         )
 
-        guard animate else {
-            window.setFrame(newFrame, display: true)
-            return
-        }
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.35
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
-            window.animator().setFrame(newFrame, display: true)
-        }
+        window.setFrame(newFrame, display: true)
     }
 
     private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {
@@ -263,7 +262,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .removeDuplicates()
             .sink { [weak self, weak window] extraHeight in
                 guard let self, let window else { return }
-                self.resizeWindow(window, extraHeight: extraHeight, animate: true)
+                self.resizeWindow(window, extraHeight: extraHeight)
             }
             .store(in: &viewModel.cancellables)
     }
