@@ -148,10 +148,12 @@ struct ContentView: View {
                     }
                     .conditionalModifier(Defaults[.enableGestures]) { view in
                         view
-                            .panGesture(direction: .left) { _, phase in
+                            // Scroll only: a drag recognizer here would sit above
+                            // the mirror's own zoom drag and compete with it.
+                            .panGesture(direction: .left, usesDragGesture: false) { _, phase in
                                 handleSideGesture(to: .shelf, phase: phase)
                             }
-                            .panGesture(direction: .right) { _, phase in
+                            .panGesture(direction: .right, usesDragGesture: false) { _, phase in
                                 handleSideGesture(to: .home, phase: phase)
                             }
                     }

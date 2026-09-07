@@ -255,8 +255,13 @@ class MusicManager: ObservableObject {
             self.album = state.album
         }
 
-        if timeChanged {
+        // elapsedTime and timestampDate are a single anchor — a position and
+        // the moment it was true. Everything on screen is extrapolated from
+        // the pair, so they have to move together or the readout shifts by
+        // whatever gap opens between them.
+        if timeChanged || state.lastUpdated != self.timestampDate {
             self.elapsedTime = state.currentTime
+            self.timestampDate = state.lastUpdated
         }
 
         if durationChanged {
@@ -287,8 +292,6 @@ class MusicManager: ObservableObject {
         if volumeChanged {
             self.volume = state.volume
         }
-        
-        self.timestampDate = state.lastUpdated
     }
 
     func toggleFavoriteTrack() {

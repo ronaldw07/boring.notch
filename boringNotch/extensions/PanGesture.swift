@@ -19,18 +19,58 @@ enum PanDirection {
 }
 
 extension View {
-    func panGesture(direction: PanDirection, threshold: CGFloat = 4, action: @escaping (CGFloat, NSEvent.Phase) -> Void) -> some View {
+    /// - Parameter usesDragGesture: Adds a mouse-drag recognizer alongside the
+    ///   scroll monitor. Turn it off where the same area already owns a drag of
+    ///   its own — a `DragGesture(minimumDistance: 0)` on a parent will
+    ///   otherwise compete with it.
+    func panGesture(
+        direction: PanDirection,
+        threshold: CGFloat = 4,
+        usesDragGesture: Bool = true,
+        action: @escaping (CGFloat, NSEvent.Phase) -> Void
+    ) -> some View {
         self
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let s = direction.signed(from: value.translation)
-                        guard s > 0, s.magnitude >= threshold else { return }
-                        action(s.magnitude, .changed)
-                    }
-                    .onEnded { _ in action(0, .ended) }
-            )
+            .conditionalModifier(usesDragGesture) { view in
+                view.gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let s = direction.signed(from: value.translation)
+                            guard s > 0, s.magnitude >= threshold else { return }
+                            action(s.magnitude, .changed)
+                        }
+                        .onEnded { _ in action(0, .ended) }
+                )
+            }
             .background(ScrollMonitor(direction: direction, threshold: threshold, action: action))
+    }
+}
+
+/// Grants one scroll gesture to a single direction at a time.
+///
+/// Monitors are installed per direction and cannot see each other, so a
+/// diagonal two-finger swipe can pass the horizontal dominance test on one
+/// event and the vertical one on the next — switching tabs and opening or
+/// closing the notch from a single swipe. Whichever direction crosses its
+/// threshold first owns the gesture until it ends.
+@MainActor
+private final class ScrollGestureArbiter {
+    static let shared = ScrollGestureArbiter()
+
+    private var owner: ObjectIdentifier?
+
+    func claim(_ claimant: AnyObject) -> Bool {
+        let id = ObjectIdentifier(claimant)
+        guard let owner else {
+            self.owner = id
+            return true
+        }
+        return owner == id
+    }
+
+    func release(_ claimant: AnyObject) {
+        if owner == ObjectIdentifier(claimant) {
+            owner = nil
+        }
     }
 }
 
@@ -81,6 +121,7 @@ private struct ScrollMonitor: NSViewRepresentable {
                 }
                 active = false
                 accumulated = 0
+                ScrollGestureArbiter.shared.release(self)
             }
         }
 
@@ -102,6 +143,7 @@ private struct ScrollMonitor: NSViewRepresentable {
             active = false
             endTask?.cancel()
             endTask = nil
+            ScrollGestureArbiter.shared.release(self)
         }
 
         private func handleScroll(_ event: NSEvent) {
@@ -113,6 +155,7 @@ private struct ScrollMonitor: NSViewRepresentable {
                 }
                 active = false
                 accumulated = 0
+                ScrollGestureArbiter.shared.release(self)
                 return
             }
 
@@ -133,6 +176,11 @@ private struct ScrollMonitor: NSViewRepresentable {
             accumulated = s > 0 ? accumulated + s : 0
 
             if !active && accumulated >= threshold {
+                // Another direction already owns this swipe.
+                guard ScrollGestureArbiter.shared.claim(self) else {
+                    accumulated = 0
+                    return
+                }
                 active = true
                 action(accumulated.magnitude, .began)
             } else if active {
