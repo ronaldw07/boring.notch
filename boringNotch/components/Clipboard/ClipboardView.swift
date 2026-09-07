@@ -86,6 +86,14 @@ struct ClipboardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottomTrailing) { expandButton }
+        .onAppear {
+            // Forces the tab to always open at the exact same size as Home
+            // or Shelf, no matter what state a previous visit left behind.
+            // Growth only ever happens from an explicit press of the expand
+            // button below, never as a side effect of switching tabs.
+            isExpanded = false
+            vm.extraContentHeight = 0
+        }
         .onDisappear {
             // Leaving the tab collapses the window back down; nothing else
             // resets extraContentHeight, and it would otherwise stay tall
@@ -240,6 +248,10 @@ private struct ClipboardRow: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.red)
                         .frame(width: 20, height: 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(Color.red.opacity(0.15))
+                        )
                 }
                 .buttonStyle(.plain)
                 .transition(.opacity)
