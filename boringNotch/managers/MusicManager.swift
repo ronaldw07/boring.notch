@@ -181,11 +181,12 @@ class MusicManager: ObservableObject {
     // MARK: - Update Methods
     @MainActor
     private func updateFromPlaybackState(_ state: PlaybackState) {
-        // Captured before isPlaying flips, while the extrapolation is still
-        // the number actually on screen.
-        let positionWhenPaused: TimeInterval? = (self.isPlaying && !state.isPlaying)
-            ? estimatedPlaybackPosition()
-            : nil
+        // Captured before isPlaying and playbackRate flip, while the
+        // extrapolation still describes the number actually on screen.
+        let displayedPosition = estimatedPlaybackPosition()
+        let wasPlaying = self.isPlaying
+        let positionWhenPaused: TimeInterval? = (wasPlaying && !state.isPlaying) ? displayedPosition : nil
+        let didResume = !wasPlaying && state.isPlaying
 
         // Check for playback state changes (playing/paused)
         if state.isPlaying != self.isPlaying {
@@ -271,9 +272,17 @@ class MusicManager: ObservableObject {
             // readout back by however long ago that poll was.
             self.elapsedTime = positionWhenPaused
             self.timestampDate = Date()
-        } else if shouldAdoptReportedPosition(state), timeChanged || state.lastUpdated != self.timestampDate {
+        } else if shouldAdoptReportedPosition(state, displayedPosition: displayedPosition),
+                  timeChanged || state.lastUpdated != self.timestampDate {
             self.elapsedTime = state.currentTime
             self.timestampDate = state.lastUpdated
+        } else if didResume {
+            // Declining the report on resume still needs a fresh anchor: the
+            // timestamp is the one frozen at the pause, so extrapolating from
+            // it once the rate goes back to 1 would leap forward by the entire
+            // length of the pause.
+            self.elapsedTime = displayedPosition
+            self.timestampDate = Date()
         }
 
         if durationChanged {
@@ -578,22 +587,31 @@ class MusicManager: ObservableObject {
         }
     }
 
-    /// Clock-rounding jitter in a source app's own paused-position report can
-    /// land a hair on either side of the frozen readout. A real seek while
-    /// paused moves the position by much more than this and is always taken
-    /// as-is.
-    private static let pausedJitterTolerance: TimeInterval = 0.4
+    /// How far behind the readout a reported position has to be before it's
+    /// treated as a real seek rather than the two merely disagreeing. Half a
+    /// second of scrub is about one pixel of a 640pt slider, so nothing a
+    /// person means to do lands under this.
+    private static let backwardCorrectionTolerance: TimeInterval = 0.5
 
-    /// While playing, every report is trusted, same as always. While paused,
-    /// a position is only trusted if it came from the source app itself
-    /// (`isCurrentTimeAuthoritative`) rather than a controller carrying the
-    /// last value forward between real reports — and even then, only if it
-    /// actually moved by more than clock jitter, in either direction.
+    /// A reported position is adopted only if it came from the source app
+    /// itself (`isCurrentTimeAuthoritative`) rather than a controller carrying
+    /// its last value forward, and only if it doesn't step the readout
+    /// backwards by a sliver.
+    ///
+    /// Players store the position from just before a pause, which is a little
+    /// behind where the readout was frozen. Adopting that on resume rewinds
+    /// the number — invisible mid-second, but a whole displayed second when
+    /// the value happens to sit just past a second boundary, which is the
+    /// flicker this exists to stop. Anything further back than the tolerance
+    /// is a real seek; forward is always fine, since it can never read as a
+    /// rewind.
     @MainActor
-    private func shouldAdoptReportedPosition(_ state: PlaybackState) -> Bool {
-        guard !state.isPlaying else { return true }
+    private func shouldAdoptReportedPosition(_ state: PlaybackState, displayedPosition: TimeInterval) -> Bool {
         guard state.isCurrentTimeAuthoritative else { return false }
-        return abs(state.currentTime - elapsedTime) >= Self.pausedJitterTolerance
+
+        let backwardStep = displayedPosition - state.currentTime
+        guard backwardStep > 0 else { return true }
+        return backwardStep >= Self.backwardCorrectionTolerance
     }
 
     // MARK: - Playback Position Estimation
