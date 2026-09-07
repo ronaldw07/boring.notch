@@ -27,10 +27,17 @@ class CalendarManager: ObservableObject {
     private let calendarService = CalendarService()
 
     private var eventStoreChangedObserver: NSObjectProtocol?
+    private var refreshTask: Task<Void, Never>?
+
+    /// EventKit only signals changes to the local store. Calendar.app pulls
+    /// from remote accounts like Google on its own schedule, so poll as well
+    /// to pick up anything that landed without a notification.
+    private static let refreshInterval: TimeInterval = 60
 
     private init() {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
+        startPeriodicRefresh()
         Task {
             await reloadCalendarAndReminderLists()
         }
@@ -40,6 +47,7 @@ class CalendarManager: ObservableObject {
         if let observer = eventStoreChangedObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        refreshTask?.cancel()
     }
 
     private func setupEventStoreChangedObserver() {
@@ -48,8 +56,23 @@ class CalendarManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task {
-                await self?.reloadCalendarAndReminderLists()
+            Task { @MainActor in
+                guard let self else { return }
+                await self.reloadCalendarAndReminderLists()
+                // The notification means the store's contents changed, not
+                // just which calendars exist. Without this the events on
+                // screen stay stale until something else happens to refetch.
+                await self.updateEvents()
+            }
+        }
+    }
+
+    private func startPeriodicRefresh() {
+        refreshTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.refreshInterval))
+                guard !Task.isCancelled, let self else { return }
+                await self.updateEvents()
             }
         }
     }

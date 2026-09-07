@@ -181,6 +181,12 @@ class MusicManager: ObservableObject {
     // MARK: - Update Methods
     @MainActor
     private func updateFromPlaybackState(_ state: PlaybackState) {
+        // Captured before isPlaying flips, while the extrapolation is still
+        // the number actually on screen.
+        let positionWhenPaused: TimeInterval? = (self.isPlaying && !state.isPlaying)
+            ? estimatedPlaybackPosition()
+            : nil
+
         // Check for playback state changes (playing/paused)
         if state.isPlaying != self.isPlaying {
             NSLog("Playback state changed: \(state.isPlaying ? "Playing" : "Paused")")
@@ -259,7 +265,13 @@ class MusicManager: ObservableObject {
         // the moment it was true. Everything on screen is extrapolated from
         // the pair, so they have to move together or the readout shifts by
         // whatever gap opens between them.
-        if timeChanged || state.lastUpdated != self.timestampDate {
+        if let positionWhenPaused {
+            // Freeze on the number that was showing. The player's own reported
+            // position is the last poll's, so adopting it here would step the
+            // readout back by however long ago that poll was.
+            self.elapsedTime = positionWhenPaused
+            self.timestampDate = Date()
+        } else if !isPausedBacktrack(state), timeChanged || state.lastUpdated != self.timestampDate {
             self.elapsedTime = state.currentTime
             self.timestampDate = state.lastUpdated
         }
@@ -564,6 +576,18 @@ class MusicManager: ObservableObject {
                 self.calculateAverageColor()
             }
         }
+    }
+
+    /// While paused, players keep re-reporting the position from just before
+    /// the pause, which is slightly behind the frozen readout. Adopting it
+    /// would tick the number backwards for no reason. Anything beyond this is
+    /// a real seek and is taken as-is.
+    private static let pausedBacktrackTolerance: TimeInterval = 1.5
+
+    @MainActor
+    private func isPausedBacktrack(_ state: PlaybackState) -> Bool {
+        guard !state.isPlaying, state.currentTime < elapsedTime else { return false }
+        return elapsedTime - state.currentTime < Self.pausedBacktrackTolerance
     }
 
     // MARK: - Playback Position Estimation
