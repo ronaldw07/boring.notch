@@ -223,6 +223,9 @@ struct ContentView: View {
         }
         .padding(.bottom, 8)
         .frame(maxWidth: windowSize.width, maxHeight: windowSize.height + vm.extraContentHeight, alignment: .top)
+        // Sits above everything so the arrow wins wherever AppKit would
+        // otherwise substitute a cursor of its own.
+        .overlay(CursorLock())
         .compositingGroup()
         .scaleEffect(
             x: gestureScale,
@@ -708,4 +711,55 @@ struct GeneralDropTargetDelegate: DropDelegate {
     return ContentView()
         .environmentObject(vm)
         .frame(width: vm.notchSize.width, height: vm.notchSize.height)
+}
+
+/// Holds the pointer as the plain arrow anywhere inside the notch.
+///
+/// Nothing here asks for a different cursor, but AppKit supplies its own
+/// without being asked — an I-beam over anything drawn as text, a resize
+/// cursor near a window edge — and it reasserts them as the pointer moves.
+/// So the arrow can't simply be set once; it has to be claimed for the whole
+/// area and set again on every cursor update.
+///
+/// The view never takes part in hit testing, so buttons and the scrubber
+/// underneath keep receiving their clicks as normal.
+struct CursorLock: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        LockedCursorView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class LockedCursorView: NSView {
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .arrow)
+        }
+
+        override func cursorUpdate(with event: NSEvent) {
+            NSCursor.arrow.set()
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            NSCursor.arrow.set()
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            NSCursor.arrow.set()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero,
+                    options: [.activeAlways, .inVisibleRect, .cursorUpdate, .mouseEnteredAndExited, .mouseMoved],
+                    owner: self
+                )
+            )
+        }
+
+        // Clicks belong to whatever is underneath.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
 }
