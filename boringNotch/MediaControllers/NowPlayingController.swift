@@ -230,6 +230,29 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         let payload = update.payload
         let diff = update.diff ?? false
 
+        // The adapter opens a stream with an empty non-diff frame, and sends
+        // another whenever it reconnects. Every field being absent says the
+        // frame carries nothing, but a non-diff update is read as a complete
+        // snapshot, so the absences became a real state: no title, no artist,
+        // and a position of zero. That is what dropped the readout to 0:00 and
+        // blanked the track name for the moment until the next real frame.
+        guard !payload.isEmpty else { return }
+
+        // A browser publishes a media session per tab, and each one arrives as
+        // a full snapshot that is paused at zero. Pausing the real player drops
+        // its priority just long enough for one of those to claim the slot and
+        // hand it straight back, which is what put 0:00 on screen for a moment
+        // on every pause. A source that has never played has nothing to say
+        // about where playback is, so it doesn't get to take the slot from one
+        // that has.
+        let incomingApp = payload.parentApplicationBundleIdentifier ?? payload.bundleIdentifier
+        let isUnplayedNewSource = !diff
+            && incomingApp != nil
+            && incomingApp != playbackState.bundleIdentifier
+            && payload.playing == false
+            && (payload.elapsedTime ?? 0) == 0
+        guard !(isUnplayedNewSource && !playbackState.title.isEmpty) else { return }
+
         var newPlaybackState = PlaybackState(bundleIdentifier: playbackState.bundleIdentifier)
         
         newPlaybackState.title = payload.title ?? (diff ? self.playbackState.title : "")
@@ -347,6 +370,17 @@ struct NowPlayingPayload: Codable {
     let parentApplicationBundleIdentifier: String?
     let bundleIdentifier: String?
     let volume: Double?
+
+    /// Whether the payload carries no information at all. A player that has
+    /// genuinely stopped still names itself, so this is only ever the
+    /// adapter's empty framing, never a real state worth applying.
+    var isEmpty: Bool {
+        title == nil && artist == nil && album == nil && duration == nil
+            && elapsedTime == nil && shuffleMode == nil && repeatMode == nil
+            && artworkData == nil && timestamp == nil && playbackRate == nil
+            && playing == nil && parentApplicationBundleIdentifier == nil
+            && bundleIdentifier == nil && volume == nil
+    }
 }
 
 actor JSONLinesPipeHandler {
