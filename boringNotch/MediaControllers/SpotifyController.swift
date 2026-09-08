@@ -37,11 +37,29 @@ class SpotifyController: MediaControllerProtocol {
     private var lastArtworkURL: String?
     private var artworkFetchTask: Task<Void, Never>?
     
+    /// How often Spotify's own position is re-read. Notifications only fire
+    /// on play, pause and track changes, so between them nothing corrects a
+    /// seek made in Spotify itself, or any drift against our own clock.
+    private static let pollInterval: Duration = .milliseconds(500)
+
+    private var pollTask: Task<Void, Never>?
+
     init() {
         setupPlaybackStateChangeObserver()
         Task {
             if isActive() {
                 await updatePlaybackInfo()
+            }
+        }
+        startPolling()
+    }
+
+    private func startPolling() {
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.pollInterval)
+                guard let self, self.isActive() else { continue }
+                await self.updatePlaybackInfo()
             }
         }
     }
@@ -61,6 +79,7 @@ class SpotifyController: MediaControllerProtocol {
     deinit {
         notificationTask?.cancel()
         artworkFetchTask?.cancel()
+        pollTask?.cancel()
     }
     
     // MARK: - Protocol Implementation
@@ -96,9 +115,34 @@ class SpotifyController: MediaControllerProtocol {
         NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == playbackState.bundleIdentifier }
     }
     
+    /// True while a read is in flight. Polling and Spotify's own change
+    /// notification both call this, so without a guard two reads overlap and
+    /// the slower one lands last — applying a position from before the one
+    /// already on screen. That is the flicker back and forth after a seek.
+    private var isReadingPlaybackInfo = false
+
+    /// When the most recently applied read was started, so a result that was
+    /// overtaken can be recognised and dropped rather than applied late.
+    private var latestAppliedRead: Date = .distantPast
+
+    /// When we last told Spotify to do something. A read already in flight
+    /// when a seek goes out samples the position from before it, and lands
+    /// afterwards carrying the old number — which is the seek showing
+    /// correctly for a moment and then being overwritten by where the track
+    /// used to be. Anything begun before the command can only describe the
+    /// world before it, so it is dropped.
+    private var lastCommandAt: Date = .distantPast
+
     func updatePlaybackInfo() async {
+        guard !isReadingPlaybackInfo else { return }
+        isReadingPlaybackInfo = true
+        let startedAt = Date()
+        defer { isReadingPlaybackInfo = false }
+
         guard let descriptor = try? await fetchPlaybackInfoAsync() else { return }
         guard descriptor.numberOfItems >= 10 else { return }
+        guard startedAt >= latestAppliedRead, startedAt >= lastCommandAt else { return }
+        latestAppliedRead = startedAt
         
         let isPlaying = descriptor.atIndex(1)?.booleanValue ?? false
         let currentTrack = descriptor.atIndex(2)?.stringValue ?? "Unknown"
@@ -122,10 +166,16 @@ class SpotifyController: MediaControllerProtocol {
             playbackRate: 1,
             isShuffled: isShuffled,
             repeatMode: isRepeating ? .all : .off,
-            lastUpdated: Date(),
+            // Spotify read the position somewhere inside the script's run, not
+            // at the moment it returned, so the midpoint is the closest we can
+            // honestly place it. Stamping the return instead dated every
+            // position slightly early and left the readout running ahead.
+            lastUpdated: startedAt.addingTimeInterval(Date().timeIntervalSince(startedAt) / 2),
             artwork: nil,
             volume: Double(volumePercentage) / 100.0
         )
+        // Read from Spotify just now, so it is the position, not a claim about it.
+        state.isPositionLive = true
 
         if artworkURL == lastArtworkURL, let existingArtwork = self.playbackState.artwork {
             state.artwork = existingArtwork
@@ -163,6 +213,9 @@ class SpotifyController: MediaControllerProtocol {
 // MARK: - Private Methods
     
     private func executeCommand(_ command: String) async {
+        // Stamped before the command goes out, so every read already running
+        // is treated as describing the world before it.
+        lastCommandAt = Date()
         let script = "tell application \"Spotify\" to \(command)"
         try? await AppleScriptHelper.executeVoid(script)
     }

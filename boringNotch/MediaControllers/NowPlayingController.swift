@@ -255,10 +255,22 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
 
         var newPlaybackState = PlaybackState(bundleIdentifier: playbackState.bundleIdentifier)
         
-        newPlaybackState.title = payload.title ?? (diff ? self.playbackState.title : "")
-        newPlaybackState.artist = payload.artist ?? (diff ? self.playbackState.artist : "")
-        newPlaybackState.album = payload.album ?? (diff ? self.playbackState.album : "")
-        newPlaybackState.duration = payload.duration ?? (diff ? self.playbackState.duration : 0)
+        // Frames are sparse in both directions — a snapshot names only what it
+        // felt like naming, and the ones seen here routinely omit the title of
+        // a track that is plainly still playing. Reading that absence as an
+        // empty title made MusicManager see a track change, and a track change
+        // carrying no position of its own resets the readout to 0:00. That is
+        // the drop to zero on unpausing after a wait; the next frame names the
+        // track again, which is the jump back.
+        newPlaybackState.title = payload.title ?? self.playbackState.title
+        newPlaybackState.artist = payload.artist ?? self.playbackState.artist
+        newPlaybackState.album = payload.album ?? self.playbackState.album
+        // A frame that omits the duration isn't saying the track is zero
+        // seconds long, it's saying it didn't carry one — and only the
+        // opening snapshot carries it at all, so reading the absence as zero
+        // put a 0:00 length on a playing track. Every position is clamped to
+        // this, so zeroing it drags the whole readout to 0:00 with it.
+        newPlaybackState.duration = payload.duration ?? self.playbackState.duration
         
         // An update that omits the position is saying it doesn't carry one,
         // not that playback is at zero — a full snapshot used to land in the
@@ -267,11 +279,26 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         // position here is also not this layer's job: MusicManager tracks it
         // continuously, so anything not reported is carried forward and
         // flagged unverified for it to ignore.
-        if let elapsedTime = payload.elapsedTime {
+        // A position and the moment it was true are one fact, not two, and
+        // they were being decided in separate blocks. So a frame carrying a
+        // position but no timestamp of its own got paired with one carried
+        // forward from before the pause — and once playing, the readout
+        // extrapolates from that stamp, adding the entire length of the pause
+        // in one step. That is the glitch forward. Its mirror, a carried
+        // position landing against a fresh stamp, is a glitch back.
+        //
+        // So the pair moves together or not at all: a position without its
+        // own timestamp can't be placed in time, and is no more usable than
+        // no position at all.
+        if let elapsedTime = payload.elapsedTime,
+           let dateString = payload.timestamp,
+           let date = ISO8601DateFormatter().date(from: dateString) {
             newPlaybackState.currentTime = elapsedTime
+            newPlaybackState.lastUpdated = date
             newPlaybackState.isCurrentTimeAuthoritative = true
         } else {
             newPlaybackState.currentTime = self.playbackState.currentTime
+            newPlaybackState.lastUpdated = self.playbackState.lastUpdated
             newPlaybackState.isCurrentTimeAuthoritative = false
         }
 
@@ -297,15 +324,6 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
             )
         } else if !diff {
             newPlaybackState.artwork = nil
-        }
-
-        if let dateString = payload.timestamp,
-           let date = ISO8601DateFormatter().date(from: dateString) {
-            newPlaybackState.lastUpdated = date
-        } else if !diff {
-            newPlaybackState.lastUpdated = Date()
-        } else {
-            newPlaybackState.lastUpdated = self.playbackState.lastUpdated
         }
 
         newPlaybackState.playbackRate = payload.playbackRate ?? (diff ? self.playbackState.playbackRate : 1.0)

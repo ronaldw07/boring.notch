@@ -25,6 +25,11 @@ struct PlaybackState {
     /// `MusicManager` uses this to know when it's safe to trust a position
     /// update over its own extrapolation of the last authoritative one.
     var isCurrentTimeAuthoritative: Bool = true
+    /// Whether `currentTime` was read from the player at this instant, rather
+    /// than pushed by it whenever it felt like reporting. A live position is
+    /// simply the truth and needs none of the corroboration and staleness
+    /// checks that exist to second-guess the streamed ones.
+    var isPositionLive: Bool = false
     var duration: Double = 0
     var playbackRate: Double = 1
     var isShuffled: Bool = false

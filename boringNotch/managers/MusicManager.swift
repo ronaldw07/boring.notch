@@ -68,9 +68,30 @@ class MusicManager: ObservableObject {
     @Published var isTransitioning: Bool = false
     private var transitionWorkItem: DispatchWorkItem?
 
-    /// The second currently on screen, held by `displayedPlaybackPosition` so
-    /// nothing routine can move it. Nil until the first read.
+    /// Backing state for `displayedPlaybackPosition`, which runs on its own
+    /// clock and converges on the estimate rather than stepping onto it. Nil
+    /// until the first read.
     private var shownPosition: TimeInterval?
+    private var shownPositionReadAt: Date = .init()
+
+    /// A reported position large enough from the estimate to be a seek,
+    /// waiting on a second report before it's trusted. See
+    /// `resolvedReportedPosition`.
+    private var pendingOutlierReport: (value: TimeInterval, receivedAt: Date)?
+
+    /// The instant playback was last seen to stop, which is the moment the
+    /// frozen readout describes. Reports stamped before it are describing a
+    /// moment that freeze already accounts for. Nil while playing.
+    private var playbackStoppedAt: Date?
+
+    /// The last number handed to the display, held so the next one can be
+    /// checked against it. See `displayedPlaybackPosition`.
+    private var lastDisplayed: TimeInterval?
+
+    /// Set when something happens that genuinely moves playback backwards —
+    /// a seek, or a new track. Until it passes, the readout is allowed to go
+    /// back; outside it, going back is always a mistake upstream.
+    private var backwardMoveAllowedUntil: Date?
 
     // MARK: - Initialization
     init() {
@@ -187,11 +208,14 @@ class MusicManager: ObservableObject {
     private func updateFromPlaybackState(_ state: PlaybackState) {
         // Captured before isPlaying and playbackRate flip, while the
         // extrapolation still describes the number actually on screen.
-        let displayedPosition = estimatedPlaybackPosition()
+        let estimateBeforeUpdate = estimatedPlaybackPosition()
         let wasPlaying = self.isPlaying
-        let positionWhenPaused: TimeInterval? = (wasPlaying && !state.isPlaying) ? displayedPosition : nil
         let didResume = !wasPlaying && state.isPlaying
-        let trackChanged = state.title != self.songTitle || state.artist != self.artistName
+        let didPause = wasPlaying && !state.isPlaying
+        // A track change resets the position to zero, so it has to mean a
+        // different track — never a frame that simply failed to name one.
+        let trackChanged = !state.title.isEmpty
+            && (state.title != self.songTitle || state.artist != self.artistName)
 
         // Check for playback state changes (playing/paused)
         if state.isPlaying != self.isPlaying {
@@ -276,24 +300,67 @@ class MusicManager: ObservableObject {
             // position carries over. An update arriving without a position on
             // a track change means the new one hasn't started yet.
             self.elapsedTime = state.isCurrentTimeAuthoritative ? state.currentTime : 0
-            self.timestampDate = state.isCurrentTimeAuthoritative ? state.lastUpdated : Date()
-        } else if let positionWhenPaused {
-            // Freeze on the number that was showing. The player's own reported
-            // position is the last poll's, so adopting it here would step the
-            // readout back by however long ago that poll was.
-            self.elapsedTime = positionWhenPaused
-            self.timestampDate = Date()
-        } else if shouldAdoptReportedPosition(state, displayedPosition: displayedPosition) {
+            self.timestampDate = state.isCurrentTimeAuthoritative ? sanitizedStamp(state.lastUpdated) : Date()
+            self.pendingOutlierReport = nil
+            self.allowBackwardMove()
+            self.lastDisplayed = nil
+        } else if state.isPositionLive {
+            // Read from the player this instant, so there is nothing to
+            // second-guess: no corroboration, no staleness rules, no holding
+            // it back. A difference big enough to be a seek is a seek, and
+            // the readout follows it wherever it goes, including backwards.
+            // Any backward disagreement with a live reading is the player
+            // having moved, not noise to be smoothed away, so the readout is
+            // freed to follow it rather than being held by the no-going-back
+            // rule that exists for the streamed source.
+            if state.currentTime < estimateBeforeUpdate - 0.25 {
+                allowBackwardMove()
+            }
             self.elapsedTime = state.currentTime
             self.timestampDate = state.lastUpdated
-        } else if didResume {
-            // Declining the report on resume still needs a fresh anchor: the
-            // timestamp is the one frozen at the pause, so extrapolating from
-            // it once the rate goes back to 1 would leap forward by the entire
-            // length of the pause.
-            self.elapsedTime = displayedPosition
+            self.pendingOutlierReport = nil
+        } else if state.isCurrentTimeAuthoritative,
+                  let resolved = resolvedReportedPosition(
+                    state.currentTime,
+                    reportedAt: sanitizedStamp(state.lastUpdated),
+                    estimate: estimateBeforeUpdate
+                  ) {
+            self.elapsedTime = resolved
+            self.timestampDate = sanitizedStamp(state.lastUpdated)
+        } else if didResume || didPause {
+            // Play and pause arrive carrying no position of their own, so the
+            // anchor has to be rebuilt — and it is rebuilt from the number on
+            // screen, never from the last report, which by then is seconds
+            // old. Anchoring anywhere else is what made the readout step at
+            // the exact moment the key was pressed: the estimate stops
+            // extrapolating the instant playback does, so it collapses onto a
+            // stale anchor, and the display gets dragged there with it.
+            //
+            // Nothing is invented here. Spotify's next real report still
+            // corrects this, while playing, where a correction can be
+            // absorbed without being seen.
+            // Only while it really is the number on screen. Reads happen just
+            // for an open notch, so a stale one is whatever was last shown
+            // before it closed — minutes ago and no longer true of anything.
+            let onScreen = Date().timeIntervalSince(shownPositionReadAt) <= Self.maxSmoothingStep
+                ? shownPosition
+                : nil
+            self.elapsedTime = onScreen ?? estimateBeforeUpdate
             self.timestampDate = Date()
         }
+
+
+
+        if didPause {
+            // The freeze above is what the readout now shows, and it is true
+            // as of this instant. Anything the player says about an earlier
+            // one is news we already have.
+            playbackStoppedAt = Date()
+            pendingOutlierReport = nil
+        } else if didResume || trackChanged {
+            playbackStoppedAt = nil
+        }
+
 
         if durationChanged {
             self.songDuration = state.duration
@@ -597,74 +664,242 @@ class MusicManager: ObservableObject {
         }
     }
 
-    /// How far a reported position has to be from the readout before it's
-    /// treated as a seek rather than the two merely disagreeing about the
-    /// same moment. Sits above the drift actually observed between the
-    /// readout and the player — around three quarters of a second — since
-    /// anything below this is absorbed smoothly rather than being applied as
-    /// a jump, and mistaking drift for a seek is what puts a visible step on
+    /// How far the readout has to be from the estimate before the difference
+    /// is treated as a seek and landed on rather than absorbed. Sits above the
+    /// drift actually measured between the two, around three quarters of a
+    /// second, since mistaking drift for a seek is what puts a visible step on
     /// screen.
-    private static let seekThreshold: TimeInterval = 2.0
+    private static let seekThreshold: TimeInterval = 1.5
 
-    /// Once anchored, the readout runs on its own clock and the player only
-    /// gets to move it for a real event — a seek, or a track change handled
-    /// by the caller. Reports that merely restate roughly where playback
-    /// already is are ignored in *both* directions.
-    ///
-    /// Adopting them is what produced every flicker here: a report a fraction
-    /// of a second either way is invisible mid-second but shifts the whole
-    /// displayed second when the value sits near a boundary, and a paused
-    /// player restating its position was enough to drift the frozen number
-    /// forward while nothing was playing at all.
-    @MainActor
-    private func shouldAdoptReportedPosition(_ state: PlaybackState, displayedPosition: TimeInterval) -> Bool {
-        guard state.isCurrentTimeAuthoritative else { return false }
+    /// The same bar while paused, where a correction cannot be absorbed and
+    /// so has to be refused outright. Sits above a poll interval, which is
+    /// the most our own position can be wrong by once playback has stopped.
+    private static let pausedSeekThreshold: TimeInterval = 3.0
 
-        // Nothing routine gets to move the position, playing or paused. Once
-        // anchored, the readout runs on its own clock; a report that merely
-        // restates roughly where playback already is can only disagree with
-        // it by a fraction of a second, and applying that is the flicker.
-        // Only a real seek clears this bar.
-        return abs(state.currentTime - displayedPosition) >= Self.seekThreshold
+    /// How close a second report has to land to the first outlier before two
+    /// glitches are believed to actually be one real seek settling.
+    private static let corroborationTolerance: TimeInterval = 0.75
+
+    /// How long a lone outlier is kept waiting for a confirming second
+    /// report before it's dropped as stale.
+    private static let corroborationWindow: TimeInterval = 3.0
+
+    /// How long after a pause the player's own position frames are treated as
+    /// the stale tail of that pause rather than news. Measured at under a
+    /// second between the pause and the frame that used to undo it.
+    private static let pauseSettlingWindow: TimeInterval = 3.0
+
+    /// How far past the pause a report has to be stamped before it's read as
+    /// something that happened after playback stopped. Clears the whole
+    /// second the adapter's timestamps are truncated to.
+    private static let postPauseStampTolerance: TimeInterval = 1.5
+
+    /// Timestamps this far from now are the adapter's framing rather than a
+    /// real moment — an empty opening frame decodes to the epoch — and would
+    /// otherwise anchor the readout to an absurd point in time.
+    private static let maxStampAge: TimeInterval = 3600
+
+    /// How long the readout is allowed to follow playback backwards after
+    /// something that genuinely moves it there.
+    private static let backwardMoveGrace: TimeInterval = 1.0
+
+    private func allowBackwardMove() {
+        backwardMoveAllowedUntil = Date().addingTimeInterval(Self.backwardMoveGrace)
     }
+
+    /// Falls back to now for a stamp that can't be a real report time.
+    private func sanitizedStamp(_ stamp: Date) -> Date {
+        let age = Date().timeIntervalSince(stamp)
+        return (age > Self.maxStampAge || age < -Self.maxStampAge) ? Date() : stamp
+    }
+
+    /// The player is the authority on where playback is, so a report close
+    /// to our own estimate is taken immediately — refusing genuine drift
+    /// corrections is what let the readout run a second ahead, since our own
+    /// extrapolation runs on past the moment playback really stopped and
+    /// nothing came back to correct it.
+    ///
+    /// But a report far from the estimate is taken on faith by nothing else:
+    /// the adapter has been seen to emit exactly one stale or zeroed report —
+    /// right as playback resumes, or the first poll after the notch has sat
+    /// closed a while — immediately followed by a correct one. Landing the
+    /// first of those on screen is the drop the next report then undoes, so
+    /// a jump this size only gets adopted once a second report lands within
+    /// `corroborationTolerance` of the first, meaning the player really did
+    /// move there rather than glitching once. Keeping the anchor honest is
+    /// this function's job; keeping an adopted jump from visibly stepping is
+    /// `displayedPlaybackPosition`'s.
+    private func resolvedReportedPosition(
+        _ reported: TimeInterval,
+        reportedAt: Date,
+        estimate: TimeInterval
+    ) -> TimeInterval? {
+        // A pause's position frame arrives a beat after the flag that caused
+        // it, and the position it carries is the player's last internal
+        // sample rather than where it actually stopped — Spotify's runs over
+        // a second behind, sometimes four. While playing that lag is
+        // invisible, because the anchor is extrapolated forward from its own
+        // timestamp and the two cancel out. The moment playback stops the
+        // extrapolation stops with it, and the lag that was being cancelled
+        // lands on screen as a step backwards.
+        //
+        // Magnitude can't tell that report apart from a real backward seek —
+        // four seconds looks like four seconds either way. Its timestamp can:
+        // a stale report describes a moment before playback stopped, which is
+        // a moment the freeze already accounts for, while a seek made after
+        // pausing is stamped later. Reports are stamped to the whole second,
+        // so a report has to be clearly past the pause to count as news.
+        if !isPlaying, let stoppedAt = playbackStoppedAt {
+            let sincePause = Date().timeIntervalSince(stoppedAt)
+
+            // The stale frame lands within a second of the pause, measured.
+            // Nothing that arrives in that window and points backwards is
+            // news: the freeze already covers every moment up to the pause,
+            // and a backward seek cannot happen in the same breath as the
+            // pause that preceded it. Forward moves still pass, so a seek
+            // made from the player shows up immediately.
+            if sincePause < Self.pauseSettlingWindow, reported < estimate {
+                return nil
+            }
+
+            // Past the window, a report stamped before playback stopped is
+            // still describing a moment the freeze accounts for.
+            if reportedAt.timeIntervalSince(stoppedAt) < Self.postPauseStampTolerance {
+                return nil
+            }
+        }
+
+        guard abs(reported - estimate) > Self.seekThreshold else {
+            pendingOutlierReport = nil
+            return reported
+        }
+
+        let now = Date()
+        if let pending = pendingOutlierReport,
+           now.timeIntervalSince(pending.receivedAt) <= Self.corroborationWindow,
+           abs(pending.value - reported) <= Self.corroborationTolerance {
+            pendingOutlierReport = nil
+            // Two reports agreeing on a position this far from our own is the
+            // player telling us it really did move — the one case where the
+            // readout is meant to follow it backwards.
+            if reported < estimate { allowBackwardMove() }
+            return reported
+        }
+
+        pendingOutlierReport = (reported, now)
+        return nil
+    }
+
+    /// How much faster or slower than real time the readout runs while it's
+    /// closing a gap. A quarter is too small a rate change to see and still
+    /// absorbs the drift actually measured here, around half a second, in
+    /// roughly two seconds.
+    private static let catchUpBias: Double = 0.25
+
+    /// The longest gap between reads that still counts as consecutive frames.
+    /// The timeline drives these every 0.1s playing and 0.5s paused, so this
+    /// clears both with room to spare while still catching the case that
+    /// matters: the notch having been closed.
+    private static let maxSmoothingStep: TimeInterval = 1.0
 
     /// The number actually shown, as opposed to the raw estimate.
     ///
-    /// Once a second is on screen it stays there until the position is
-    /// genuinely past it. The player and this readout are two clocks that
-    /// disagree by a fraction of a second — its reports are stamped a moment
-    /// in the past, and ours keeps running while an event is in flight — so
-    /// letting a report move the number is what put a different second on
-    /// screen and then took it back. Nothing routine moves it: it only ever
-    /// counts up.
+    /// The estimate steps whenever the player reports a position, because the
+    /// two clocks always disagree slightly: its reports are stamped a moment
+    /// in the past, and ours keeps running while an event is in flight. That
+    /// gap is a fraction of a second — invisible mid-second, a whole displayed
+    /// second when it lands near a boundary.
     ///
-    /// A gap too large to be that disagreement is a seek or a new track,
-    /// which is a real move somebody asked for, and is landed on directly.
+    /// So the readout never steps onto a correction, and never ignores one
+    /// either. It runs on its own clock, slightly fast while it's behind and
+    /// slightly slow while it's ahead, and converges without being seen to
+    /// move. Only a gap too large to be the two clocks disagreeing — a seek,
+    /// or a new track — is landed on directly.
+    /// Playback within a track only ever moves forward. Everything upstream
+    /// of this — the player's own lagging reports, an anchor rebuilt at each
+    /// pause, a smoothed value converging at a quarter of real time — can put
+    /// the two out of step by seconds, and every attempt to close that gap
+    /// arrives as a step backwards on screen.
+    ///
+    /// So the invariant is enforced here, once, at the end: the number does
+    /// not go back. A real seek and a new track do move playback backwards,
+    /// and both say so explicitly by opening `backwardMoveAllowedUntil`.
     @MainActor
     func displayedPlaybackPosition(at date: Date = Date()) -> TimeInterval {
-        let estimate = clampedToTrack(estimatedPlaybackPosition(at: date))
+        let candidate = smoothedPlaybackPosition(at: date)
 
-        guard let shown = shownPosition, abs(estimate - shown) < Self.seekThreshold else {
+        if let last = lastDisplayed, candidate < last {
+            let mayGoBack = backwardMoveAllowedUntil.map { date < $0 } ?? false
+            guard mayGoBack else { return last }
+        }
+
+        lastDisplayed = candidate
+        return candidate
+    }
+
+    @MainActor
+    private func smoothedPlaybackPosition(at date: Date = Date()) -> TimeInterval {
+        let estimate = clampedToTrack(estimatedPlaybackPosition(at: date))
+        let sinceLastRead = max(0, date.timeIntervalSince(shownPositionReadAt))
+        shownPositionReadAt = date
+
+        // Smoothing only makes sense between consecutive frames. Reads happen
+        // solely while the notch is on screen, so a longer gap than that means
+        // it was closed — and a closed notch has no number anybody watched get
+        // where it is, so there is nothing to converge from. Carrying the gap
+        // into the step is what sent the readout ten seconds past the truth on
+        // reopening, and the snap back from there is the jump.
+        guard sinceLastRead <= Self.maxSmoothingStep else {
             shownPosition = estimate
             return estimate
         }
 
-        let next = max(shown, estimate)
+        // A stationary readout has nowhere to hide a correction: every one of
+        // them is a visible step, so while paused the number is held and the
+        // disagreement is carried into the next playing stretch instead. Our
+        // own error while paused is bounded by how stale the last report was,
+        // about a poll interval, so a wider bar here still lets a real seek
+        // through while refusing everything that is merely drift.
+        let bar = isPlaying ? Self.seekThreshold : Self.pausedSeekThreshold
+
+        // Whatever the anchor does, the number on screen does not walk
+        // backwards in the moment after a pause. This is the last line
+        // between a stale report and the user seeing 2:02 become 1:58.
+        if !isPlaying, let stoppedAt = playbackStoppedAt, let shown = shownPosition,
+           date.timeIntervalSince(stoppedAt) < Self.pauseSettlingWindow, estimate < shown {
+            return shown
+        }
+
+        guard let shown = shownPosition, abs(estimate - shown) < bar else {
+            shownPosition = estimate
+            return estimate
+        }
+
+        guard isPlaying else { return shown }
+
+        let rate = (playbackRate > 0 ? playbackRate : 1)
+            * (estimate > shown ? 1 + Self.catchUpBias : 1 - Self.catchUpBias)
+        let advanced = shown + sinceLastRead * rate
+
+        // Converge onto the estimate rather than sailing past it.
+        let next = estimate > shown ? min(advanced, estimate) : max(advanced, estimate)
         shownPosition = next
         return next
     }
 
+    /// A duration of zero means it hasn't been reported yet, not that the
+    /// track has no length, so it can't be used as a ceiling — doing that
+    /// pinned the readout to 0:00 for as long as the duration was missing.
     private func clampedToTrack(_ position: TimeInterval) -> TimeInterval {
-        min(max(0, position), songDuration)
+        songDuration > 0 ? min(max(0, position), songDuration) : max(0, position)
     }
 
     // MARK: - Playback Position Estimation
     public func estimatedPlaybackPosition(at date: Date = Date()) -> TimeInterval {
-        guard isPlaying else { return min(elapsedTime, songDuration) }
+        guard isPlaying else { return clampedToTrack(elapsedTime) }
 
         let timeDifference = date.timeIntervalSince(timestampDate)
-        let estimated = elapsedTime + (timeDifference * playbackRate)
-        return min(max(0, estimated), songDuration)
+        return clampedToTrack(elapsedTime + (timeDifference * playbackRate))
     }
 
     func calculateAverageColor() {
@@ -737,6 +972,23 @@ class MusicManager: ObservableObject {
     }
 
     func seek(to position: TimeInterval) {
+        // Dragging the slider back is the user moving playback backwards, so
+        // the readout has to be free to follow rather than hold.
+        allowBackwardMove()
+
+        // The player takes a moment to accept a seek and a moment more to
+        // report it back, and until then every layer here still describes
+        // where the track used to be — which is the readout flicking back to
+        // the old position before the new one arrives. Nothing is being
+        // guessed: this is the position playback was just sent to, and the
+        // player's own reading replaces it as soon as it lands.
+        elapsedTime = position
+        timestampDate = Date()
+        shownPosition = position
+        shownPositionReadAt = Date()
+        lastDisplayed = position
+        pendingOutlierReport = nil
+
         Task {
             await activeController?.seek(to: position)
         }

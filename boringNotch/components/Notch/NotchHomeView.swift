@@ -502,7 +502,11 @@ struct MusicSliderView: View {
             )
             .font(.caption)
         }
-        .onChange(of: currentDate) {
+        // `initial` seeds the value as the view appears. This view is built
+        // fresh every time the notch opens, and without it the readout renders
+        // its default of zero until the next timeline tick — up to half a
+        // second while paused, which is the drop to 0:00 and back on open.
+        .onChange(of: currentDate, initial: true) {
            guard !dragging, timestampDate.timeIntervalSince(lastDragged) > -1 else { return }
             sliderValue = MusicManager.shared.displayedPlaybackPosition(at: currentDate)
         }
