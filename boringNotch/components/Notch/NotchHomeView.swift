@@ -191,8 +191,9 @@ struct MusicControlsView: View {
         // `nil` for minimumInterval means unthrottled, not stopped — that
         // previously kicked in exactly when paused (playbackRate == 0),
         // ticking this at full frame rate right when the readout most needed
-        // to hold still. `paused:` is the actual way to stop it.
-        TimelineView(.animation(minimumInterval: 0.1, paused: !musicManager.isPlaying)) { timeline in
+        // to hold still. Slowed rather than stopped while paused, so a seek
+        // made from the player itself still shows up.
+        TimelineView(.animation(minimumInterval: musicManager.isPlaying ? 0.1 : 0.5)) { timeline in
             MusicSliderView(
                 sliderValue: $sliderValue,
                 duration: $musicManager.songDuration,
@@ -503,7 +504,7 @@ struct MusicSliderView: View {
         }
         .onChange(of: currentDate) {
            guard !dragging, timestampDate.timeIntervalSince(lastDragged) > -1 else { return }
-            sliderValue = MusicManager.shared.estimatedPlaybackPosition(at: currentDate)
+            sliderValue = MusicManager.shared.displayedPlaybackPosition(at: currentDate)
         }
     }
 

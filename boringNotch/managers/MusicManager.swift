@@ -68,6 +68,10 @@ class MusicManager: ObservableObject {
     @Published var isTransitioning: Bool = false
     private var transitionWorkItem: DispatchWorkItem?
 
+    /// The second currently on screen, held by `displayedPlaybackPosition` so
+    /// nothing routine can move it. Nil until the first read.
+    private var shownPosition: TimeInterval?
+
     // MARK: - Initialization
     init() {
         // Listen for changes to the default controller preference
@@ -187,6 +191,7 @@ class MusicManager: ObservableObject {
         let wasPlaying = self.isPlaying
         let positionWhenPaused: TimeInterval? = (wasPlaying && !state.isPlaying) ? displayedPosition : nil
         let didResume = !wasPlaying && state.isPlaying
+        let trackChanged = state.title != self.songTitle || state.artist != self.artistName
 
         // Check for playback state changes (playing/paused)
         if state.isPlaying != self.isPlaying {
@@ -266,14 +271,19 @@ class MusicManager: ObservableObject {
         // the moment it was true. Everything on screen is extrapolated from
         // the pair, so they have to move together or the readout shifts by
         // whatever gap opens between them.
-        if let positionWhenPaused {
+        if trackChanged {
+            // A different song is a hard reset — nothing about the old
+            // position carries over. An update arriving without a position on
+            // a track change means the new one hasn't started yet.
+            self.elapsedTime = state.isCurrentTimeAuthoritative ? state.currentTime : 0
+            self.timestampDate = state.isCurrentTimeAuthoritative ? state.lastUpdated : Date()
+        } else if let positionWhenPaused {
             // Freeze on the number that was showing. The player's own reported
             // position is the last poll's, so adopting it here would step the
             // readout back by however long ago that poll was.
             self.elapsedTime = positionWhenPaused
             self.timestampDate = Date()
-        } else if shouldAdoptReportedPosition(state, displayedPosition: displayedPosition),
-                  timeChanged || state.lastUpdated != self.timestampDate {
+        } else if shouldAdoptReportedPosition(state, displayedPosition: displayedPosition) {
             self.elapsedTime = state.currentTime
             self.timestampDate = state.lastUpdated
         } else if didResume {
@@ -587,31 +597,65 @@ class MusicManager: ObservableObject {
         }
     }
 
-    /// How far behind the readout a reported position has to be before it's
-    /// treated as a real seek rather than the two merely disagreeing. Half a
-    /// second of scrub is about one pixel of a 640pt slider, so nothing a
-    /// person means to do lands under this.
-    private static let backwardCorrectionTolerance: TimeInterval = 0.5
+    /// How far a reported position has to be from the readout before it's
+    /// treated as a seek rather than the two merely disagreeing about the
+    /// same moment. Sits above the drift actually observed between the
+    /// readout and the player — around three quarters of a second — since
+    /// anything below this is absorbed smoothly rather than being applied as
+    /// a jump, and mistaking drift for a seek is what puts a visible step on
+    /// screen.
+    private static let seekThreshold: TimeInterval = 2.0
 
-    /// A reported position is adopted only if it came from the source app
-    /// itself (`isCurrentTimeAuthoritative`) rather than a controller carrying
-    /// its last value forward, and only if it doesn't step the readout
-    /// backwards by a sliver.
+    /// Once anchored, the readout runs on its own clock and the player only
+    /// gets to move it for a real event — a seek, or a track change handled
+    /// by the caller. Reports that merely restate roughly where playback
+    /// already is are ignored in *both* directions.
     ///
-    /// Players store the position from just before a pause, which is a little
-    /// behind where the readout was frozen. Adopting that on resume rewinds
-    /// the number — invisible mid-second, but a whole displayed second when
-    /// the value happens to sit just past a second boundary, which is the
-    /// flicker this exists to stop. Anything further back than the tolerance
-    /// is a real seek; forward is always fine, since it can never read as a
-    /// rewind.
+    /// Adopting them is what produced every flicker here: a report a fraction
+    /// of a second either way is invisible mid-second but shifts the whole
+    /// displayed second when the value sits near a boundary, and a paused
+    /// player restating its position was enough to drift the frozen number
+    /// forward while nothing was playing at all.
     @MainActor
     private func shouldAdoptReportedPosition(_ state: PlaybackState, displayedPosition: TimeInterval) -> Bool {
         guard state.isCurrentTimeAuthoritative else { return false }
 
-        let backwardStep = displayedPosition - state.currentTime
-        guard backwardStep > 0 else { return true }
-        return backwardStep >= Self.backwardCorrectionTolerance
+        // Nothing routine gets to move the position, playing or paused. Once
+        // anchored, the readout runs on its own clock; a report that merely
+        // restates roughly where playback already is can only disagree with
+        // it by a fraction of a second, and applying that is the flicker.
+        // Only a real seek clears this bar.
+        return abs(state.currentTime - displayedPosition) >= Self.seekThreshold
+    }
+
+    /// The number actually shown, as opposed to the raw estimate.
+    ///
+    /// Once a second is on screen it stays there until the position is
+    /// genuinely past it. The player and this readout are two clocks that
+    /// disagree by a fraction of a second — its reports are stamped a moment
+    /// in the past, and ours keeps running while an event is in flight — so
+    /// letting a report move the number is what put a different second on
+    /// screen and then took it back. Nothing routine moves it: it only ever
+    /// counts up.
+    ///
+    /// A gap too large to be that disagreement is a seek or a new track,
+    /// which is a real move somebody asked for, and is landed on directly.
+    @MainActor
+    func displayedPlaybackPosition(at date: Date = Date()) -> TimeInterval {
+        let estimate = clampedToTrack(estimatedPlaybackPosition(at: date))
+
+        guard let shown = shownPosition, abs(estimate - shown) < Self.seekThreshold else {
+            shownPosition = estimate
+            return estimate
+        }
+
+        let next = max(shown, estimate)
+        shownPosition = next
+        return next
+    }
+
+    private func clampedToTrack(_ position: TimeInterval) -> TimeInterval {
+        min(max(0, position), songDuration)
     }
 
     // MARK: - Playback Position Estimation

@@ -237,20 +237,19 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         newPlaybackState.album = payload.album ?? (diff ? self.playbackState.album : "")
         newPlaybackState.duration = payload.duration ?? (diff ? self.playbackState.duration : 0)
         
-        // A guess made here on pause used to fight MusicManager's own
-        // extrapolation of the last real report, and the two disagreeing by
-        // even a little showed up as the displayed time jumping and settling
-        // back. MusicManager already tracks position continuously and is the
-        // better place to extrapolate from, so this only ever carries the
-        // last known value forward and flags it as unverified.
+        // An update that omits the position is saying it doesn't carry one,
+        // not that playback is at zero — a full snapshot used to land in the
+        // zero branch and report exactly that, which is what made the readout
+        // drop to 0:00 on its own after sitting for a while. Guessing a
+        // position here is also not this layer's job: MusicManager tracks it
+        // continuously, so anything not reported is carried forward and
+        // flagged unverified for it to ignore.
         if let elapsedTime = payload.elapsedTime {
             newPlaybackState.currentTime = elapsedTime
             newPlaybackState.isCurrentTimeAuthoritative = true
-        } else if diff {
+        } else {
             newPlaybackState.currentTime = self.playbackState.currentTime
             newPlaybackState.isCurrentTimeAuthoritative = false
-        } else {
-            newPlaybackState.currentTime = 0
         }
 
         
