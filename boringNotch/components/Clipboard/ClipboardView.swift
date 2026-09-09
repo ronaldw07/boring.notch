@@ -52,6 +52,9 @@ struct ClipboardView: View {
 
     @State private var isExpanded = false
 
+    @State private var isConfirmingClearAll = false
+    @State private var clearAllResetTask: Task<Void, Never>?
+
     var body: some View {
         Group {
             if clipboard.items.isEmpty {
@@ -110,9 +113,26 @@ struct ClipboardView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            // Nothing to expand into when there's no history.
-            if !clipboard.items.isEmpty {
-                expandButton
+            // Undo can still be relevant right after a clear, when items is
+            // already empty — so it's gated on its own state, not folded
+            // into the items check below.
+            if !clipboard.items.isEmpty || clipboard.canUndo {
+                HStack(spacing: 8) {
+                    if clipboard.canUndo {
+                        undoButton
+                    }
+                    if !clipboard.items.isEmpty {
+                        clearAllButton
+                        expandButton
+                    }
+                }
+                // Tucked close to the corner, right under where the battery
+                // indicator sits in the header above, rather than the
+                // header's usual 6pt content padding — that gap read as
+                // floating in the clipboard's own space rather than
+                // continuing the header's row.
+                .padding(.top, 2)
+                .padding(.trailing, 6)
             }
         }
         .onAppear {
@@ -133,6 +153,8 @@ struct ClipboardView: View {
                 vm.extraContentHeight = 0
                 vm.windowExtraHeight = 0
             }
+            clearAllResetTask?.cancel()
+            isConfirmingClearAll = false
         }
     }
 
@@ -153,12 +175,61 @@ struct ClipboardView: View {
                 .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
         }
         .buttonStyle(.plain)
-        // Tucked close to the corner, right under where the battery
-        // indicator sits in the header above, rather than the header's
-        // usual 6pt content padding — that gap read as floating in the
-        // clipboard's own space rather than continuing the header's row.
-        .padding(.top, 2)
-        .padding(.trailing, 6)
+    }
+
+    // MARK: - Clear all
+
+    /// Requires a second tap within a couple seconds to actually clear —
+    /// same red the whole time, only the label swaps, so the ask reads as
+    /// "are you sure" rather than a different action appearing.
+    private var clearAllButton: some View {
+        Button(action: tapClearAll) {
+            Text(isConfirmingClearAll ? "Confirm" : "Delete All")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.red)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @MainActor
+    private func tapClearAll() {
+        guard !clipboard.items.isEmpty else { return }
+
+        guard isConfirmingClearAll else {
+            withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.16)) {
+                isConfirmingClearAll = true
+            }
+            clearAllResetTask = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.16)) {
+                    isConfirmingClearAll = false
+                }
+            }
+            return
+        }
+
+        clearAllResetTask?.cancel()
+        isConfirmingClearAll = false
+        clipboard.clear()
+
+        // Collapse the window back down the same animated way the expand
+        // button's own collapse does — otherwise it's left tall behind the
+        // now-empty state.
+        if isExpanded {
+            toggleExpanded()
+        }
+    }
+
+    // MARK: - Undo
+
+    private var undoButton: some View {
+        Button(action: clipboard.undo) {
+            Text("Undo")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
     }
 
     @MainActor

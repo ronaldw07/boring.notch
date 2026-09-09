@@ -33,6 +33,13 @@ final class ClipboardManager: ObservableObject {
     static let shared = ClipboardManager()
 
     @Published private(set) var items: [ClipboardItem] = []
+    @Published private(set) var canUndo: Bool = false
+
+    /// The list as it was immediately before the last delete/clear, so
+    /// `undo()` can restore it. Never touched by the automatic overflow
+    /// eviction in `record()` — that's capacity management, not a user
+    /// action, so it isn't undoable.
+    private var undoSnapshot: [ClipboardItem]?
 
     private var lastChangeCount: Int
     private var pollTask: Task<Void, Never>?
@@ -81,15 +88,43 @@ final class ClipboardManager: ObservableObject {
     }
 
     func clear() {
-        items.forEach { deleteImageFile(for: $0) }
+        commitPendingUndo()
+        undoSnapshot = items
+        canUndo = true
         items = []
         save()
     }
 
     func delete(_ item: ClipboardItem) {
-        deleteImageFile(for: item)
+        commitPendingUndo()
+        undoSnapshot = items
+        canUndo = true
         items.removeAll { $0.id == item.id }
         save()
+    }
+
+    /// Restores the list to how it was before the last delete/clear. Image
+    /// files for a deleted item aren't actually removed from disk until the
+    /// next destructive action or the next launch's orphan sweep — see
+    /// `commitPendingUndo()` — so nothing needs to be recreated here.
+    func undo() {
+        guard let snapshot = undoSnapshot else { return }
+        items = snapshot
+        undoSnapshot = nil
+        canUndo = false
+        save()
+    }
+
+    /// Finalizes whatever the last delete/clear removed once it's no longer
+    /// undoable — a new delete, a new copy, or app relaunch all mean the
+    /// previous one is committed. This is the point where its image files
+    /// actually become garbage, so it's also the point where
+    /// `pruneOrphanedImages` is allowed to sweep them.
+    private func commitPendingUndo() {
+        guard undoSnapshot != nil else { return }
+        undoSnapshot = nil
+        canUndo = false
+        pruneOrphanedImages()
     }
 
     // MARK: - Capture
@@ -160,6 +195,11 @@ final class ClipboardManager: ObservableObject {
         if let newest = items.first, newest.kind == item.kind {
             return
         }
+
+        // A new copy moves history forward — undoing a delete from before
+        // it would otherwise restore a snapshot that doesn't include this
+        // item, silently dropping it.
+        commitPendingUndo()
 
         items.insert(item, at: 0)
 
