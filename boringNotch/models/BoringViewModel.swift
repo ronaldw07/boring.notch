@@ -219,8 +219,19 @@ class BoringViewModel: NSObject, ObservableObject {
         self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
         self.closedNotchSize = self.notchSize
         self.notchState = .closed
-        self.extraContentHeight = 0
-        self.windowExtraHeight = 0
+
+        // Shrink any expanded tab content (e.g. the clipboard's expanded
+        // list) in step with the notch's own close animation, and only pull
+        // the window in once that's finished. The window is the content's
+        // clip bounds, so shrinking it immediately — before the panel has
+        // finished collapsing — chops the still-visible bottom off mid-
+        // animation, which is what read as a flicker/jump on close.
+        withAnimation(animationLibrary.animation, completionCriteria: .removed) {
+            self.extraContentHeight = 0
+        } completion: { [weak self] in
+            self?.windowExtraHeight = 0
+        }
+
         self.isBatteryPopoverActive = false
         self.coordinator.sneakPeek.show = false
         self.edgeAutoOpenActive = false
