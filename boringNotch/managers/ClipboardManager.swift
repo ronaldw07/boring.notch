@@ -10,7 +10,11 @@ import AppKit
 import Foundation
 
 private let historyLimit = 50
-private let pollInterval: Duration = .milliseconds(500)
+// Halved from the original 500ms: the gap between a copy and the next poll
+// tick is the one window where a copy can be lost outright (e.g. quitting
+// right after copying, before this ever notices the pasteboard changed).
+// flushPendingCapture() below closes most of what's left of that window.
+private let pollInterval: Duration = .milliseconds(250)
 
 /// What a captured pasteboard entry actually was, so the row and the
 /// re-copy logic can treat a file, a link, an image and plain text
@@ -139,6 +143,13 @@ final class ClipboardManager: ObservableObject {
                 self.captureIfChanged()
             }
         }
+    }
+
+    /// Catches whatever the poll loop hasn't gotten to yet. Called right
+    /// before the app terminates, so a copy made in the last stretch before
+    /// quitting isn't simply lost to the gap between polls.
+    func flushPendingCapture() {
+        captureIfChanged()
     }
 
     private func captureIfChanged() {
@@ -311,6 +322,13 @@ final class ClipboardManager: ObservableObject {
     private func save() {
         guard let storeURL else { return }
         guard let data = try? JSONEncoder().encode(items) else { return }
-        try? data.write(to: storeURL, options: .atomic)
+        do {
+            try data.write(to: storeURL, options: .atomic)
+        } catch {
+            // A silent failure here means whatever changed only lives in
+            // memory — worth knowing about instead of finding out at the
+            // next relaunch that it never actually persisted.
+            NSLog("ClipboardManager: failed to save history: \(error)")
+        }
     }
 }

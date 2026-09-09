@@ -73,6 +73,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Catches a copy made in the moments right before quitting, which
+        // the poll loop wouldn't otherwise get to in time.
+        ClipboardManager.shared.flushPendingCapture()
+
         NotificationCenter.default.removeObserver(self)
         if let observer = screenLockedObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
