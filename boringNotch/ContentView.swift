@@ -20,6 +20,7 @@ struct ContentView: View {
 
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @ObservedObject var musicManager = MusicManager.shared
+    @ObservedObject var timerManager = TimerManager.shared
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
     @ObservedObject var volumeManager = VolumeManager.shared
@@ -262,6 +263,16 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: timerManager.justFinished) { _, finished in
+            guard finished != nil else { return }
+            // Unlike the drop-zone auto-open above, this one doesn't
+            // schedule a close afterward — a finished timer should sit
+            // there until acknowledged, not vanish on its own.
+            coordinator.currentView = .timer
+            if vm.notchState == .closed {
+                doOpen()
+            }
+        }
     }
 
     @ViewBuilder
@@ -309,6 +320,12 @@ struct ContentView: View {
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
+                      } else if timerManager.isRunning && vm.notchState == .closed && !vm.hideOnClosed {
+                          // A deliberately started timer is a more
+                          // intentional signal than ambient background
+                          // music, so it wins the closed-notch slot first.
+                          TimerLiveActivity()
+                              .frame(alignment: .center)
                       } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
                           MusicLiveActivity()
                               .frame(alignment: .center)
@@ -377,6 +394,8 @@ struct ContentView: View {
                         // Asking for the full notch height *plus* the header's
                         // is what made this overflow.
                         ClipboardView()
+                    case .timer:
+                        TimerTabView()
                     }
                 }
                 .transition(
@@ -508,6 +527,35 @@ struct ContentView: View {
                 ),
                 alignment: .center
             )
+        }
+        .frame(
+            height: vm.effectiveClosedNotchHeight,
+            alignment: .center
+        )
+    }
+
+    @ViewBuilder
+    func TimerLiveActivity() -> some View {
+        HStack {
+            Image(systemName: timerManager.mode == .stopwatch ? "stopwatch.fill" : "timer")
+                .font(.system(size: max(0, vm.effectiveClosedNotchHeight - 12) * 0.55))
+                .foregroundStyle(.white)
+                .frame(
+                    width: max(0, vm.effectiveClosedNotchHeight - 12),
+                    height: max(0, vm.effectiveClosedNotchHeight - 12)
+                )
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width - 20)
+
+            Text(TimerManager.clockString(from: timerManager.mode == .countdown
+                ? timerManager.remaining(at: timerManager.now)
+                : timerManager.elapsed(at: timerManager.now)))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(width: max(0, vm.effectiveClosedNotchHeight - 12) + 40, alignment: .center)
         }
         .frame(
             height: vm.effectiveClosedNotchHeight,

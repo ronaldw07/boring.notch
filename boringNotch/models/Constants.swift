@@ -36,6 +36,11 @@ enum HideNotchOption: String, Defaults.Serializable {
     case never
 }
 
+enum TimerMode: String, Defaults.Serializable {
+    case stopwatch
+    case countdown
+}
+
 // Define notification names at file scope
 extension Notification.Name {
     static let mediaControllerChanged = Notification.Name("mediaControllerChanged")
@@ -199,4 +204,15 @@ extension Defaults.Keys {
     }
 
     static let didClearLegacyURLCacheV1 = Key<Bool>("didClearLegacyURLCache_v1", default: false)
+
+    // MARK: Timer
+    // Anchor-based like the music playback position: `timerAnchorDate` plus
+    // `timerAccumulated` is enough to recompute elapsed/remaining time
+    // against `Date()` after a relaunch, with no separate "was running when
+    // we quit" bookkeeping.
+    static let timerMode = Key<TimerMode>("timerMode", default: .stopwatch)
+    static let timerIsRunning = Key<Bool>("timerIsRunning", default: false)
+    static let timerAnchorDate = Key<Date?>("timerAnchorDate", default: nil)
+    static let timerAccumulated = Key<TimeInterval>("timerAccumulated", default: 0)
+    static let timerTargetDuration = Key<TimeInterval>("timerTargetDuration", default: 5 * 60)
 }

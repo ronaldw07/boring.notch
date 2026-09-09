@@ -28,6 +28,7 @@ public enum NotchViews: CaseIterable {
     case home
     case shelf
     case clipboard
+    case timer
 }
 
 enum SettingsEnum {
