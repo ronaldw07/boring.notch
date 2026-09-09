@@ -263,8 +263,13 @@ class MusicManager: ObservableObject {
                 self.lastArtworkBundleIdentifier = state.bundleIdentifier
             }
 
-            // Only update sneak peek if there's actual content and something changed
-            if !state.title.isEmpty && !state.artist.isEmpty && state.isPlaying {
+            // Gated on an actual track change, not just `hasContentChange` —
+            // that also goes true on frames where only the artwork bytes
+            // differ (re-encoding jitter from the same source can do this
+            // on nearly every frame of an unchanged track), which kept
+            // re-arming the peek's auto-hide timer for as long as playback
+            // continued and made it look permanently stuck open.
+            if trackChanged && !state.title.isEmpty && !state.artist.isEmpty && state.isPlaying {
                 self.updateSneakPeek()
             }
 

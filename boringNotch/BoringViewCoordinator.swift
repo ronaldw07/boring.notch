@@ -218,10 +218,11 @@ class BoringViewCoordinator: ObservableObject {
         }
         Task { @MainActor in
             withAnimation(.smooth) {
-                self.sneakPeek.show = status
-                self.sneakPeek.type = type
-                self.sneakPeek.value = value
-                self.sneakPeek.icon = icon
+                // One assignment, not four — `sneakPeek`'s own `didSet`
+                // (re)starts the auto-hide timer on every write, so setting
+                // its fields one at a time restarted that timer three extra
+                // times per call for no reason.
+                self.sneakPeek = .init(show: status, type: type, value: value, icon: icon)
             }
         }
 
