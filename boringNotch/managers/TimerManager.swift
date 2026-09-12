@@ -63,6 +63,22 @@ final class TimerManager: ObservableObject {
         max(0, targetDuration - elapsed(at: date))
     }
 
+    /// What a countdown should *show*, as opposed to what it is.
+    ///
+    /// Rounded up, because a 5:00 timer holds exactly 300.000s only at the
+    /// instant it starts: every tick after that lands a hair *past* its
+    /// second boundary, so the first one reads 298.99 and flooring took it
+    /// straight to "4:58". 4:59 was real for well under a millisecond, which
+    /// is why it looked skipped. Rounding up gives every value its own full
+    /// second on screen, and still lands on "0:00" exactly when the time is
+    /// actually up.
+    ///
+    /// The stopwatch deliberately doesn't use this — it floors, to stay
+    /// consistent with the hundredths shown next to it.
+    func remainingForDisplay(at date: Date) -> TimeInterval {
+        ceil(remaining(at: date))
+    }
+
     // MARK: - Controls
 
     func setMode(_ newMode: TimerMode) {
@@ -80,6 +96,15 @@ final class TimerManager: ObservableObject {
 
     func start() {
         guard !isRunning else { return }
+
+        // A spent countdown has banked its entire duration, so starting it
+        // again as-is would leave nothing remaining and completion would
+        // fire on the very next tick — sound and all — without a second of
+        // it ever running. Play on a finished timer means run it again.
+        if mode == .countdown && remaining(at: .now) <= 0 {
+            accumulated = 0
+        }
+
         anchorDate = .now
         now = anchorDate!
         isRunning = true
@@ -109,12 +134,21 @@ final class TimerManager: ObservableObject {
 
     // MARK: - Ticking
 
+    /// Countdown and the closed-notch widget only ever show whole seconds,
+    /// so a 1s cadence is plenty. A running stopwatch shows hundredths
+    /// (`centisecondsString`), which needs a much faster cadence to read as
+    /// live-updating rather than stepping.
+    private var tickInterval: Duration {
+        mode == .stopwatch ? .milliseconds(30) : .seconds(1)
+    }
+
     private func startTicking() {
         tickTask?.cancel()
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled, let self else { return }
+                guard let self else { return }
+                try? await Task.sleep(for: self.tickInterval)
+                guard !Task.isCancelled else { return }
                 self.now = .now
                 self.checkCountdownCompletion(at: self.now)
             }
@@ -135,9 +169,13 @@ final class TimerManager: ObservableObject {
     }
 
     /// Shared by the closed-notch live activity and the tab's own readout,
-    /// so the two can never format the same value differently.
+    /// so the two can never format the same value differently. Floors
+    /// rather than rounds — paired with `centisecondsString` on the same
+    /// value, rounding here would occasionally show e.g. "1:24" while the
+    /// hundredths still read something under ".995", which reads as the two
+    /// disagreeing with each other.
     static func clockString(from seconds: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(seconds.rounded()))
+        let totalSeconds = max(0, Int(seconds))
         let totalMinutes = totalSeconds / 60
         let remainingSeconds = totalSeconds % 60
         let hours = totalMinutes / 60
@@ -148,5 +186,11 @@ final class TimerManager: ObservableObject {
         } else {
             return String(format: "%d:%02d", minutes, remainingSeconds)
         }
+    }
+
+    /// Two digits, floored to match `clockString`'s whole-second part.
+    static func centisecondsString(from seconds: TimeInterval) -> String {
+        let hundredths = Int((max(0, seconds) * 100).truncatingRemainder(dividingBy: 100))
+        return String(format: "%02d", hundredths)
     }
 }
