@@ -102,6 +102,10 @@ brew install --cask TheBoredTeam/boring-notch/boring-notch
 - Use the controls to manage your music like a rockstar.
 - Click the star in your menu bar to customize your notch to your heart's content.
 
+## Changelog
+
+This fork's own changes, on top of upstream, are tracked in [CHANGELOG.md](./CHANGELOG.md).
+
 ## 📋 Roadmap
 - [x] Playback live activity 🎧
 - [x] Calendar integration 📆

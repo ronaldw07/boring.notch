@@ -7,6 +7,18 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.3.1 — 2026-09-12 13:47
+
+### Fixed
+
+- **"Remember last tab" actually remembers the last tab.** On close, a
+  shelf-has-files check ran before this setting was ever consulted, so having
+  anything on the shelf — which is most of the time, once you've used it once
+  — forced a jump to Shelf regardless. The setting is off by default; turn it
+  on in Settings → General.
+
+---
+
 ## 0.3.0 — 2026-09-12 11:19
 
 ### Added
