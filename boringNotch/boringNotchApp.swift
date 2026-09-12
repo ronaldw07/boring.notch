@@ -344,6 +344,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // `.shared` is a lazy singleton, and its init is what starts the
+        // pasteboard poll loop — without touching it here, nothing does that
+        // until ClipboardView first appears (the user opens the Clipboard
+        // tab), so every copy made before that first visit is missed
+        // entirely. Even the copy made right before that first visit is
+        // lost: init() seeds its "last seen" baseline from whatever's
+        // already on the pasteboard at that moment, so it never reads as a
+        // change. Touching it here means capture starts at launch instead.
+        _ = ClipboardManager.shared
 
         NotificationCenter.default.addObserver(
             self,

@@ -40,6 +40,12 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.3.2 — 2026-09-12
+
+- **Fixed:** Clipboard history now captures from app launch instead of only
+  after first opening the Clipboard tab — copies made before that were
+  silently missed.
+
 ### 0.3.1 — 2026-09-12
 
 - **Fixed:** "Remember last tab" now actually remembers the last tab — it was

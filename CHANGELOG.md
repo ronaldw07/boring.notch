@@ -7,6 +7,20 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.3.2 — 2026-09-12 15:02
+
+### Fixed
+
+- **Clipboard history now captures from launch, not from first opening the
+  tab.** `ClipboardManager` is a lazy singleton whose `init()` is what starts
+  the pasteboard poll loop; the only thing touching it was `ClipboardView`
+  itself, so nothing was recorded until that tab was opened once — and even
+  the copy made right before that first visit was missed, since `init()`
+  seeds its baseline from whatever's already on the pasteboard at that
+  moment. Now touched once at launch instead.
+
+---
+
 ## 0.3.1 — 2026-09-12 13:47
 
 ### Fixed
