@@ -24,7 +24,17 @@ final class ShelfStateViewModel: ObservableObject {
     private var updateTask: Task<Void, Never>?
 
     private init() {
-        items = ShelfPersistenceService.shared.load()
+        items = Self.pinnedFirst(ShelfPersistenceService.shared.load())
+    }
+
+    /// Pinned items sort ahead of everything else, so the ones worth keeping
+    /// stay reachable at the left instead of being pushed off the end of the
+    /// row by newer drops. Two `filter`s rather than a `sort`: `sort` isn't
+    /// guaranteed stable in Swift, and the order *within* each half — pins in
+    /// the order they were pinned, the rest in the order they arrived — is
+    /// the part that has to survive.
+    private static func pinnedFirst(_ items: [ShelfItem]) -> [ShelfItem] {
+        items.filter(\.isPinned) + items.filter { !$0.isPinned }
     }
 
 
@@ -40,7 +50,7 @@ final class ShelfStateViewModel: ObservableObject {
                 seen.insert(key)
             }
         }
-        items = merged
+        items = Self.pinnedFirst(merged)
     }
 
     func remove(_ item: ShelfItem) {
@@ -53,6 +63,16 @@ final class ShelfStateViewModel: ObservableObject {
         if case .file = items[idx].kind {
             items[idx].kind = .file(bookmark: bookmark)
         }
+    }
+
+    func setPinned(_ item: ShelfItem, _ pinned: Bool) {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        var updated = items
+        updated[idx].isPinned = pinned
+        // Reordered in the same assignment as the flag, so the row animates
+        // the card moving to its new place instead of restyling it where it
+        // stands and jumping on some later update.
+        items = Self.pinnedFirst(updated)
     }
 
     private func scheduleDeferredBookmarkUpdate(for item: ShelfItem, bookmark: Data) {
@@ -80,8 +100,20 @@ final class ShelfStateViewModel: ObservableObject {
     func load(_ providers: [NSItemProvider]) {
         guard !providers.isEmpty else { return }
         isLoading = true
+        // One fresh id shared by everything from this drop, so the row can
+        // collapse a multi-file drop into a single stack tile instead of
+        // overflowing with one card per file. nil for a single-file drop,
+        // which never has anything to stack with.
+        let groupID: UUID? = providers.count > 1 ? UUID() : nil
         Task { [weak self] in
-            let dropped = await ShelfDropService.items(from: providers)
+            var dropped = await ShelfDropService.items(from: providers)
+            if let groupID {
+                dropped = dropped.map { item in
+                    var tagged = item
+                    tagged.groupID = groupID
+                    return tagged
+                }
+            }
             await MainActor.run {
                 self?.add(dropped)
                 self?.isLoading = false

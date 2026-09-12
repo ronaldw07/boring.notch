@@ -53,12 +53,44 @@ struct ShelfItem: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var kind: ShelfItemKind
     var isTemporary: Bool
-    init(id: UUID = UUID(), kind: ShelfItemKind, isTemporary: Bool = false) {
+    /// Shared by every item dropped together in one multi-file drop, so the
+    /// shelf can collapse them into a single stack tile instead of growing
+    /// one card per file. nil for anything dropped on its own.
+    var groupID: UUID?
+    var isPinned: Bool
+
+    init(id: UUID = UUID(), kind: ShelfItemKind, isTemporary: Bool = false, groupID: UUID? = nil, isPinned: Bool = false) {
         self.id = id
         self.kind = kind
         self.isTemporary = isTemporary
+        self.groupID = groupID
+        self.isPinned = isPinned
     }
-    
+
+    // Hand-written rather than synthesized so that shelves persisted before
+    // groupID/isPinned existed still decode — a synthesized decoder treats
+    // isPinned as required and would fail the whole array on the first old
+    // item, wiping every saved shelf item on first launch after this change.
+    enum CodingKeys: String, CodingKey { case id, kind, isTemporary, groupID, isPinned }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decode(ShelfItemKind.self, forKey: .kind)
+        isTemporary = try container.decode(Bool.self, forKey: .isTemporary)
+        groupID = try container.decodeIfPresent(UUID.self, forKey: .groupID)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(isTemporary, forKey: .isTemporary)
+        try container.encodeIfPresent(groupID, forKey: .groupID)
+        try container.encode(isPinned, forKey: .isPinned)
+    }
+
     var displayName: String {
         switch kind {
         case .file(let bookmarkData):

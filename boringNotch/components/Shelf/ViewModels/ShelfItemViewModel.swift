@@ -105,14 +105,23 @@ final class ShelfItemViewModel: ObservableObject {
             selection.toggle(item)
         } else if flags.contains(.control) {
             handleRightClick(event: event, view: view)
-        } else {
-            if !selection.isSelected(item.id) { selection.selectSingle(item) }
+        } else if event.clickCount == 1 {
+            // Accumulate rather than replace, so a plain click on another
+            // card doesn't drop everything already selected — that's the
+            // sticky multi-select. Gated to a single click: clickCount 2 is
+            // the second mouseDown of the same double-click, and toggling
+            // there too would flip a just-selected item straight back off
+            // the instant before handleDoubleClick opens it.
+            selection.toggle(item)
         }
         if event.clickCount == 2 { handleDoubleClick() }
     }
 
     func handleRightClick(event: NSEvent, view: NSView) {
-        if !selection.isSelected(item.id) { selection.selectSingle(item) }
+        // Adds rather than replaces — right-clicking one card in an existing
+        // multi-selection should open the menu for the whole selection, not
+        // collapse it down to just the card under the cursor.
+        if !selection.isSelected(item.id) { selection.toggle(item) }
         presentContextMenu(event: event, in: view)
     }
 
@@ -367,6 +376,9 @@ final class ShelfItemViewModel: ObservableObject {
             menu.addItem(copyPathItem)
         }
 
+        let allPinned = !selectedItems.isEmpty && selectedItems.allSatisfy { $0.isPinned }
+        addMenuItem(title: allPinned ? "Unpin" : "Pin")
+
         menu.addItem(NSMenuItem.separator())
         addMenuItem(title: "Remove")
 
@@ -543,7 +555,15 @@ final class ShelfItemViewModel: ObservableObject {
             case "Remove":
                 let selected = ShelfSelectionModel.shared.selectedItems(in: ShelfStateViewModel.shared.items)
                 for it in selected { ShelfActionService.remove(it) }
-                
+
+            case "Pin":
+                let selected = ShelfSelectionModel.shared.selectedItems(in: ShelfStateViewModel.shared.items)
+                for it in selected { ShelfStateViewModel.shared.setPinned(it, true) }
+
+            case "Unpin":
+                let selected = ShelfSelectionModel.shared.selectedItems(in: ShelfStateViewModel.shared.items)
+                for it in selected { ShelfStateViewModel.shared.setPinned(it, false) }
+
             case "Remove Background":
                 handleRemoveBackground()
                 
