@@ -14,10 +14,6 @@ private let listVerticalPadding: CGFloat = 8
 /// Rows visible when the expand button is on. The window is grown to fit
 /// exactly this many, so it's a real target height, not a minimum.
 private let expandedRowCount = 10
-/// Ease-out quint. Decelerating suits a panel unfolding; a spring would
-/// overshoot and momentarily push the notch's bottom radius past its rest
-/// position.
-private let expandCurve = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)
 /// Footprint of the expand button at the top-trailing corner: a 22pt button
 /// plus its 2pt padding. The scroll thumb's track starts below this so the
 /// two never fight for the same hit area.
@@ -108,7 +104,14 @@ struct ClipboardView: View {
         // first expand after a fresh launch has nothing to measure against.
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
             viewportHeight = height
-            if !isExpanded {
+            // `isExpanded` alone isn't "at rest": it flips to false the
+            // instant a collapse *starts*, so every frame of the collapse
+            // animation used to overwrite the baseline with a height that was
+            // still shrinking. Expanding again before it settled then
+            // measured against that inflated number and asked for too little
+            // room. windowExtraHeight is the one that stays put until the
+            // whole thing is genuinely finished.
+            if !isExpanded && vm.windowExtraHeight == 0 {
                 collapsedViewportHeight = height
             }
         }
@@ -141,17 +144,23 @@ struct ClipboardView: View {
             // Growth only ever happens from an explicit press of the expand
             // button below, never as a side effect of switching tabs.
             isExpanded = false
-            vm.extraContentHeight = 0
-            vm.windowExtraHeight = 0
+            vm.setExtraContentHeight(0)
         }
         .onDisappear {
-            // Leaving the tab collapses the window back down; nothing else
-            // resets these, and they would otherwise stay tall while showing
-            // Home or Shelf. No animation — the tab is already gone.
+            // Leaving the tab collapses the panel back down; nothing else
+            // resets this, and it would otherwise stay tall while showing
+            // Home or Shelf.
+            //
+            // Through setExtraContentHeight rather than zeroing the two
+            // heights by hand: the tab is gone, but the notch it was sitting
+            // in is still on screen, so the panel still has to shrink in the
+            // sequenced way everything else does. Writing windowExtraHeight
+            // directly skipped that and snapped the window shut underneath
+            // whatever was drawing, which clipped the bottom of the panel for
+            // a frame on the way out.
             if isExpanded {
                 isExpanded = false
-                vm.extraContentHeight = 0
-                vm.windowExtraHeight = 0
+                vm.setExtraContentHeight(0)
             }
             clearAllResetTask?.cancel()
             isConfirmingClearAll = false
@@ -235,27 +244,7 @@ struct ClipboardView: View {
     @MainActor
     private func toggleExpanded() {
         isExpanded.toggle()
-
-        guard isExpanded else {
-            // Shrink the window only once the panel has finished animating
-            // closed. The window is the content's clip bounds, so resizing it
-            // up front slices the bottom off the panel for the whole
-            // animation.
-            withAnimation(expandCurve, completionCriteria: .removed) {
-                vm.extraContentHeight = 0
-            } completion: {
-                vm.windowExtraHeight = 0
-            }
-            return
-        }
-
-        // Grow the window first: it's transparent, so an instant resize is
-        // invisible, and the panel needs somewhere to animate into.
-        let shortfall = expandShortfall()
-        vm.windowExtraHeight = shortfall
-        withAnimation(expandCurve) {
-            vm.extraContentHeight = shortfall
-        }
+        vm.setExtraContentHeight(isExpanded ? expandShortfall() : 0)
     }
 
     /// Only the shortfall needs to come from the window — whatever already

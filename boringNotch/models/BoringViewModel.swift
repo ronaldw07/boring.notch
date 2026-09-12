@@ -30,6 +30,11 @@ class BoringViewModel: NSObject, ObservableObject {
 
     @Published var edgeAutoOpenActive: Bool = false
     @Published var isHoveringCalendar: Bool = false
+    /// Set while the cursor is over the shelf's row of items. Horizontal
+    /// scrolling there belongs to the row, not to the notch's swipe-between-
+    /// tabs gesture, which would otherwise fire on the same event and change
+    /// tab out from under the scroll.
+    @Published var isHoveringShelfRow: Bool = false
     @Published var isBatteryPopoverActive: Bool = false
 
     @Published var screenUUID: String?
@@ -193,22 +198,75 @@ class BoringViewModel: NSObject, ObservableObject {
     func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {
         let screenFrame = getScreenFrame(screenUUID)
         if let frame = screenFrame {
-            
-            let baseY = frame.maxY - notchSize.height
+            // While open, a tab can grow the panel past the base notch size
+            // (e.g. the clipboard's expanded list) — the real hoverable area
+            // is that taller shape, not just notchSize's own height, or the
+            // cursor reads as having "left" the instant a tab grows past it.
+            //
+            // The larger of the two extras, because they're deliberately out
+            // of step mid-animation: extraContentHeight is the *target* and
+            // drops to zero the moment a collapse starts, while the panel is
+            // still visibly tall for the length of that collapse.
+            // windowExtraHeight is what stays big until it's genuinely
+            // finished, so the max of the pair is the shape actually on
+            // screen — without it, a collapse reads as a mouse-exit from the
+            // area it hasn't finished vacating and slams the whole notch shut
+            // partway through.
+            let extra = max(extraContentHeight, windowExtraHeight)
+            let effectiveHeight = notchState == .open ? notchSize.height + extra : notchSize.height
+            let baseY = frame.maxY - effectiveHeight
             let baseX = frame.midX - notchSize.width / 2
-            
+
             return position.y >= baseY && position.x >= baseX && position.x <= baseX + notchSize.width
         }
-        
+
         return false
     }
 
     func open() {
-        self.notchSize = openNotchSize
-        self.notchState = .open
-        
+        withAnimation(animationLibrary.panelAnimation) {
+            self.notchSize = openNotchSize
+            self.notchState = .open
+        }
+
         // Force music information update when notch is opened
         MusicManager.shared.forceUpdate()
+    }
+
+    /// Grows or shrinks the room a tab's content gets beyond the notch's own
+    /// size — the clipboard's expanded list, the timer's taller countdown
+    /// layout, or (via `close()`) collapsing either of those back to zero.
+    /// Growing and shrinking aren't symmetric: the window is the content's
+    /// clip bounds, so it has to be big *before* the content grows into it
+    /// (grow window first, instantly — it's transparent, so that's
+    /// invisible), but shrinking it before the content has finished
+    /// animating down would chop the still-visible bottom off mid-animation
+    /// (shrink content first, pull the window in only once that's done).
+    @MainActor
+    func setExtraContentHeight(_ shortfall: CGFloat) {
+        guard shortfall != extraContentHeight else { return }
+
+        if shortfall > extraContentHeight {
+            windowExtraHeight = shortfall
+            withAnimation(animationLibrary.collapseCurve) {
+                extraContentHeight = shortfall
+            }
+        } else {
+            withAnimation(animationLibrary.collapseCurve, completionCriteria: .removed) {
+                extraContentHeight = shortfall
+            } completion: { [weak self] in
+                // `.removed` fires when the animation leaves the view for any
+                // reason — including being *replaced*, not just finishing. So
+                // an expand that interrupts a collapse still lets the
+                // interrupted collapse's completion run, and it would yank
+                // the window back down to the old target while the panel is
+                // mid-way through growing into it — clipping the bottom off
+                // for a frame or two. Only pull the window in if this is
+                // still the height being animated toward.
+                guard let self, self.extraContentHeight == shortfall else { return }
+                self.windowExtraHeight = shortfall
+            }
+        }
     }
 
     func close() {
@@ -216,21 +274,16 @@ class BoringViewModel: NSObject, ObservableObject {
         if SharingStateManager.shared.preventNotchClose {
             return
         }
-        self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
-        self.closedNotchSize = self.notchSize
-        self.notchState = .closed
+        withAnimation(animationLibrary.panelAnimation) {
+            self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
+            self.closedNotchSize = self.notchSize
+            self.notchState = .closed
+        }
 
         // Shrink any expanded tab content (e.g. the clipboard's expanded
-        // list) in step with the notch's own close animation, and only pull
-        // the window in once that's finished. The window is the content's
-        // clip bounds, so shrinking it immediately — before the panel has
-        // finished collapsing — chops the still-visible bottom off mid-
-        // animation, which is what read as a flicker/jump on close.
-        withAnimation(animationLibrary.animation, completionCriteria: .removed) {
-            self.extraContentHeight = 0
-        } completion: { [weak self] in
-            self?.windowExtraHeight = 0
-        }
+        // list) in step with the notch's own close animation — see
+        // setExtraContentHeight for why this can't just snap to zero.
+        setExtraContentHeight(0)
 
         self.isBatteryPopoverActive = false
         self.coordinator.sneakPeek.show = false

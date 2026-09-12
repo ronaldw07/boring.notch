@@ -53,7 +53,13 @@ enum MusicPlayerImageSizes {
         if let topLeftNotchpadding: CGFloat = screen.auxiliaryTopLeftArea?.width,
            let topRightNotchpadding: CGFloat = screen.auxiliaryTopRightArea?.width
         {
-            notchWidth = screen.frame.width - topLeftNotchpadding - topRightNotchpadding + 4
+            // +2 rather than the +4 this used to carry. The screen's
+            // auxiliary areas give the physical notch's real edges, and the
+            // fudge on top of them is only there to cover the black shape's
+            // own antialiasing — at 4 it overshot and the shape sat a point
+            // proud of the notch on each side. Centred, so this takes the
+            // 2pt off the width evenly, one from each edge.
+            notchWidth = screen.frame.width - topLeftNotchpadding - topRightNotchpadding + 2
         }
 
         // Check if the Mac has a notch

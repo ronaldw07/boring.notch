@@ -41,6 +41,13 @@ struct ContentView: View {
     // Shared interactive spring for movement/resizing to avoid conflicting animations
     private let animationSpring = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0)
 
+    /// Nudges the running timer's readout toward the screen edge instead of
+    /// sitting dead-centre in its slot. Offset rather than padding or a
+    /// different alignment so it stays a pure visual shift — the live
+    /// activity's overall width is unchanged, and so is where it sits
+    /// relative to the physical notch.
+    private let timerReadoutEdgeNudge: CGFloat = 8
+
     private let extendedHoverPadding: CGFloat = 30
     private let zeroHeightHoverPadding: CGFloat = 10
 
@@ -119,21 +126,40 @@ struct ContentView: View {
                     )
                 
                 mainLayout
-                    // Top-aligned: a plain .frame(height:) centers a child that
-                    // reports taller than the proposal, so any overflow would
-                    // split evenly and push the header off the top of the
-                    // screen. Growth from a tab's extra content is added here
-                    // so it extends downward instead.
+                    // Top-aligned: a plain .frame centers a child that reports
+                    // taller than the proposal, so any overflow would split
+                    // evenly and push the header off the top of the screen.
+                    // Growth from a tab's extra content is added here so it
+                    // extends downward instead.
+                    //
+                    // minHeight rather than height, and a real number rather
+                    // than nil when closed: nil hands the height back to the
+                    // child's intrinsic size, and SwiftUI can't interpolate
+                    // nil -> a number, so opening snapped the frame for one
+                    // frame instead of animating it. As a minimum it's one
+                    // animatable number in both directions, while closed
+                    // content that genuinely needs more room (a sneak peek)
+                    // can still grow past it.
                     .frame(
-                        height: vm.notchState == .open ? vm.notchSize.height + vm.extraContentHeight : nil,
+                        minHeight: vm.notchState == .open
+                            ? vm.notchSize.height + vm.extraContentHeight
+                            : vm.effectiveClosedNotchHeight,
                         alignment: .top
                     )
                     .conditionalModifier(true) { view in
-                        let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
-                        let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
-                        
-                        return view
-                            .animation(vm.notchState == .open ? openAnimation : closeAnimation, value: vm.notchState)
+                        // The panel's own open/close animation now lives
+                        // inside BoringViewModel.open()/close() themselves
+                        // (animationLibrary.panelAnimation) rather than here.
+                        // close() in particular is often called from an
+                        // async Task (the hover-exit timer, the sharing-
+                        // finished handler), and a state change made outside
+                        // an active SwiftUI transaction doesn't reliably
+                        // pick up a `.animation(value:)` modifier the way a
+                        // synchronous change does — which is what made
+                        // closing snap instead of animate while opening
+                        // (always triggered from a direct, synchronous
+                        // withAnimation call) stayed smooth.
+                        view
                             .animation(.smooth, value: gestureProgress)
                     }
                     .contentShape(Rectangle())
@@ -223,7 +249,28 @@ struct ContentView: View {
             }
         }
         .padding(.bottom, 8)
-        .frame(maxWidth: windowSize.width, maxHeight: windowSize.height + vm.extraContentHeight, alignment: .top)
+        // Two frames, not one, because the panel has to answer two different
+        // questions with two different numbers.
+        //
+        // The tab content is vertically greedy (ClipboardView et al are
+        // maxHeight: .infinity), so the panel is exactly as tall as whatever
+        // height gets proposed to it. Propose the window's own height and the
+        // panel silently tracks the *window* instead of extraContentHeight —
+        // which is what made collapsing teleport: expanding grows the window
+        // up front so the panel had something new to fill, but collapsing
+        // deliberately holds the window tall until the animation finishes, so
+        // nothing moved until the window snapped shut at the end.
+        //
+        // So: an inner box sized off extraContentHeight — the animated value,
+        // and the only thing the panel should ever measure against — and an
+        // outer frame that fills the window and top-aligns that box, so the
+        // panel stays glued to the screen's top edge instead of drifting to
+        // the middle whenever the box is shorter than the window. At rest the
+        // box and the window are the same height, so this changes nothing
+        // about how the notch sits; it only differs mid-collapse, which is
+        // exactly the window of time that was broken.
+        .frame(height: windowSize.height + vm.extraContentHeight, alignment: .top)
+        .frame(maxWidth: windowSize.width, maxHeight: .infinity, alignment: .top)
         // Sits above everything so the arrow wins wherever AppKit would
         // otherwise substitute a cursor of its own.
         .overlay(CursorLock())
@@ -550,12 +597,13 @@ struct ContentView: View {
                 .frame(width: vm.closedNotchSize.width - 20)
 
             Text(TimerManager.clockString(from: timerManager.mode == .countdown
-                ? timerManager.remaining(at: timerManager.now)
+                ? timerManager.remainingForDisplay(at: timerManager.now)
                 : timerManager.elapsed(at: timerManager.now)))
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .frame(width: max(0, vm.effectiveClosedNotchHeight - 12) + 40, alignment: .center)
+                .offset(x: timerReadoutEdgeNudge)
         }
         .frame(
             height: vm.effectiveClosedNotchHeight,
@@ -580,9 +628,8 @@ struct ContentView: View {
     }
 
     private func doOpen() {
-        withAnimation(animationSpring) {
-            vm.open()
-        }
+        // open() wraps its own state changes in animationLibrary.panelAnimation.
+        vm.open()
     }
 
     // MARK: - Hover Management
@@ -625,8 +672,20 @@ struct ContentView: View {
                     withAnimation(animationSpring) {
                         self.isHovering = false
                     }
-                    
-                    if self.vm.notchState == .open && !self.vm.isBatteryPopoverActive && !SharingStateManager.shared.preventNotchClose {
+
+                    // SwiftUI's hover tracking follows this view's *frame*,
+                    // which shrinks in real time as a tab's extra content
+                    // (e.g. the clipboard collapsing) animates back down. If
+                    // the cursor sits anywhere in the space that frame just
+                    // vacated, that reads as a mouse-exit even though the
+                    // cursor never moved — closing the whole notch off a
+                    // shrink, not a real hover-out. Re-checking against the
+                    // actual cursor position (which accounts for that extra
+                    // height) catches the false exit before acting on it.
+                    if self.vm.notchState == .open
+                        && !self.vm.isBatteryPopoverActive
+                        && !SharingStateManager.shared.preventNotchClose
+                        && !self.vm.isMouseHovering() {
                         self.vm.close()
                     }
                 }
@@ -666,6 +725,7 @@ struct ContentView: View {
     private func handleSideGesture(step: Int, phase: NSEvent.Phase) {
         guard vm.notchState == .open,
               !vm.isHoveringCalendar,
+              !vm.isHoveringShelfRow,
               phase == .began else { return }
 
         let order = tabs.map(\.view)

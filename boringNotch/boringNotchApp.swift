@@ -260,16 +260,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Clamped so a bad height calculation upstream can never push the
         // window taller than the screen itself.
         let newHeight = min(windowSize.height + extraHeight, screen.frame.height)
+        let screenFrame = screen.frame
 
-        // Resize first, keeping the current origin — then hand off to
-        // positionWindow, the same function every other window placement in
-        // the app already goes through, rather than a second parallel copy
-        // of that origin math that has now been wrong twice.
-        window.setFrame(
-            NSRect(origin: window.frame.origin, size: CGSize(width: windowSize.width, height: newHeight)),
-            display: false
+        // Origin and size are computed together and set in one call. This
+        // used to resize first at the window's *old* origin, then hand off
+        // to positionWindow for a separate setFrameOrigin — which meant the
+        // window briefly held its new (taller) height while still anchored
+        // to its old, shorter-height origin, poking its top edge above the
+        // actual screen top for a frame before snapping down. That single
+        // wrong-geometry frame was the flicker on expand/collapse.
+        let newFrame = NSRect(
+            x: screenFrame.origin.x + (screenFrame.width / 2) - windowSize.width / 2,
+            y: screenFrame.origin.y + screenFrame.height - newHeight,
+            width: windowSize.width,
+            height: newHeight
         )
-        positionWindow(window, on: screen)
+        // display: true so the resize and the redraw land in the same pass.
+        // Deferred, the window server can composite the moved/resized window
+        // using the previous frame's bits for a moment — and since AppKit
+        // anchors content to the bottom-left while this window is pinned to
+        // the top of the screen, stale bits show up shifted by exactly the
+        // amount the height just changed. That's a single-frame jump of the
+        // whole panel right at the point the window catches up.
+        window.setFrame(newFrame, display: true)
     }
 
     private func observeExtraContentHeight(for window: NSWindow, viewModel: BoringViewModel) {
