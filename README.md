@@ -18,6 +18,12 @@
   </a>
 </p>
 
+> **This is [@ronaldw07](https://github.com/ronaldw07)'s fork** of
+> [TheBoredTeam/boring.notch](https://github.com/TheBoredTeam/boring.notch),
+> with its own ongoing feature work — see [What's New in This Fork](#-whats-new-in-this-fork)
+> below. All credit for the original app goes to TheBoredTeam; this fork
+> builds on top of it.
+
 <!--Welcome to **Boring.Notch**, the coolest way to make your MacBook's notch the star of the show! Forget about those boring status bars—our notch turns into a dynamic music control center, complete with a snazzy visualizer and all the music controls you need. It's like having a mini concert right at the top of your screen! -->
 
 Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch the star of the show! Say goodbye to boring status bars: with Boring Notch, your notch transforms into a dynamic music control center, complete with a vibrant visualizer and all the essential music controls you need. But that’s just the start! Boring Notch also offers calendar integration, a handy file shelf with AirDrop support, a complete MacOS HUD replacement and more!
@@ -27,6 +33,44 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 </p>
 
 <!--https://github.com/user-attachments/assets/19b87973-4b3a-4853-b532-7e82d1d6b040-->
+---
+
+## 🆕 What's New in This Fork
+
+Everything below this line is original to this fork, on top of upstream
+**2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
+
+### 0.3.1 — 2026-09-12
+
+- **Fixed:** "Remember last tab" now actually remembers the last tab — it was
+  silently overridden any time the shelf had files on it.
+
+### 0.3.0 — 2026-09-12
+
+- **Added:** Shelf pinning — right-click an item to pin it; pinned items sort
+  to the left and stay there.
+- **Added:** Shelf stacks — dropping several files at once lands as one tile
+  with a count badge, expandable in place, instead of overflowing the row.
+- **Added:** Sticky multi-select — click multiple shelf items to highlight
+  and drag/share them together.
+- **Changed:** Removed the AirDrop / quick-share tile; sharing stays available
+  through right-click and drag-out.
+- **Fixed:** The shelf's horizontal scroll bar, which previously did nothing
+  on drag.
+
+### 0.2.0 — 2026-09-11
+
+- **Added:** Remove buttons and hover highlighting on shelf items.
+- **Added:** Wheel/trackpad scrolling over the shelf row.
+- **Changed:** Timer tab laid out as a row instead of a column, so it no
+  longer grows the notch to fit itself.
+- **Fixed:** Countdown timer no longer skips displaying 4:59.
+
+### 0.1.0 — 2026-09-10
+
+- **Fixed:** Closing the notch now animates instead of teleporting, and no
+  longer flickers or closes early mid-collapse.
+
 ---
 <!--## Table of Contents
 - [Installation](#installation)
@@ -101,10 +145,6 @@ brew install --cask TheBoredTeam/boring-notch/boring-notch
 - Hover over the notch to see it expand and reveal all its secrets.
 - Use the controls to manage your music like a rockstar.
 - Click the star in your menu bar to customize your notch to your heart's content.
-
-## Changelog
-
-This fork's own changes, on top of upstream, are tracked in [CHANGELOG.md](./CHANGELOG.md).
 
 ## 📋 Roadmap
 - [x] Playback live activity 🎧
