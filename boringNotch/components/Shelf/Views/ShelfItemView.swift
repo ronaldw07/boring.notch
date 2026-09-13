@@ -548,6 +548,10 @@ private struct DraggableClickHandler<Content: View>: NSViewRepresentable {
             onRemoveHoverChange?(hovering)
         }
 
+        /// A plain mouseDown on a card that's *already* selected, held back
+        /// until mouseUp — see `mouseDown` for why.
+        private var deferredClick: NSEvent?
+
         override func mouseDown(with event: NSEvent) {
             // The remove button is drawn by SwiftUI underneath this view, so
             // it can never receive this event itself — take the click here
@@ -562,27 +566,62 @@ private struct DraggableClickHandler<Content: View>: NSViewRepresentable {
                 }
             }
 
+            let flags = event.modifierFlags
+            let isPlainClick = event.clickCount == 1
+                && !flags.contains(.shift) && !flags.contains(.command) && !flags.contains(.control)
+
+            // A plain click toggles a card's selection — that's the sticky
+            // multi-select. Firing it immediately here is fine for a card
+            // that ISN'T selected yet (there's nothing a drag needs from it),
+            // but for one that already IS selected, this mouseDown might be
+            // the start of dragging the whole multi-selection out, and
+            // toggling it off pre-emptively would drop it (and, since
+            // startDragSession only drags the *current* selection when the
+            // pressed card is still part of it, collapse the drag down to
+            // just this one card instead of everything selected). Holding
+            // the click until mouseUp — and only then, if no drag actually
+            // happened — is what lets a press-and-drag on a selected card
+            // carry the rest of the selection with it.
+            if isPlainClick && ShelfSelectionModel.shared.isSelected(item.id) {
+                deferredClick = event
+                mouseDownEvent = event
+                return
+            }
+
+            deferredClick = nil
             mouseDownEvent = event
             onClick?(event, self)
         }
-        
+
         override func mouseDragged(with event: NSEvent) {
             guard let mouseDownEvent = mouseDownEvent else {
                 super.mouseDragged(with: event)
                 return
             }
-            
+
             let dragDistance = hypot(
                 event.locationInWindow.x - mouseDownEvent.locationInWindow.x,
                 event.locationInWindow.y - mouseDownEvent.locationInWindow.y
             )
-            
+
             if dragDistance > dragThreshold {
+                // A drag is happening — the deferred click, if any, was never
+                // a plain click after all.
+                deferredClick = nil
                 startDragSession(with: event)
                 self.mouseDownEvent = nil
             } else {
                 super.mouseDragged(with: event)
             }
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            if let deferredClick {
+                self.deferredClick = nil
+                onClick?(deferredClick, self)
+            }
+            mouseDownEvent = nil
+            super.mouseUp(with: event)
         }
         
         private func startDragSession(with event: NSEvent) {

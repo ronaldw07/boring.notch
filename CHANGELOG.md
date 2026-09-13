@@ -7,6 +7,19 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.3.3 — 2026-09-12 16:18
+
+### Fixed
+
+- **Dragging several selected shelf items out together now actually carries
+  all of them.** Pressing down on a card that's already selected fired the
+  sticky-multi-select toggle immediately, before the drag-distance check ever
+  ran — so starting a drag from one of several selected cards dropped it from
+  the selection first, and the drag fell back to just that single card. The
+  click is now held until mouseUp, and only applied if no drag happened.
+
+---
+
 ## 0.3.2 — 2026-09-12 15:02
 
 ### Fixed

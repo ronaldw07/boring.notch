@@ -40,6 +40,11 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.3.3 — 2026-09-12
+
+- **Fixed:** Dragging several selected shelf items out together now carries
+  all of them, instead of collapsing to just the one card you pressed down on.
+
 ### 0.3.2 — 2026-09-12
 
 - **Fixed:** Clipboard history now captures from app launch instead of only
