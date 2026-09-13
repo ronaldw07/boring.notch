@@ -7,6 +7,18 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.3.4 — 2026-09-12 17:05
+
+### Added
+
+- **Shelf: a Select All / Deselect All button**, top-right, tucked under the
+  battery indicator like the clipboard tab's own corner buttons. Selects
+  every item on the shelf (not just visible stack tiles) so it lines up with
+  what a drag-out actually carries, and doubles as the way to clear a
+  selection now that a background tap no longer does that.
+
+---
+
 ## 0.3.3 — 2026-09-12 16:18
 
 ### Fixed

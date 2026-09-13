@@ -40,6 +40,11 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.3.4 — 2026-09-12
+
+- **Added:** Select All / Deselect All button on the shelf, top-right under
+  the battery indicator.
+
 ### 0.3.3 — 2026-09-12
 
 - **Fixed:** Dragging several selected shelf items out together now carries

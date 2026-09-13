@@ -68,6 +68,11 @@ final class ShelfSelectionModel: ObservableObject {
         lastAnchorID = nil
     }
 
+    func selectAll(_ items: [ShelfItem]) {
+        selectedIDs = Set(items.map(\.id))
+        lastAnchorID = items.last?.id
+    }
+
     // Keep anchor sane if items array changed drastically (optional helper)
     func ensureValidAnchor(in allItems: [ShelfItem]) {
         if let anchor = lastAnchorID, !allItems.contains(where: { $0.id == anchor }) {

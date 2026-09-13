@@ -103,6 +103,20 @@ struct ShelfView: View {
                         style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [10])
                     )
             }
+            .overlay(alignment: .topTrailing) {
+                if !tvm.isEmpty {
+                    selectAllButton
+                        // Tucked close to the corner, right under where the
+                        // battery indicator sits in the header above — the
+                        // same placement the clipboard tab's own corner
+                        // buttons use, rather than the header's usual 6pt
+                        // content padding, which reads as floating loose in
+                        // the shelf's own space instead of continuing the
+                        // header's row.
+                        .padding(.top, 2)
+                        .padding(.trailing, 6)
+                }
+            }
             .transaction { transaction in
                 transaction.animation = vm.animation
             }
@@ -142,6 +156,34 @@ struct ShelfView: View {
         .onAppear {
             ShelfStateViewModel.shared.cleanupInvalidItems()
         }
+    }
+
+    // MARK: - Select all
+
+    /// True once every item is selected, not just every displayed *tile* —
+    /// a collapsed stack is one tile standing in for several real items, and
+    /// selecting all has to mean all of those too, since that's what a
+    /// drag-out actually carries.
+    private var isEverythingSelected: Bool {
+        !tvm.items.isEmpty && selection.selectedIDs.count == tvm.items.count
+    }
+
+    /// Doubles as its own undo: this is the only remaining way to clear a
+    /// selection now that a background tap no longer does — see the note on
+    /// `panel` above.
+    private var selectAllButton: some View {
+        Button {
+            if isEverythingSelected {
+                selection.clear()
+            } else {
+                selection.selectAll(tvm.items)
+            }
+        } label: {
+            Text(isEverythingSelected ? "Deselect All" : "Select All")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Row
