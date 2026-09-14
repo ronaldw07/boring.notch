@@ -603,7 +603,12 @@ private struct LyricsScrollCapture: NSViewRepresentable {
         override var isFlipped: Bool { true }
 
         override func scrollWheel(with event: NSEvent) {
-            onScroll?(event.scrollingDeltaY)
+            // A physical mouse wheel reports coarse, unitless notches rather
+            // than a trackpad's precise point deltas — scaled up so a
+            // couple of clicks actually moves a line instead of barely
+            // registering against `lineStep`.
+            let scale: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 8
+            onScroll?(event.scrollingDeltaY * scale)
         }
 
         override func mouseUp(with event: NSEvent) {
