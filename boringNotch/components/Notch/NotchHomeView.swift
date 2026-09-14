@@ -384,7 +384,13 @@ struct VolumeControlView: View {
 
 struct SyncedLyricsPanelView: View {
     @ObservedObject var musicManager = MusicManager.shared
+    // Set while the user is dragging through lines by hand; nil means
+    // "follow playback". Kept as an index rather than a live timestamp so
+    // scrubbing works the same whether the song is playing or paused.
+    @State private var scrubIndex: Int? = nil
+    @State private var scrollAccumulator: CGFloat = 0
     private static let slotSize = CGSize(width: 215, height: 130)
+    private static let lineStep: CGFloat = 26
 
     var body: some View {
         content
@@ -412,46 +418,135 @@ struct SyncedLyricsPanelView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var syncedView: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-            let elapsed: Double = {
-                guard musicManager.isPlaying else { return musicManager.elapsedTime }
-                let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
-                let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
-                return min(max(progressed, 0), musicManager.songDuration)
-            }()
-            let currentIndex = musicManager.lyricLineIndex(at: elapsed) ?? -1
-            let lyrics = musicManager.syncedLyrics
-
-            VStack(spacing: 8) {
-                lineView(lyrics, currentIndex - 1, opacity: 0.3, size: 11)
-                lineView(lyrics, currentIndex, opacity: 1, size: 14, bold: true)
-                lineView(lyrics, currentIndex + 1, opacity: 0.5, size: 12)
-                lineView(lyrics, currentIndex + 2, opacity: 0.3, size: 11)
-            }
-            .frame(maxHeight: .infinity)
-            .animation(.easeOut(duration: 0.18), value: currentIndex)
-        }
+    private func liveElapsed() -> Double {
+        guard musicManager.isPlaying else { return musicManager.elapsedTime }
+        let delta = Date().timeIntervalSince(musicManager.timestampDate)
+        let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
+        return min(max(progressed, 0), musicManager.songDuration)
     }
 
-    private static let lineTransition: AnyTransition = .asymmetric(
-        insertion: .opacity.combined(with: .move(edge: .bottom)),
-        removal: .opacity.combined(with: .move(edge: .top))
-    )
+    private func clampedIndex(_ index: Int) -> Int {
+        min(max(index, 0), max(musicManager.syncedLyrics.count - 1, 0))
+    }
 
-    @ViewBuilder
-    private func lineView(_ lyrics: [(time: Double, text: String)], _ index: Int, opacity: Double, size: CGFloat, bold: Bool = false) -> some View {
-        if lyrics.indices.contains(index) {
-            Text(lyrics[index].text)
-                .font(.system(size: size, weight: bold ? .semibold : .regular))
-                .foregroundStyle(.white.opacity(opacity))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(width: Self.slotSize.width, alignment: .center)
-                .id(index)
-                .transition(Self.lineTransition)
-        } else {
-            Color.clear.frame(height: size + 4)
+    private var syncedView: some View {
+        ZStack(alignment: .bottom) {
+            // Only the live-tracking path needs a running timer — scrubbing
+            // and pausing both render a single static frame, no ticking.
+            if let scrubIndex {
+                // No bold while browsing by hand — a per-line font/weight
+                // change while scrolling is what read as stutter. Still
+                // fades toward whichever line is centered, just by opacity.
+                scrollingStack(position: Double(scrubIndex), emphasisIndex: scrubIndex, boldIndex: nil, animated: true)
+            } else if musicManager.isPlaying {
+                TimelineView(.animation(minimumInterval: 0.05)) { timeline in
+                    let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
+                    let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
+                    let elapsed = min(max(progressed, 0), musicManager.songDuration)
+                    let (position, highlightIndex) = continuousPosition(elapsed: elapsed)
+                    scrollingStack(position: position, emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: false)
+                }
+            } else {
+                let (position, highlightIndex) = continuousPosition(elapsed: liveElapsed())
+                scrollingStack(position: position, emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: false)
+            }
+
+            if scrubIndex != nil {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        scrubIndex = nil
+                        scrollAccumulator = 0
+                    }
+                } label: {
+                    Label("Sync", systemImage: "waveform")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.white.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 2)
+                .transition(.opacity)
+                .zIndex(1)
+            }
+
+            // Scroll capture sits over the scrolling text only, not the
+            // Sync pill's strip — an NSView here wins hit-testing against
+            // any SwiftUI content underneath regardless of z-order, so
+            // covering the button's area would swallow its clicks outright.
+            LyricsScrollCapture(onScroll: handleScroll)
+                .padding(.bottom, 24)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// Two-finger trackpad scroll, not click-and-drag — smoother, and
+    /// doesn't fight the panel's own click targets. Accumulates fractional
+    /// deltas so a full line only advances once real trackpad travel
+    /// crosses `lineStep`, rather than jumping a line per scroll event.
+    private func handleScroll(_ deltaY: CGFloat) {
+        let base = scrubIndex ?? (musicManager.lyricLineIndex(at: liveElapsed()) ?? 0)
+        scrollAccumulator += deltaY
+        let steps = Int((scrollAccumulator / Self.lineStep).rounded(.towardZero))
+        guard steps != 0 else { return }
+        scrollAccumulator -= CGFloat(steps) * Self.lineStep
+        scrubIndex = clampedIndex(base - steps)
+    }
+
+    /// Position within the next line's gap, not just which line is "last
+    /// passed" — that's what lets the whole stack glide continuously
+    /// instead of holding still and then hopping. `highlightIndex` is the
+    /// line that's actually playing right now (nil before the first synced
+    /// line arrives), kept separate from position so nothing gets bolded
+    /// before it's genuinely current.
+    private func continuousPosition(elapsed: Double) -> (position: Double, highlightIndex: Int?) {
+        let lyrics = musicManager.syncedLyrics
+        guard !lyrics.isEmpty, elapsed >= lyrics[0].time else { return (0, nil) }
+        let idx = musicManager.lyricLineIndex(at: elapsed) ?? 0
+        guard idx < lyrics.count - 1 else { return (Double(idx), idx) }
+        let t0 = lyrics[idx].time
+        let t1 = lyrics[idx + 1].time
+        let fraction = t1 > t0 ? min(max((elapsed - t0) / (t1 - t0), 0), 1) : 0
+        return (Double(idx) + fraction, idx)
+    }
+
+    /// Every line lives in one stack that slides as a whole, like Spotify's
+    /// lyrics screen — not a fixed set of prev/current/next slots swapping
+    /// content, which read as jumping between discrete levels rather than
+    /// scrolling. `position` can be fractional so the glide between two
+    /// lines is continuous rather than a discrete per-line hop.
+    private func scrollingStack(position: Double, emphasisIndex: Int?, boldIndex: Int?, animated: Bool) -> some View {
+        let lyrics = musicManager.syncedLyrics
+        let clampedPosition = min(max(position, 0), Double(max(lyrics.count - 1, 0)))
+        let center = Self.slotSize.height / 2 - Self.lineStep / 2
+
+        return LazyVStack(spacing: 0) {
+            ForEach(Array(lyrics.enumerated()), id: \.offset) { index, entry in
+                Text(entry.text)
+                    .font(.system(size: index == boldIndex ? 14 : 12, weight: index == boldIndex ? .semibold : .regular))
+                    .foregroundStyle(.white.opacity(lineOpacity(index: index, emphasisIndex: emphasisIndex)))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(width: Self.slotSize.width, height: Self.lineStep)
+            }
+        }
+        .offset(y: center - CGFloat(clampedPosition) * Self.lineStep)
+        .animation(animated ? .easeOut(duration: 0.15) : nil, value: clampedPosition)
+        .frame(width: Self.slotSize.width, height: Self.slotSize.height, alignment: .top)
+        .clipped()
+    }
+
+    private func lineOpacity(index: Int, emphasisIndex: Int?) -> Double {
+        // Nothing has genuinely started yet (before the first synced
+        // timestamp) — keep everything at one dim, uncommitted level rather
+        // than falsely emphasizing line 0.
+        guard let emphasisIndex else { return 0.3 }
+        switch abs(index - emphasisIndex) {
+        case 0: return 1
+        case 1: return 0.45
+        case 2: return 0.25
+        default: return 0.12
         }
     }
 
@@ -462,6 +557,31 @@ struct SyncedLyricsPanelView: View {
                 .foregroundStyle(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 4)
+        }
+    }
+}
+
+/// SwiftUI's own scroll/drag gestures are unreliable in this app's
+/// non-key `NSPanel` (see the shelf's item view for the same workaround),
+/// so trackpad scroll here is captured directly in AppKit.
+private struct LyricsScrollCapture: NSViewRepresentable {
+    let onScroll: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ScrollCaptureView {
+        let view = ScrollCaptureView()
+        view.onScroll = onScroll
+        return view
+    }
+
+    func updateNSView(_ nsView: ScrollCaptureView, context: Context) {
+        nsView.onScroll = onScroll
+    }
+
+    final class ScrollCaptureView: NSView {
+        var onScroll: ((CGFloat) -> Void)?
+
+        override func scrollWheel(with event: NSEvent) {
+            onScroll?(event.scrollingDeltaY)
         }
     }
 }
