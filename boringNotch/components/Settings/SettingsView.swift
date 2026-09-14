@@ -690,6 +690,16 @@ struct Media: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                Defaults.Toggle(key: .pauseMusicOnMute) {
+                    Text("Pause music when system audio is muted")
+                }
+            } footer: {
+                Text("Muting your Mac (e.g. Fn/mute key) pauses whatever's playing instead of continuing silently.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .accentColor(.effectiveAccent)
         .navigationTitle("Media")

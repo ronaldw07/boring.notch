@@ -70,6 +70,11 @@ class MusicManager: ObservableObject {
     private var lastLyricsTitle: String = ""
     private var lastLyricsArtist: String = ""
 
+    // Distinguishes "we paused this because of a mute" from a pause the
+    // user made themselves while muted — only the former should resume on
+    // unmute. Cleared whenever the user touches playback directly.
+    private var pausedByMuteAutomatically = false
+
     @Published var isFlipping: Bool = false
     private var flipWorkItem: DispatchWorkItem?
 
@@ -119,6 +124,24 @@ class MusicManager: ObservableObject {
                 self.lastLyricsTitle = ""
                 self.lastLyricsArtist = ""
                 self.fetchLyricsIfAvailable(bundleIdentifier: self.bundleIdentifier, title: self.songTitle, artist: self.artistName)
+            }
+            .store(in: &cancellables)
+
+        // System mute is a hardware/CoreAudio state, nothing to do with
+        // whatever's playing — this is the one place that connects the two,
+        // so a mute doesn't leave a song running silently in the background.
+        VolumeManager.shared.$isMuted
+            .removeDuplicates()
+            .sink { [weak self] muted in
+                guard let self, Defaults[.pauseMusicOnMute] else { return }
+                if muted {
+                    guard self.isPlaying else { return }
+                    self.pause()
+                    self.pausedByMuteAutomatically = true
+                } else if self.pausedByMuteAutomatically {
+                    self.pausedByMuteAutomatically = false
+                    self.play()
+                }
             }
             .store(in: &cancellables)
 
@@ -973,18 +996,21 @@ class MusicManager: ObservableObject {
 
     // MARK: - Public Methods for controlling playback
     func playPause() {
+        pausedByMuteAutomatically = false
         Task {
             await activeController?.togglePlay()
         }
     }
 
     func play() {
+        pausedByMuteAutomatically = false
         Task {
             await activeController?.play()
         }
     }
 
     func pause() {
+        pausedByMuteAutomatically = false
         Task {
             await activeController?.pause()
         }
@@ -1003,6 +1029,7 @@ class MusicManager: ObservableObject {
     }
     
     func togglePlay() {
+        pausedByMuteAutomatically = false
         Task {
             await activeController?.togglePlay()
         }
