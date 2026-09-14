@@ -486,10 +486,25 @@ struct SyncedLyricsPanelView: View {
             // Sync pill's strip — an NSView here wins hit-testing against
             // any SwiftUI content underneath regardless of z-order, so
             // covering the button's area would swallow its clicks outright.
-            LyricsScrollCapture(onScroll: handleScroll)
+            LyricsScrollCapture(onScroll: handleScroll, onTap: handleLineTap)
                 .padding(.bottom, 24)
         }
         .contentShape(Rectangle())
+    }
+
+    /// A click's y-distance from the panel's vertical center — where the
+    /// live/centered line always sits — converts straight to a line offset,
+    /// the same convention `handleScroll` uses. Seeking there also drops
+    /// out of scrub mode, so tracking resumes from the new position.
+    private func handleLineTap(atY y: CGFloat) {
+        let lyrics = musicManager.syncedLyrics
+        guard !lyrics.isEmpty else { return }
+        let base = scrubIndex ?? (musicManager.lyricLineIndex(at: liveElapsed() + Self.lyricLeadOffset) ?? 0)
+        let deltaLines = Int(((y - Self.slotSize.height / 2) / Self.lineStep).rounded())
+        let target = clampedIndex(base + deltaLines)
+        musicManager.seek(to: lyrics[target].time)
+        scrubIndex = nil
+        scrollAccumulator = 0
     }
 
     /// Two-finger trackpad scroll, not click-and-drag — smoother, and
@@ -565,22 +580,35 @@ struct SyncedLyricsPanelView: View {
 /// so trackpad scroll here is captured directly in AppKit.
 private struct LyricsScrollCapture: NSViewRepresentable {
     let onScroll: (CGFloat) -> Void
+    // Top-down y of the click within this view, so SwiftUI can convert it
+    // to a line index using the same geometry it lays lines out with.
+    let onTap: (CGFloat) -> Void
 
     func makeNSView(context: Context) -> ScrollCaptureView {
         let view = ScrollCaptureView()
         view.onScroll = onScroll
+        view.onTap = onTap
         return view
     }
 
     func updateNSView(_ nsView: ScrollCaptureView, context: Context) {
         nsView.onScroll = onScroll
+        nsView.onTap = onTap
     }
 
     final class ScrollCaptureView: NSView {
         var onScroll: ((CGFloat) -> Void)?
+        var onTap: ((CGFloat) -> Void)?
+
+        override var isFlipped: Bool { true }
 
         override func scrollWheel(with event: NSEvent) {
             onScroll?(event.scrollingDeltaY)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            let local = convert(event.locationInWindow, from: nil)
+            onTap?(local.y)
         }
     }
 }
