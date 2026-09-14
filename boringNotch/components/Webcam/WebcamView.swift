@@ -95,6 +95,12 @@ struct CameraPreviewView: View {
         .onDisappear {
             zoomIndicatorTask?.cancel()
             webcamManager.stopSession()
+            // Otherwise the notch closing (which tears this view down)
+            // leaves the camera picked as the active slot with nothing
+            // running in it — reopening shows a dead preview, and lyrics/
+            // calendar can never win the slot back since this flag never
+            // cleared.
+            vm.isCameraExpanded = false
         }
     }
 

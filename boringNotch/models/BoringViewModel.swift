@@ -160,8 +160,14 @@ class BoringViewModel: NSObject, ObservableObject {
 
         switch webcamManager.authorizationStatus {
         case .authorized:
-            if webcamManager.isSessionRunning {
-                webcamManager.stopSession()
+            // Keyed on the selection flag, not the session — the session
+            // can already be stopped (e.g. the notch closed and tore the
+            // preview down) while this is still true, and that shouldn't
+            // require an extra click before "off" actually takes.
+            if isCameraExpanded {
+                if webcamManager.isSessionRunning {
+                    webcamManager.stopSession()
+                }
                 isCameraExpanded = false
             } else if webcamManager.cameraAvailable {
                 webcamManager.startSession()
@@ -208,10 +214,14 @@ class BoringViewModel: NSObject, ObservableObject {
             isLyricsExpanded = false
             return
         }
+        // Cleared unconditionally, not just when a session happens to still
+        // be running — it can already be stopped (notch closed and tore the
+        // preview down) while this flag is stuck true, which would
+        // otherwise leave camera permanently winning the shared slot.
         if webcamManager.isSessionRunning {
             webcamManager.stopSession()
-            isCameraExpanded = false
         }
+        isCameraExpanded = false
         isCalendarExpanded = false
         isLyricsExpanded = true
     }
@@ -226,8 +236,8 @@ class BoringViewModel: NSObject, ObservableObject {
         }
         if webcamManager.isSessionRunning {
             webcamManager.stopSession()
-            isCameraExpanded = false
         }
+        isCameraExpanded = false
         isLyricsExpanded = false
         isCalendarExpanded = true
     }
