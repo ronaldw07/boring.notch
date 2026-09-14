@@ -61,6 +61,10 @@ class BoringViewModel: NSObject, ObservableObject {
     @Published var isCameraExpanded: Bool = false
     @Published var isRequestingAuthorization: Bool = false
     @Published var isLyricsExpanded: Bool = false
+    // Calendar is the default slot content — unlike camera/lyrics, which
+    // are opt-in per session, an empty slot here just leaves the music
+    // player stretched across the space with nothing beside it.
+    @Published var isCalendarExpanded: Bool = true
     
     deinit {
         destroy()
@@ -163,6 +167,7 @@ class BoringViewModel: NSObject, ObservableObject {
                 webcamManager.startSession()
                 isCameraExpanded = true
                 isLyricsExpanded = false
+                isCalendarExpanded = false
             }
 
         case .denied, .restricted:
@@ -207,7 +212,24 @@ class BoringViewModel: NSObject, ObservableObject {
             webcamManager.stopSession()
             isCameraExpanded = false
         }
+        isCalendarExpanded = false
         isLyricsExpanded = true
+    }
+
+    /// Camera, lyrics, and calendar share one slot on the right — picking
+    /// one is a selection among the three, not an independent on/off flag,
+    /// so activating any of them always clears the other two.
+    func toggleCalendarView() {
+        if isCalendarExpanded {
+            isCalendarExpanded = false
+            return
+        }
+        if webcamManager.isSessionRunning {
+            webcamManager.stopSession()
+            isCameraExpanded = false
+        }
+        isLyricsExpanded = false
+        isCalendarExpanded = true
     }
 
     func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {

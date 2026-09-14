@@ -390,7 +390,13 @@ struct SyncedLyricsPanelView: View {
     @State private var scrubIndex: Int? = nil
     @State private var scrollAccumulator: CGFloat = 0
     private static let slotSize = CGSize(width: 215, height: 130)
-    private static let lineStep: CGFloat = 26
+    // Tall enough to fit a wrapped second line instead of truncating with
+    // an ellipsis — every row is this height so the scroll math (each line
+    // exactly lineStep apart) stays uniform regardless of wrapping.
+    private static let lineStep: CGFloat = 34
+    // Provider timestamps read a little late against the actual audio —
+    // look this far ahead so a line lands when it's actually sung.
+    private static let lyricLeadOffset: Double = 0.5
 
     var body: some View {
         content
@@ -439,16 +445,21 @@ struct SyncedLyricsPanelView: View {
                 // fades toward whichever line is centered, just by opacity.
                 scrollingStack(position: Double(scrubIndex), emphasisIndex: scrubIndex, boldIndex: nil, animated: true)
             } else if musicManager.isPlaying {
+                // Snaps per line rather than gliding across the whole gap
+                // between two timestamps — that gap can be several seconds,
+                // and drifting the entire time read as sluggish rather than
+                // synced. A quick animated snap the moment the line changes
+                // reads as "synced" the way Spotify's does.
                 TimelineView(.animation(minimumInterval: 0.05)) { timeline in
                     let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
                     let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
                     let elapsed = min(max(progressed, 0), musicManager.songDuration)
-                    let (position, highlightIndex) = continuousPosition(elapsed: elapsed)
-                    scrollingStack(position: position, emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: false)
+                    let highlightIndex = musicManager.lyricLineIndex(at: elapsed + Self.lyricLeadOffset)
+                    scrollingStack(position: Double(highlightIndex ?? 0), emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: true)
                 }
             } else {
-                let (position, highlightIndex) = continuousPosition(elapsed: liveElapsed())
-                scrollingStack(position: position, emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: false)
+                let highlightIndex = musicManager.lyricLineIndex(at: liveElapsed() + Self.lyricLeadOffset)
+                scrollingStack(position: Double(highlightIndex ?? 0), emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: true)
             }
 
             if scrubIndex != nil {
@@ -494,23 +505,6 @@ struct SyncedLyricsPanelView: View {
         scrubIndex = clampedIndex(base - steps)
     }
 
-    /// Position within the next line's gap, not just which line is "last
-    /// passed" — that's what lets the whole stack glide continuously
-    /// instead of holding still and then hopping. `highlightIndex` is the
-    /// line that's actually playing right now (nil before the first synced
-    /// line arrives), kept separate from position so nothing gets bolded
-    /// before it's genuinely current.
-    private func continuousPosition(elapsed: Double) -> (position: Double, highlightIndex: Int?) {
-        let lyrics = musicManager.syncedLyrics
-        guard !lyrics.isEmpty, elapsed >= lyrics[0].time else { return (0, nil) }
-        let idx = musicManager.lyricLineIndex(at: elapsed) ?? 0
-        guard idx < lyrics.count - 1 else { return (Double(idx), idx) }
-        let t0 = lyrics[idx].time
-        let t1 = lyrics[idx + 1].time
-        let fraction = t1 > t0 ? min(max((elapsed - t0) / (t1 - t0), 0), 1) : 0
-        return (Double(idx) + fraction, idx)
-    }
-
     /// Every line lives in one stack that slides as a whole, like Spotify's
     /// lyrics screen — not a fixed set of prev/current/next slots swapping
     /// content, which read as jumping between discrete levels rather than
@@ -526,9 +520,14 @@ struct SyncedLyricsPanelView: View {
                 Text(entry.text)
                     .font(.system(size: index == boldIndex ? 14 : 12, weight: index == boldIndex ? .semibold : .regular))
                     .foregroundStyle(.white.opacity(lineOpacity(index: index, emphasisIndex: emphasisIndex)))
-                    .lineLimit(2)
+                    // No cap — a line that needs 3+ wrapped rows just takes
+                    // the room it needs (pushing the next block down) rather
+                    // than ever truncating with an ellipsis.
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
-                    .frame(width: Self.slotSize.width, height: Self.lineStep)
+                    .frame(width: Self.slotSize.width, alignment: .top)
+                    .frame(minHeight: Self.lineStep, alignment: .top)
             }
         }
         .offset(y: center - CGFloat(clampedPosition) * Self.lineStep)
@@ -613,6 +612,10 @@ struct NotchHomeView: View {
         Defaults[.showLyricsButton] && Defaults[.enableLyrics] && vm.isLyricsExpanded
     }
 
+    private var shouldShowCalendarPanel: Bool {
+        Defaults[.showCalendar] && vm.isCalendarExpanded
+    }
+
     private var mainContent: some View {
         HStack(alignment: .top, spacing: 15) {
             MusicPlayerView(albumArtNamespace: albumArtNamespace)
@@ -630,7 +633,7 @@ struct NotchHomeView: View {
                     .opacity(vm.notchState == .closed ? 0 : 1)
                     .blur(radius: vm.notchState == .closed ? 20 : 0)
                     .transition(.opacity)
-            } else if Defaults[.showCalendar] {
+            } else if shouldShowCalendarPanel {
                 CalendarView()
                     .frame(width: 215)
                     .onHover { isHovering in

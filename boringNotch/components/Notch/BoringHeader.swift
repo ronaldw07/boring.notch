@@ -14,6 +14,7 @@ struct BoringHeader: View {
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @StateObject var tvm = ShelfStateViewModel.shared
+    @Default(.showCalendar) var showCalendar
     var body: some View {
         HStack(spacing: 0) {
             HStack {
@@ -43,6 +44,22 @@ struct BoringHeader: View {
                         OpenNotchHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon)
                             .transition(.scale(scale: 0.8).combined(with: .opacity))
                     } else {
+                        if showCalendar {
+                            Button(action: {
+                                vm.toggleCalendarView()
+                            }) {
+                                Capsule()
+                                    .fill(.black)
+                                    .frame(width: 30, height: 30)
+                                    .overlay {
+                                        Image(systemName: vm.isCalendarExpanded ? "calendar.circle.fill" : "calendar")
+                                            .foregroundColor(.white)
+                                            .padding()
+                                            .imageScale(.medium)
+                                    }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                         if Defaults[.showLyricsButton] && Defaults[.enableLyrics] {
                             Button(action: {
                                 vm.toggleLyricsView()
