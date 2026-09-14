@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Richard Kunkli on 07/08/2024.
+//  Modified by Ronald Wen — removed the AirDrop/Quick Share section, relabeled the lyrics toggle to Show Lyrics (WIP)
 //
 
 import AVFoundation
@@ -680,10 +681,7 @@ struct Media: View {
             Section {
                 MusicSlotConfigurationView()
                 Defaults.Toggle(key: .enableLyrics) {
-                    HStack {
-                        Text("Show lyrics below artist name")
-                        customBadge(text: "Beta")
-                    }
+                    Text("Show Lyrics (WIP)")
                 }
             } header: {
                 Text("Media controls")

@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Harsh Vardhan  Goswami  on 04/08/24.
+//  Modified by Ronald Wen — reworked panel height animation sequencing, added camera/lyrics slot toggles, fixed the remember-last-tab setting
 //
 
 import Combine
@@ -59,6 +60,7 @@ class BoringViewModel: NSObject, ObservableObject {
     let webcamManager = WebcamManager.shared
     @Published var isCameraExpanded: Bool = false
     @Published var isRequestingAuthorization: Bool = false
+    @Published var isLyricsExpanded: Bool = false
     
     deinit {
         destroy()
@@ -160,6 +162,7 @@ class BoringViewModel: NSObject, ObservableObject {
             } else if webcamManager.cameraAvailable {
                 webcamManager.startSession()
                 isCameraExpanded = true
+                isLyricsExpanded = false
             }
 
         case .denied, .restricted:
@@ -194,7 +197,19 @@ class BoringViewModel: NSObject, ObservableObject {
             break
         }
     }
-    
+
+    func toggleLyricsView() {
+        if isLyricsExpanded {
+            isLyricsExpanded = false
+            return
+        }
+        if webcamManager.isSessionRunning {
+            webcamManager.stopSession()
+            isCameraExpanded = false
+        }
+        isLyricsExpanded = true
+    }
+
     func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {
         let screenFrame = getScreenFrame(screenUUID)
         if let frame = screenFrame {

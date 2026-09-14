@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Richard Kunkli on 2024. 10. 17..
+//  Modified by Ronald Wen — added the showLyricsButton default
 //
 
 import SwiftUI
@@ -103,6 +104,7 @@ extension Defaults.Keys {
     static let showEmojis = Key<Bool>("showEmojis", default: false)
     //static let alwaysShowTabs = Key<Bool>("alwaysShowTabs", default: true)
     static let showMirror = Key<Bool>("showMirror", default: false)
+    static let showLyricsButton = Key<Bool>("showLyricsButton", default: true)
     static let mirrorShape = Key<MirrorShapeEnum>("mirrorShape", default: MirrorShapeEnum.rectangle)
     static let settingsIconInNotch = Key<Bool>("settingsIconInNotch", default: true)
     static let lightingEffect = Key<Bool>("lightingEffect", default: true)

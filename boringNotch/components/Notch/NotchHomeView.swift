@@ -4,6 +4,7 @@
 //
 //  Created by Hugo Persson on 2024-08-18.
 //  Modified by Harsh Vardhan Goswami & Richard Kunkli & Mustafa Ramadan
+//  Modified by Ronald Wen — added the synced lyrics panel (shared slot with the mirror/calendar)
 //
 
 import Combine
@@ -151,39 +152,6 @@ struct MusicControlsView: View {
                 frameWidth: width
             )
             .fontWeight(.medium)
-            if Defaults[.enableLyrics] {
-                TimelineView(.animation(minimumInterval: 0.25)) { timeline in
-                    let currentElapsed: Double = {
-                        guard musicManager.isPlaying else { return musicManager.elapsedTime }
-                        let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
-                        let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
-                        return min(max(progressed, 0), musicManager.songDuration)
-                    }()
-                    let line: String = {
-                        if musicManager.isFetchingLyrics { return "Loading lyrics…" }
-                        if !musicManager.syncedLyrics.isEmpty {
-                            return musicManager.lyricLine(at: currentElapsed)
-                        }
-                        let trimmed = musicManager.currentLyrics.trimmingCharacters(in: .whitespacesAndNewlines)
-                        return trimmed.isEmpty ? "No lyrics found" : trimmed.replacingOccurrences(of: "\n", with: " ")
-                    }()
-                    let isPersian = line.unicodeScalars.contains { scalar in
-                        let v = scalar.value
-                        return v >= 0x0600 && v <= 0x06FF
-                    }
-                    MarqueeText(
-                        .constant(line),
-                        font: .subheadline,
-                        nsFont: .subheadline,
-                        textColor: musicManager.isFetchingLyrics ? .gray.opacity(0.7) : .gray,
-                        frameWidth: width
-                    )
-                    .font(isPersian ? .custom("Vazirmatn-Regular", size: NSFont.preferredFont(forTextStyle: .subheadline).pointSize) : .subheadline)
-                    .lineLimit(1)
-                    .opacity(musicManager.isPlaying ? 1 : 0)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
         }
     }
 
@@ -412,6 +380,92 @@ struct VolumeControlView: View {
     }
 }
 
+// MARK: - Synced Lyrics Panel
+
+struct SyncedLyricsPanelView: View {
+    @ObservedObject var musicManager = MusicManager.shared
+    private static let slotSize = CGSize(width: 215, height: 130)
+
+    var body: some View {
+        content
+            .frame(width: Self.slotSize.width, height: Self.slotSize.height)
+            .clipped()
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if musicManager.isFetchingLyrics {
+            placeholder("Loading lyrics…")
+        } else if !musicManager.syncedLyrics.isEmpty {
+            syncedView
+        } else if !musicManager.currentLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            plainScrollView
+        } else {
+            placeholder("No lyrics found")
+        }
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.gray)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var syncedView: some View {
+        TimelineView(.animation(minimumInterval: 0.05)) { timeline in
+            let elapsed: Double = {
+                guard musicManager.isPlaying else { return musicManager.elapsedTime }
+                let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
+                let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
+                return min(max(progressed, 0), musicManager.songDuration)
+            }()
+            let currentIndex = musicManager.lyricLineIndex(at: elapsed) ?? -1
+            let lyrics = musicManager.syncedLyrics
+
+            VStack(spacing: 8) {
+                lineView(lyrics, currentIndex - 1, opacity: 0.3, size: 11)
+                lineView(lyrics, currentIndex, opacity: 1, size: 14, bold: true)
+                lineView(lyrics, currentIndex + 1, opacity: 0.5, size: 12)
+                lineView(lyrics, currentIndex + 2, opacity: 0.3, size: 11)
+            }
+            .frame(maxHeight: .infinity)
+            .animation(.easeOut(duration: 0.18), value: currentIndex)
+        }
+    }
+
+    private static let lineTransition: AnyTransition = .asymmetric(
+        insertion: .opacity.combined(with: .move(edge: .bottom)),
+        removal: .opacity.combined(with: .move(edge: .top))
+    )
+
+    @ViewBuilder
+    private func lineView(_ lyrics: [(time: Double, text: String)], _ index: Int, opacity: Double, size: CGFloat, bold: Bool = false) -> some View {
+        if lyrics.indices.contains(index) {
+            Text(lyrics[index].text)
+                .font(.system(size: size, weight: bold ? .semibold : .regular))
+                .foregroundStyle(.white.opacity(opacity))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: Self.slotSize.width, alignment: .center)
+                .id(index)
+                .transition(Self.lineTransition)
+        } else {
+            Color.clear.frame(height: size + 4)
+        }
+    }
+
+    private var plainScrollView: some View {
+        ScrollView {
+            Text(musicManager.currentLyrics)
+                .font(.system(size: 12))
+                .foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 4)
+        }
+    }
+}
+
 // MARK: - Main View
 
 struct NotchHomeView: View {
@@ -435,17 +489,26 @@ struct NotchHomeView: View {
         Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
     }
 
+    private var shouldShowLyricsPanel: Bool {
+        Defaults[.showLyricsButton] && Defaults[.enableLyrics] && vm.isLyricsExpanded
+    }
+
     private var mainContent: some View {
         HStack(alignment: .top, spacing: 15) {
             MusicPlayerView(albumArtNamespace: albumArtNamespace)
 
-            // Mirror and calendar share one slot: opening the mirror takes
-            // over rather than squeezing the calendar down to make room.
+            // Mirror, lyrics, and calendar share one slot: whichever is
+            // active takes over rather than squeezing the others down.
             if shouldShowCamera {
                 CameraPreviewView(webcamManager: webcamManager)
                     .opacity(vm.notchState == .closed ? 0 : 1)
                     .blur(radius: vm.notchState == .closed ? 20 : 0)
                     .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.76, blendDuration: 0), value: shouldShowCamera)
+                    .transition(.opacity)
+            } else if shouldShowLyricsPanel {
+                SyncedLyricsPanelView()
+                    .opacity(vm.notchState == .closed ? 0 : 1)
+                    .blur(radius: vm.notchState == .closed ? 20 : 0)
                     .transition(.opacity)
             } else if Defaults[.showCalendar] {
                 CalendarView()

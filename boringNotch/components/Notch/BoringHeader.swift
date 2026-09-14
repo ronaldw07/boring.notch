@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Harsh Vardhan  Goswami  on 04/08/24.
+//  Modified by Ronald Wen — added the lyrics toggle button next to the mirror button
 //
 
 import Defaults
@@ -42,6 +43,22 @@ struct BoringHeader: View {
                         OpenNotchHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon)
                             .transition(.scale(scale: 0.8).combined(with: .opacity))
                     } else {
+                        if Defaults[.showLyricsButton] && Defaults[.enableLyrics] {
+                            Button(action: {
+                                vm.toggleLyricsView()
+                            }) {
+                                Capsule()
+                                    .fill(.black)
+                                    .frame(width: 30, height: 30)
+                                    .overlay {
+                                        Image(systemName: vm.isLyricsExpanded ? "quote.bubble.fill" : "quote.bubble")
+                                            .foregroundColor(.white)
+                                            .padding()
+                                            .imageScale(.medium)
+                                    }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                         if Defaults[.showMirror] {
                             Button(action: {
                                 vm.toggleCameraPreview()

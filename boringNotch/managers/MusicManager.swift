@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Harsh Vardhan  Goswami  on 03/08/24.
+//  Modified by Ronald Wen — added LRCLIB lyrics fetching, synced-line lookup, and fixed refetch/flicker bugs
 //
 import AppKit
 import Combine
@@ -62,6 +63,13 @@ class MusicManager: ObservableObject {
     private var lastArtworkAlbum: String = "Self Love"
     private var lastArtworkBundleIdentifier: String? = nil
 
+    // Lyrics are keyed off track identity, not `hasContentChange` — that
+    // also flips on artwork-byte jitter from the same source, which can fire
+    // on nearly every frame of an unchanged track and re-armed "Loading
+    // lyrics…" each time.
+    private var lastLyricsTitle: String = ""
+    private var lastLyricsArtist: String = ""
+
     @Published var isFlipping: Bool = false
     private var flipWorkItem: DispatchWorkItem?
 
@@ -99,6 +107,18 @@ class MusicManager: ObservableObject {
         NotificationCenter.default.publisher(for: Notification.Name.mediaControllerChanged)
             .sink { [weak self] _ in
                 self?.setActiveControllerBasedOnPreference()
+            }
+            .store(in: &cancellables)
+
+        // Lyrics are otherwise only (re)fetched on a track change, so turning
+        // this on mid-song left the panel stuck on "No lyrics found" until
+        // the next track. Refetch immediately for whatever's already playing.
+        Defaults.publisher(.enableLyrics)
+            .sink { [weak self] change in
+                guard let self, change.newValue, !self.songTitle.isEmpty else { return }
+                self.lastLyricsTitle = ""
+                self.lastLyricsArtist = ""
+                self.fetchLyricsIfAvailable(bundleIdentifier: self.bundleIdentifier, title: self.songTitle, artist: self.artistName)
             }
             .store(in: &cancellables)
 
@@ -456,6 +476,10 @@ class MusicManager: ObservableObject {
             return
         }
 
+        guard title != lastLyricsTitle || artist != lastLyricsArtist else { return }
+        lastLyricsTitle = title
+        lastLyricsArtist = artist
+
         // Prefer native Apple Music lyrics when available
         if let bundleIdentifier = bundleIdentifier, bundleIdentifier.contains("com.apple.Music") {
             Task { @MainActor in
@@ -610,6 +634,26 @@ class MusicManager: ObservableObject {
             }
         }
         return syncedLyrics[idx].text
+    }
+
+    /// Index of the last synced line whose timestamp has passed, or `nil`
+    /// if there's no synced data (only `currentLyrics`) or playback hasn't
+    /// reached the first line yet.
+    func lyricLineIndex(at elapsed: Double) -> Int? {
+        guard !syncedLyrics.isEmpty, syncedLyrics[0].time <= elapsed else { return nil }
+        var low = 0
+        var high = syncedLyrics.count - 1
+        var idx = 0
+        while low <= high {
+            let mid = (low + high) / 2
+            if syncedLyrics[mid].time <= elapsed {
+                idx = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return idx
     }
 
     private func triggerFlipAnimation() {
