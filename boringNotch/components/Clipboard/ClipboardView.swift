@@ -4,6 +4,7 @@
 //
 //  Recently copied items, newest first. Clicking one puts it back on the
 //  pasteboard.
+//  Modified by Ronald Wen — added a 50-item limit hint to the empty state
 //
 
 import SwiftUI
@@ -311,6 +312,9 @@ struct ClipboardView: View {
             Text("Nothing copied yet")
                 .font(.caption)
                 .foregroundStyle(.gray)
+            Text("Keeps your last 50 items")
+                .font(.system(size: 9))
+                .foregroundStyle(.gray.opacity(0.6))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
