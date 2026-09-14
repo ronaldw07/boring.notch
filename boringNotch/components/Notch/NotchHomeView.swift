@@ -385,10 +385,9 @@ struct VolumeControlView: View {
 struct SyncedLyricsPanelView: View {
     @ObservedObject var musicManager = MusicManager.shared
     // Set while the user is dragging through lines by hand; nil means
-    // "follow playback". Kept as an index rather than a live timestamp so
-    // scrubbing works the same whether the song is playing or paused.
-    @State private var scrubIndex: Int? = nil
-    @State private var scrollAccumulator: CGFloat = 0
+    // "follow playback". Fractional, not snapped to a line, so scrolling
+    // tracks the gesture continuously instead of hopping line to line.
+    @State private var scrubPosition: Double? = nil
     private static let slotSize = CGSize(width: 215, height: 130)
     // Tall enough to fit a wrapped second line instead of truncating with
     // an ellipsis — every row is this height so the scroll math (each line
@@ -435,15 +434,22 @@ struct SyncedLyricsPanelView: View {
         min(max(index, 0), max(musicManager.syncedLyrics.count - 1, 0))
     }
 
+    private func clampedPosition(_ position: Double) -> Double {
+        min(max(position, 0), Double(max(musicManager.syncedLyrics.count - 1, 0)))
+    }
+
     private var syncedView: some View {
         ZStack(alignment: .bottom) {
             // Only the live-tracking path needs a running timer — scrubbing
             // and pausing both render a single static frame, no ticking.
-            if let scrubIndex {
+            if let scrubPosition {
                 // No bold while browsing by hand — a per-line font/weight
                 // change while scrolling is what read as stutter. Still
                 // fades toward whichever line is centered, just by opacity.
-                scrollingStack(position: Double(scrubIndex), emphasisIndex: scrubIndex, boldIndex: nil, animated: true)
+                // Not animated — the position already moves continuously
+                // with the scroll gesture itself, so an eased transition on
+                // top of that just reintroduces the lag it's meant to fix.
+                scrollingStack(position: scrubPosition, emphasisIndex: Int(scrubPosition.rounded()), boldIndex: nil, animated: false)
             } else if musicManager.isPlaying {
                 // Snaps per line rather than gliding across the whole gap
                 // between two timestamps — that gap can be several seconds,
@@ -462,11 +468,10 @@ struct SyncedLyricsPanelView: View {
                 scrollingStack(position: Double(highlightIndex ?? 0), emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: true)
             }
 
-            if scrubIndex != nil {
+            if scrubPosition != nil {
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) {
-                        scrubIndex = nil
-                        scrollAccumulator = 0
+                        scrubPosition = nil
                     }
                 } label: {
                     Label("Sync", systemImage: "waveform")
@@ -499,25 +504,20 @@ struct SyncedLyricsPanelView: View {
     private func handleLineTap(atY y: CGFloat) {
         let lyrics = musicManager.syncedLyrics
         guard !lyrics.isEmpty else { return }
-        let base = scrubIndex ?? (musicManager.lyricLineIndex(at: liveElapsed() + Self.lyricLeadOffset) ?? 0)
-        let deltaLines = Int(((y - Self.slotSize.height / 2) / Self.lineStep).rounded())
-        let target = clampedIndex(base + deltaLines)
+        let base = scrubPosition ?? Double(musicManager.lyricLineIndex(at: liveElapsed() + Self.lyricLeadOffset) ?? 0)
+        let deltaLines = ((y - Self.slotSize.height / 2) / Self.lineStep).rounded()
+        let target = clampedIndex(Int(base) + Int(deltaLines))
         musicManager.seek(to: lyrics[target].time)
-        scrubIndex = nil
-        scrollAccumulator = 0
+        scrubPosition = nil
     }
 
-    /// Two-finger trackpad scroll, not click-and-drag — smoother, and
-    /// doesn't fight the panel's own click targets. Accumulates fractional
-    /// deltas so a full line only advances once real trackpad travel
-    /// crosses `lineStep`, rather than jumping a line per scroll event.
+    /// Two-finger trackpad scroll, or an external mouse wheel — moves
+    /// `scrubPosition` by exactly the gesture's own distance, not in
+    /// whole-line steps, so it tracks the input continuously instead of
+    /// sticking from level to level.
     private func handleScroll(_ deltaY: CGFloat) {
-        let base = scrubIndex ?? (musicManager.lyricLineIndex(at: liveElapsed()) ?? 0)
-        scrollAccumulator += deltaY
-        let steps = Int((scrollAccumulator / Self.lineStep).rounded(.towardZero))
-        guard steps != 0 else { return }
-        scrollAccumulator -= CGFloat(steps) * Self.lineStep
-        scrubIndex = clampedIndex(base - steps)
+        let base = scrubPosition ?? Double(musicManager.lyricLineIndex(at: liveElapsed()) ?? 0)
+        scrubPosition = clampedPosition(base - deltaY / Self.lineStep)
     }
 
     /// Every line lives in one stack that slides as a whole, like Spotify's
