@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Alexander on 2025-09-24.
+//  Modified by Ronald Wen — added sticky multi-select and pin/unpin context menu actions
 //
 
 import Foundation

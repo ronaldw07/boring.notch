@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Alexander on 2025-09-24.
+//  Modified by Ronald Wen — added shelf hover highlight, remove buttons, working horizontal scroll, stacks, pinning sort, and Select All
 //
 
 import SwiftUI

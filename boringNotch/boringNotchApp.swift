@@ -3,6 +3,7 @@
 //  boringNotchApp
 //
 //  Created by Harsh Vardhan  Goswami  on 02/08/24.
+//  Modified by Ronald Wen — made the clipboard capture from app launch instead of first tab open; fixed a window-resize flicker
 //
 
 import AVFoundation

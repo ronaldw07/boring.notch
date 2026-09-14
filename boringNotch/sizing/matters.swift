@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Harsh Vardhan  Goswami  on 05/08/24.
+//  Modified by Ronald Wen — narrowed the closed notch width by 2pt
 //
 
 import Defaults

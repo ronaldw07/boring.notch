@@ -7,6 +7,7 @@
 //  date plus banked elapsed time, extrapolated against `now` rather than
 //  incremented tick by tick. That's what lets it survive sleep/wake and an
 //  app relaunch without a special case for either.
+//  Modified by Ronald Wen — fixed the countdown skipping 4:59 and restarting a finished countdown
 //
 
 import AppKit

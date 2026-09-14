@@ -4,6 +4,7 @@
 //
 //  Created by Harsh Vardhan Goswami  on 02/08/24
 //  Modified by Richard Kunkli on 24/08/2024.
+//  Modified by Ronald Wen — fixed the notch's open/close animation (teleport + flicker) and added CursorLock for click-through cursor control
 //
 
 import AVFoundation

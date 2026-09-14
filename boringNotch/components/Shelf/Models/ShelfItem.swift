@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Alexander on 2025-09-24.
+//  Modified by Ronald Wen — added groupID and isPinned fields for shelf stacks and pinning
 //
 
 import AppKit

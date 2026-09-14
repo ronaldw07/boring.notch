@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Alexander on 2025-09-26.
+//  Modified by Ronald Wen — added selectAll() for the shelf's Select All button
 //
 
 import Foundation

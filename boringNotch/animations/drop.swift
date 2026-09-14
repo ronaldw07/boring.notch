@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Harsh Vardhan  Goswami  on  04/08/24.
+//  Modified by Ronald Wen — added the collapse/panel animation curves used by the close animation fix
 //
 
 import Foundation

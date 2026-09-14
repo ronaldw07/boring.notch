@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Alexander on 2025-10-09.
+//  Modified by Ronald Wen — added pinnedFirst() sorting so pinned shelf items stay left
 
 import Foundation
 import AppKit

@@ -3,6 +3,7 @@
 //  boringNotch
 //
 //  Created by Alexander on 2025-09-24.
+//  Modified by Ronald Wen — added the remove (X) button, hover state, and fixed multi-item drag being broken by sticky-select
 //
 
 import AppKit

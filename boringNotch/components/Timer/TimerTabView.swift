@@ -6,6 +6,7 @@
 //  tabs, running state isn't reset by switching away — the whole point is
 //  that it keeps going (and shows up in the closed notch) regardless of
 //  what's currently open.
+//  Modified by Ronald Wen — changed the Timer tab to a row layout so it stops growing the notch
 //
 
 import SwiftUI
