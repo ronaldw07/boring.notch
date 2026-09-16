@@ -174,6 +174,10 @@ class BoringViewModel: NSObject, ObservableObject {
                 isCameraExpanded = true
                 isLyricsExpanded = false
                 isCalendarExpanded = false
+                // The preview only exists in the Home tab's layout — the
+                // button itself is visible everywhere, so pressing it from
+                // Shelf/Clipboard/Timer looked like nothing happened.
+                coordinator.currentView = .home
             }
 
         case .denied, .restricted:
@@ -224,6 +228,7 @@ class BoringViewModel: NSObject, ObservableObject {
         isCameraExpanded = false
         isCalendarExpanded = false
         isLyricsExpanded = true
+        coordinator.currentView = .home
     }
 
     /// Camera, lyrics, and calendar share one slot on the right — picking
@@ -240,6 +245,7 @@ class BoringViewModel: NSObject, ObservableObject {
         isCameraExpanded = false
         isLyricsExpanded = false
         isCalendarExpanded = true
+        coordinator.currentView = .home
     }
 
     func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {
