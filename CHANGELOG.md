@@ -7,6 +7,37 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.4.0 — 2026-09-15 23:41
+
+### Added
+
+- **Music: a synced lyrics panel**, toggled by a button next to the mirror.
+  Shares that slot with the mirror and a new calendar toggle — picking one
+  always clears the other two. Lines snap into place the instant playback
+  crosses each timestamp, wrap instead of ever truncating with an ellipsis,
+  and a wrapped line now gets a real gap before the next one. Scrub through
+  it with two fingers (or a mouse wheel) independent of playback, click any
+  line to seek there directly, and a "Sync" pill brings it back to live
+  tracking.
+- **Music: pause on mute, resume on unmute.** Opt-in in Settings > Media.
+  Only resumes a pause it caused itself — a manual pause while muted is left
+  alone.
+- **Calendar: a toggle button**, on by default so the music player never
+  ends up stretched alone with nothing beside it.
+
+### Fixed
+
+- **Mirror no longer gets stuck as the active slot after the notch closes.**
+  Closing it tore the camera preview down without telling the view model,
+  which left lyrics and calendar permanently locked out of the shared slot.
+- **Mirror/lyrics/calendar buttons now work from any tab**, not just Home —
+  they used to toggle state with nothing visible to show for it.
+- **Calendar no longer polls in the background.** Refreshes on appear and on
+  notch open/close instead; also fixes a startup race where fetching events
+  before the calendar list finished loading silently returned nothing.
+
+---
+
 ## 0.3.4 — 2026-09-12 17:05
 
 ### Added

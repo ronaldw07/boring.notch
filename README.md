@@ -40,6 +40,16 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.4.0 — 2026-09-15
+
+- **Added:** Synced lyrics panel — scrub with two fingers or a mouse wheel,
+  click a line to seek, toggled next to the mirror.
+- **Added:** Pause music on mute, resume on unmute (Settings > Media).
+- **Added:** Calendar toggle button, on by default.
+- **Fixed:** Mirror/lyrics/calendar buttons now work from any tab, not just
+  Home.
+- **Fixed:** Calendar no longer polls in the background.
+
 ### 0.3.4 — 2026-09-12
 
 - **Added:** Select All / Deselect All button on the shelf, top-right under
