@@ -4,13 +4,13 @@
         <title>boringNotch</title>
         <item>
             <title>2.7.3</title>
-            <pubDate>Wed, 16 Sep 2026 15:53:44 -0700</pubDate>
+            <pubDate>Wed, 16 Sep 2026 15:57:27 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
             <sparkle:version>271</sparkle:version>
             <sparkle:shortVersionString>2.7.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.4.0/boringNotch.dmg" length="8949821" type="application/octet-stream" sparkle:edSignature="78aGeC9iq0kR3UKGEYvxptDJ8HrF6a3lFjD480Gax6oSgeJoxWyyRmsVrThGhyjfcpta334XadCud7O9NYRmCw=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.4.0/boringNotch.dmg" length="8949724" type="application/octet-stream" sparkle:edSignature="QBQs1BduZithYzkMyrkBtdKUVqWCmdMocgu3mEnRq0XK1Q8g/oDOl42LUum1JmyeKuMsHQT/7tC3nahQq29yAA=="/>
         </item>
     </channel>
 </rss>
