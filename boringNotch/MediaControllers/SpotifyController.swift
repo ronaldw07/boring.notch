@@ -148,7 +148,10 @@ class SpotifyController: MediaControllerProtocol {
         let currentTrack = descriptor.atIndex(2)?.stringValue ?? "Unknown"
         let currentTrackArtist = descriptor.atIndex(3)?.stringValue ?? "Unknown"
         let currentTrackAlbum = descriptor.atIndex(4)?.stringValue ?? "Unknown"
-        let currentTime = descriptor.atIndex(5)?.doubleValue ?? 0
+        // The midpoint timestamp above accounts for the script's own
+        // round-trip, but the readout still ran measurably ahead of actual
+        // Spotify audio (~0.2s) beyond that — a further correction on top.
+        let currentTime = max(0, (descriptor.atIndex(5)?.doubleValue ?? 0) - 0.2)
         let duration = (descriptor.atIndex(6)?.doubleValue ?? 0)/1000
         let isShuffled = descriptor.atIndex(7)?.booleanValue ?? false
         let isRepeating = descriptor.atIndex(8)?.booleanValue ?? false
