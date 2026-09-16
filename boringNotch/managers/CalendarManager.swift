@@ -27,17 +27,10 @@ class CalendarManager: ObservableObject {
     private let calendarService = CalendarService()
 
     private var eventStoreChangedObserver: NSObjectProtocol?
-    private var refreshTask: Task<Void, Never>?
-
-    /// EventKit only signals changes to the local store. Calendar.app pulls
-    /// from remote accounts like Google on its own schedule, so poll as well
-    /// to pick up anything that landed without a notification.
-    private static let refreshInterval: TimeInterval = 60
 
     private init() {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
-        startPeriodicRefresh()
         Task {
             await reloadCalendarAndReminderLists()
         }
@@ -47,7 +40,6 @@ class CalendarManager: ObservableObject {
         if let observer = eventStoreChangedObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        refreshTask?.cancel()
     }
 
     private func setupEventStoreChangedObserver() {
@@ -62,16 +54,6 @@ class CalendarManager: ObservableObject {
                 // The notification means the store's contents changed, not
                 // just which calendars exist. Without this the events on
                 // screen stay stale until something else happens to refetch.
-                await self.updateEvents()
-            }
-        }
-    }
-
-    private func startPeriodicRefresh() {
-        refreshTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Self.refreshInterval))
-                guard !Task.isCancelled, let self else { return }
                 await self.updateEvents()
             }
         }
@@ -207,6 +189,14 @@ class CalendarManager: ObservableObject {
     }
 
     private func updateEvents() async {
+        // The calendar list loads asynchronously from init and can still be
+        // in flight the first time this runs (e.g. the view appearing
+        // before it resolves) — fetching against an empty list silently
+        // returns no events. The old periodic poll used to paper over this
+        // by retrying a few seconds later; fixing the actual race instead.
+        if allCalendars.isEmpty {
+            await reloadCalendarAndReminderLists()
+        }
         let calendarIDs = selectedCalendars.map { $0.id }
         let eventsResult = await calendarService.events(
             from: currentWeekStartDate,
