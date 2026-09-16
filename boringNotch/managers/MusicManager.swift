@@ -123,7 +123,7 @@ class MusicManager: ObservableObject {
                 guard let self, change.newValue, !self.songTitle.isEmpty else { return }
                 self.lastLyricsTitle = ""
                 self.lastLyricsArtist = ""
-                self.fetchLyricsIfAvailable(bundleIdentifier: self.bundleIdentifier, title: self.songTitle, artist: self.artistName)
+                self.fetchLyricsIfAvailable(bundleIdentifier: self.bundleIdentifier, title: self.songTitle, artist: self.artistName, duration: self.songDuration)
             }
             .store(in: &cancellables)
 
@@ -317,7 +317,7 @@ class MusicManager: ObservableObject {
             }
 
             // Fetch lyrics on content change
-            self.fetchLyricsIfAvailable(bundleIdentifier: state.bundleIdentifier, title: state.title, artist: state.artist)
+            self.fetchLyricsIfAvailable(bundleIdentifier: state.bundleIdentifier, title: state.title, artist: state.artist, duration: state.duration)
         }
 
         let timeChanged = state.currentTime != self.elapsedTime
@@ -490,7 +490,7 @@ class MusicManager: ObservableObject {
     }
 
     // MARK: - Lyrics
-    private func fetchLyricsIfAvailable(bundleIdentifier: String?, title: String, artist: String) {
+    private func fetchLyricsIfAvailable(bundleIdentifier: String?, title: String, artist: String, duration: Double) {
         guard Defaults[.enableLyrics], !title.isEmpty else {
             DispatchQueue.main.async {
                 self.isFetchingLyrics = false
@@ -508,7 +508,7 @@ class MusicManager: ObservableObject {
             Task { @MainActor in
                 let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
                 guard !runningApps.isEmpty else {
-                    await self.fetchLyricsFromWeb(title: title, artist: artist)
+                    await self.fetchLyricsFromWeb(title: title, artist: artist, duration: duration)
                     return
                 }
 
@@ -546,13 +546,13 @@ class MusicManager: ObservableObject {
                 } catch {
                     // fall through to web lookup
                 }
-                await self.fetchLyricsFromWeb(title: title, artist: artist)
+                await self.fetchLyricsFromWeb(title: title, artist: artist, duration: duration)
             }
         } else {
             Task { @MainActor in
                 self.isFetchingLyrics = true
                 self.currentLyrics = ""
-                await self.fetchLyricsFromWeb(title: title, artist: artist)
+                await self.fetchLyricsFromWeb(title: title, artist: artist, duration: duration)
             }
         }
     }
@@ -563,8 +563,29 @@ class MusicManager: ObservableObject {
             .replacingOccurrences(of: "\u{FFFD}", with: "")
     }
 
+    /// LRCLIB's search endpoint returns fuzzy matches — several tracks can
+    /// share a title/artist (remixes, covers, re-releases). Picking result
+    /// zero blindly grabs whichever one it ranked first, which is often the
+    /// wrong recording entirely. The track's own duration is the cheap way
+    /// to tell them apart: pick whichever candidate's duration is closest to
+    /// ours, and only trust it within a few seconds — otherwise showing
+    /// nothing beats showing another song's lyrics.
+    private static let lyricsDurationTolerance: Double = 5
+
+    private func bestLyricsMatch(_ candidates: [[String: Any]], targetDuration: Double) -> [String: Any]? {
+        guard !candidates.isEmpty else { return nil }
+        guard candidates.count > 1, targetDuration > 0 else { return candidates.first }
+        func duration(_ entry: [String: Any]) -> Double {
+            (entry["duration"] as? Double) ?? .infinity
+        }
+        guard let best = candidates.min(by: { abs(duration($0) - targetDuration) < abs(duration($1) - targetDuration) }) else {
+            return nil
+        }
+        return abs(duration(best) - targetDuration) <= Self.lyricsDurationTolerance ? best : nil
+    }
+
     @MainActor
-    private func fetchLyricsFromWeb(title: String, artist: String) async {
+    private func fetchLyricsFromWeb(title: String, artist: String, duration: Double) async {
         let cleanTitle = normalizedQuery(title)
         let cleanArtist = normalizedQuery(artist)
         guard let encodedTitle = cleanTitle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
@@ -589,10 +610,10 @@ class MusicManager: ObservableObject {
                 return
             }
             if let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-               let first = jsonArray.first {
+               let match = bestLyricsMatch(jsonArray, targetDuration: duration) {
                 // Prefer plain lyrics (syncedLyrics may also be present)
-                let plain = (first["plainLyrics"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let synced = (first["syncedLyrics"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let plain = (match["plainLyrics"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let synced = (match["syncedLyrics"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let resolved = plain.isEmpty ? synced : plain
                 self.currentLyrics = resolved
                 self.isFetchingLyrics = false

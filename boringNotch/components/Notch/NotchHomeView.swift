@@ -393,14 +393,55 @@ struct SyncedLyricsPanelView: View {
     // an ellipsis — every row is this height so the scroll math (each line
     // exactly lineStep apart) stays uniform regardless of wrapping.
     private static let lineStep: CGFloat = 34
-    // Provider timestamps read a little late against the actual audio —
-    // look this far ahead so a line lands when it's actually sung.
-    private static let lyricLeadOffset: Double = 0.5
+    // Real rendered height of each lyric row, including any second wrapped
+    // line — measured once per song rather than assumed uniform. Without
+    // this, a wrapped row's actual height still counted as one `lineStep`
+    // in the scroll math, so the "current" line drifted further from center
+    // (usually toward the bottom) the more wrapped lines came before it.
+    @State private var rowHeights: [CGFloat] = []
 
     var body: some View {
         content
             .frame(width: Self.slotSize.width, height: Self.slotSize.height)
             .clipped()
+            .onAppear { recomputeRowHeights() }
+            .onChange(of: musicManager.currentLyrics) { _, _ in recomputeRowHeights() }
+    }
+
+    private func recomputeRowHeights() {
+        let font = NSFont.systemFont(ofSize: 12)
+        rowHeights = musicManager.syncedLyrics.map { entry in
+            let attr = NSAttributedString(string: entry.text, attributes: [.font: font])
+            let bounding = attr.boundingRect(
+                with: CGSize(width: Self.slotSize.width, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading]
+            )
+            return max(ceil(bounding.height), Self.lineStep) + 8
+        }
+    }
+
+    /// Where the stack must be offset so that row `position`'s own vertical
+    /// center — not an assumed fixed row height — lands at the panel's
+    /// center. Fractional `position` (mid-scrub) interpolates between the
+    /// two neighboring rows' offsets, so scrubbing across a wrapped line
+    /// still moves continuously instead of jumping.
+    private func offsetY(for position: Double) -> CGFloat {
+        guard !rowHeights.isEmpty else { return 0 }
+        let count = rowHeights.count
+        let clamped = min(max(position, 0), Double(count - 1))
+        let lower = Int(clamped)
+        let upper = min(lower + 1, count - 1)
+        let frac = clamped - Double(lower)
+
+        func centerOffset(_ index: Int) -> CGFloat {
+            let top = rowHeights[0..<index].reduce(0, +)
+            let mid = top + rowHeights[index] / 2
+            return Self.slotSize.height / 2 - mid
+        }
+
+        let lowerOffset = centerOffset(lower)
+        let upperOffset = centerOffset(upper)
+        return lowerOffset + (upperOffset - lowerOffset) * CGFloat(frac)
     }
 
     @ViewBuilder
@@ -460,11 +501,11 @@ struct SyncedLyricsPanelView: View {
                     let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
                     let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
                     let elapsed = min(max(progressed, 0), musicManager.songDuration)
-                    let highlightIndex = musicManager.lyricLineIndex(at: elapsed + Self.lyricLeadOffset)
+                    let highlightIndex = musicManager.lyricLineIndex(at: elapsed)
                     scrollingStack(position: Double(highlightIndex ?? 0), emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: true)
                 }
             } else {
-                let highlightIndex = musicManager.lyricLineIndex(at: liveElapsed() + Self.lyricLeadOffset)
+                let highlightIndex = musicManager.lyricLineIndex(at: liveElapsed())
                 scrollingStack(position: Double(highlightIndex ?? 0), emphasisIndex: highlightIndex, boldIndex: highlightIndex, animated: true)
             }
 
@@ -504,7 +545,7 @@ struct SyncedLyricsPanelView: View {
     private func handleLineTap(atY y: CGFloat) {
         let lyrics = musicManager.syncedLyrics
         guard !lyrics.isEmpty else { return }
-        let base = scrubPosition ?? Double(musicManager.lyricLineIndex(at: liveElapsed() + Self.lyricLeadOffset) ?? 0)
+        let base = scrubPosition ?? Double(musicManager.lyricLineIndex(at: liveElapsed()) ?? 0)
         let deltaLines = ((y - Self.slotSize.height / 2) / Self.lineStep).rounded()
         let target = clampedIndex(Int(base) + Int(deltaLines))
         musicManager.seek(to: lyrics[target].time)
@@ -528,12 +569,16 @@ struct SyncedLyricsPanelView: View {
     private func scrollingStack(position: Double, emphasisIndex: Int?, boldIndex: Int?, animated: Bool) -> some View {
         let lyrics = musicManager.syncedLyrics
         let clampedPosition = min(max(position, 0), Double(max(lyrics.count - 1, 0)))
-        let center = Self.slotSize.height / 2 - Self.lineStep / 2
 
         return LazyVStack(spacing: 0) {
             ForEach(Array(lyrics.enumerated()), id: \.offset) { index, entry in
                 Text(entry.text)
                     .font(.system(size: index == boldIndex ? 14 : 12, weight: index == boldIndex ? .semibold : .regular))
+                    // Underline whichever line is centered while scrubbing by
+                    // hand, like Spotify's own lyrics view — reserved for the
+                    // scrub path (boldIndex is nil there) so it never doubles
+                    // up with the bold weight live playback uses.
+                    .underline(boldIndex == nil && index == emphasisIndex, color: .white)
                     .foregroundStyle(.white.opacity(lineOpacity(index: index, emphasisIndex: emphasisIndex)))
                     // No cap — a line that needs 3+ wrapped rows just takes
                     // the room it needs (pushing the next block down) rather
@@ -550,7 +595,7 @@ struct SyncedLyricsPanelView: View {
                     .padding(.bottom, 8)
             }
         }
-        .offset(y: center - CGFloat(clampedPosition) * Self.lineStep)
+        .offset(y: offsetY(for: clampedPosition))
         .animation(animated ? .easeOut(duration: 0.15) : nil, value: clampedPosition)
         .frame(width: Self.slotSize.width, height: Self.slotSize.height, alignment: .top)
         .clipped()
