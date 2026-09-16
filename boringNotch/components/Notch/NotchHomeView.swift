@@ -543,6 +543,11 @@ struct SyncedLyricsPanelView: View {
                     .multilineTextAlignment(.center)
                     .frame(width: Self.slotSize.width, alignment: .top)
                     .frame(minHeight: Self.lineStep, alignment: .top)
+                    // `minHeight` only pads a row shorter than lineStep — a
+                    // wrapped 2-line row already exceeds that on its own
+                    // content, so without this it butts straight into the
+                    // next line with no breathing room at all.
+                    .padding(.bottom, 8)
             }
         }
         .offset(y: center - CGFloat(clampedPosition) * Self.lineStep)
