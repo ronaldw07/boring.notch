@@ -161,6 +161,9 @@ struct TimerTabView: View {
     private func presetChip(minutes: Int) -> some View {
         let isSelected = timer.targetDuration == TimeInterval(minutes * 60)
         return Button {
+            // Keeps the stepper in step with the chip, so pressing up after
+            // picking 25m goes to 26m rather than the old custom value + 1.
+            customMinutes = minutes
             timer.setTargetDuration(TimeInterval(minutes * 60))
         } label: {
             Text("\(minutes)m")
