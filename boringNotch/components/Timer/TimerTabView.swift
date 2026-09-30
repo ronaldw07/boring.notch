@@ -187,7 +187,15 @@ struct TimerTabView: View {
                 }
                 .foregroundStyle(.white)
             } else {
-                Button(action: beginCustomEdit) {
+                // First tap picks it like any preset; a tap while it's
+                // already picked opens it for typing.
+                Button {
+                    if isSelected {
+                        beginCustomEdit()
+                    } else {
+                        timer.setTargetDuration(TimeInterval(customMinutes * 60))
+                    }
+                } label: {
                     Text("\(customMinutes)m")
                         .foregroundStyle(isSelected ? .white : .gray)
                 }
