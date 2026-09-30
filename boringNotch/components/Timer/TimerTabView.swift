@@ -27,6 +27,8 @@ struct TimerTabView: View {
     /// change the row's height, and sized so the tab as a whole fits the
     /// same space Home, Shelf and Clipboard are given.
     private static let readoutSlotHeight: CGFloat = 88
+    /// Fits "180m", so the custom chip is the same width showing or editing.
+    private static let customChipContentWidth: CGFloat = 26
 
     var body: some View {
         VStack(spacing: 8) {
@@ -185,6 +187,7 @@ struct TimerTabView: View {
                         }
                     Text("m")
                 }
+                .frame(width: Self.customChipContentWidth)
                 .foregroundStyle(.white)
             } else {
                 // First tap picks it like any preset; a tap while it's
@@ -198,18 +201,12 @@ struct TimerTabView: View {
                 } label: {
                     Text("\(customMinutes)m")
                         .foregroundStyle(isSelected ? .white : .gray)
+                        .frame(width: Self.customChipContentWidth)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .font(.system(size: 10, weight: .semibold))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(
-            Capsule().fill(isSelected || isEditingCustom
-                ? Color.effectiveAccent.opacity(0.35)
-                : Color(nsColor: .secondarySystemFill).opacity(0.5))
-        )
+        .modifier(ChipStyle(isSelected: isSelected || isEditingCustom))
     }
 
     /// Steps from whatever is selected — a preset included — and the result
@@ -253,15 +250,8 @@ struct TimerTabView: View {
             timer.setTargetDuration(TimeInterval(minutes * 60))
         } label: {
             Text("\(minutes)m")
-                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(isSelected ? .white : .gray)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule().fill(isSelected
-                        ? Color.effectiveAccent.opacity(0.35)
-                        : Color(nsColor: .secondarySystemFill).opacity(0.5))
-                )
+                .modifier(ChipStyle(isSelected: isSelected))
         }
         .buttonStyle(.plain)
     }
@@ -334,6 +324,24 @@ struct TimerTabView: View {
 
     private var showsPresetRow: Bool {
         timer.mode == .countdown && !timer.isRunning
+    }
+}
+
+/// One size for every duration chip — presets and the custom one — whether
+/// it holds a label or a text field.
+private struct ChipStyle: ViewModifier {
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 8)
+            .frame(height: 18)
+            .background(
+                Capsule().fill(isSelected
+                    ? Color.effectiveAccent.opacity(0.35)
+                    : Color(nsColor: .secondarySystemFill).opacity(0.5))
+            )
     }
 }
 
