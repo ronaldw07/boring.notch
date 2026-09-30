@@ -9,6 +9,7 @@
 //  Modified by Ronald Wen — changed the Timer tab to a row layout so it stops growing the notch
 //
 
+import Defaults
 import SwiftUI
 
 private let presetMinutes = [1, 5, 10, 25]
@@ -16,8 +17,11 @@ private let presetMinutes = [1, 5, 10, 25]
 struct TimerTabView: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject private var timer = TimerManager.shared
-    @State private var customMinutes: Int = 5
+    @Default(.timerCustomMinutes) private var customMinutes
     @State private var finishedPulse = false
+    @State private var isEditingCustom = false
+    @State private var customText = ""
+    @FocusState private var customFieldFocused: Bool
 
     /// The readout's slot, ring or no ring. Fixed so switching modes can't
     /// change the row's height, and sized so the tab as a whole fits the
@@ -143,27 +147,101 @@ struct TimerTabView: View {
             ForEach(presetMinutes, id: \.self) { minutes in
                 presetChip(minutes: minutes)
             }
-            Stepper(value: $customMinutes, in: 1...180) {
-                Text("\(customMinutes)m")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.gray)
+            HStack(spacing: 2) {
+                customLabel
+                Stepper("", value: stepperMinutes, in: 1...180)
+                    .labelsHidden()
+                    .fixedSize()
             }
-            .fixedSize()
             .onChange(of: customMinutes) { _, minutes in
+                if isEditingCustom { customText = "\(minutes)" }
+            }
+        }
+        .onDisappear {
+            if isEditingCustom { commitCustomEdit() }
+        }
+    }
+
+    @ViewBuilder
+    private var customLabel: some View {
+        let isSelected = timer.targetDuration == TimeInterval(customMinutes * 60)
+            && !presetMinutes.contains(customMinutes)
+        Group {
+            if isEditingCustom {
+                HStack(spacing: 0) {
+                    TextField("", text: $customText)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 22)
+                        .focused($customFieldFocused)
+                        .onSubmit(commitCustomEdit)
+                        .onExitCommand(perform: endCustomEdit)
+                        .onChange(of: customText) { _, text in
+                            let digits = String(text.filter(\.isNumber).prefix(3))
+                            if digits != text { customText = digits }
+                        }
+                        .onChange(of: customFieldFocused) { _, focused in
+                            if !focused && isEditingCustom { commitCustomEdit() }
+                        }
+                    Text("m")
+                }
+                .foregroundStyle(.white)
+            } else {
+                Button(action: beginCustomEdit) {
+                    Text("\(customMinutes)m")
+                        .foregroundStyle(isSelected ? .white : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(.system(size: 10, weight: .semibold))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(
+            Capsule().fill(isSelected || isEditingCustom
+                ? Color.effectiveAccent.opacity(0.35)
+                : Color(nsColor: .secondarySystemFill).opacity(0.5))
+        )
+    }
+
+    /// Steps from whatever is selected — a preset included — and the result
+    /// becomes the custom value, so the custom slot keeps its own number
+    /// until the arrows or typing actually change it.
+    private var stepperMinutes: Binding<Int> {
+        Binding(
+            get: { max(1, Int(timer.targetDuration / 60)) },
+            set: { minutes in
+                customMinutes = minutes
                 timer.setTargetDuration(TimeInterval(minutes * 60))
             }
+        )
+    }
+
+    private func beginCustomEdit() {
+        customText = "\(customMinutes)"
+        NotchKeyboardFocus.begin()
+        isEditingCustom = true
+        DispatchQueue.main.async { customFieldFocused = true }
+    }
+
+    private func commitCustomEdit() {
+        if let value = Int(customText) {
+            customMinutes = min(max(value, 1), 180)
+            // Same value as before still counts as picking it.
+            timer.setTargetDuration(TimeInterval(customMinutes * 60))
         }
-        .onAppear {
-            customMinutes = max(1, Int(timer.targetDuration / 60))
-        }
+        endCustomEdit()
+    }
+
+    private func endCustomEdit() {
+        isEditingCustom = false
+        customFieldFocused = false
+        NotchKeyboardFocus.end()
     }
 
     private func presetChip(minutes: Int) -> some View {
         let isSelected = timer.targetDuration == TimeInterval(minutes * 60)
         return Button {
-            // Keeps the stepper in step with the chip, so pressing up after
-            // picking 25m goes to 26m rather than the old custom value + 1.
-            customMinutes = minutes
             timer.setTargetDuration(TimeInterval(minutes * 60))
         } label: {
             Text("\(minutes)m")

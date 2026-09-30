@@ -109,6 +109,37 @@ class BoringNotchSkyLightWindow: NSPanel {
     
     private var observers: Set<AnyCancellable> = []
     
-    override var canBecomeKey: Bool { false }
+    /// Off except while a text field in the notch is being edited — a key
+    /// window is the only way typing reaches it.
+    static var acceptsKeyboardInput = false
+
+    override var canBecomeKey: Bool { Self.acceptsKeyboardInput }
     override var canBecomeMain: Bool { false }
+}
+
+/// Lends the notch keyboard focus for the length of one edit, then hands it
+/// back to whatever app had it. The panel is non-activating, so the other
+/// app stays frontmost the whole time.
+@MainActor
+enum NotchKeyboardFocus {
+    private static var previousApp: NSRunningApplication?
+
+    static func begin() {
+        previousApp = NSWorkspace.shared.frontmostApplication
+        BoringNotchSkyLightWindow.acceptsKeyboardInput = true
+        let mouse = NSEvent.mouseLocation
+        NSApp.windows
+            .compactMap { $0 as? BoringNotchSkyLightWindow }
+            .first { $0.isVisible && $0.frame.contains(mouse) }?
+            .makeKey()
+    }
+
+    static func end() {
+        BoringNotchSkyLightWindow.acceptsKeyboardInput = false
+        if NSApp.keyWindow is BoringNotchSkyLightWindow {
+            NSApp.keyWindow?.resignKey()
+            previousApp?.activate()
+        }
+        previousApp = nil
+    }
 }
