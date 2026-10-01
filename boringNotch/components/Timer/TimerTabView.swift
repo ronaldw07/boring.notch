@@ -18,6 +18,7 @@ struct TimerTabView: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject private var timer = TimerManager.shared
     @Default(.timerCustomMinutes) private var customMinutes
+    @Default(.timerRecentMinutes) private var recentMinutes
     @State private var finishedPulse = false
     @State private var isEditingCustom = false
     @State private var customText = ""
@@ -158,6 +159,16 @@ struct TimerTabView: View {
             .onChange(of: customMinutes) { _, minutes in
                 if isEditingCustom { customText = "\(minutes)" }
             }
+
+            if !recentMinutes.isEmpty {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.gray)
+                    .padding(.leading, 4)
+                ForEach(recentMinutes, id: \.self) { minutes in
+                    presetChip(minutes: minutes)
+                }
+            }
         }
         .onDisappear {
             if isEditingCustom { commitCustomEdit() }
@@ -271,7 +282,7 @@ struct TimerTabView: View {
             .disabled(!canReset)
             .opacity(canReset ? 1 : 0.4)
 
-            Button(action: timer.start) {
+            Button(action: startTimer) {
                 Image(systemName: "play.fill")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
@@ -293,6 +304,20 @@ struct TimerTabView: View {
             .disabled(!timer.isRunning)
             .opacity(timer.isRunning ? 1 : 0.4)
         }
+    }
+
+    private func startTimer() {
+        if timer.mode == .countdown { recordRecent() }
+        timer.start()
+    }
+
+    /// Newest first, one entry per length, presets left out since they're
+    /// already one tap away, and capped so the row never outgrows the tab.
+    private func recordRecent() {
+        guard !timer.isRunning else { return }
+        let minutes = max(1, Int(timer.targetDuration / 60))
+        guard !presetMinutes.contains(minutes) else { return }
+        recentMinutes = Array(([minutes] + recentMinutes.filter { $0 != minutes }).prefix(4))
     }
 
     private func reset() {
