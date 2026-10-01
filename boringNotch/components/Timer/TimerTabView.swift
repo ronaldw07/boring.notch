@@ -177,8 +177,10 @@ struct TimerTabView: View {
 
     @ViewBuilder
     private var customLabel: some View {
-        let isSelected = timer.targetDuration == TimeInterval(customMinutes * 60)
-            && !presetMinutes.contains(customMinutes)
+        let atCustomValue = timer.targetDuration == TimeInterval(customMinutes * 60)
+        // Highlight stays off when the value is also a preset, so two chips
+        // never light up at once — but that has no bearing on what a tap does.
+        let isSelected = atCustomValue && !presetMinutes.contains(customMinutes)
         Group {
             if isEditingCustom {
                 HStack(spacing: 0) {
@@ -204,7 +206,7 @@ struct TimerTabView: View {
                 // First tap picks it like any preset; a tap while it's
                 // already picked opens it for typing.
                 Button {
-                    if isSelected {
+                    if atCustomValue {
                         beginCustomEdit()
                     } else {
                         timer.setTargetDuration(TimeInterval(customMinutes * 60))
