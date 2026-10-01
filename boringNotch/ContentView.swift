@@ -591,18 +591,14 @@ struct ContentView: View {
     func MusicAndTimerLiveActivity() -> some View {
         let side = max(0, vm.effectiveClosedNotchHeight - 12)
         return HStack {
-            Image(nsImage: musicManager.albumArt)
-                .resizable()
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: MusicPlayerImageSizes.cornerRadiusInset.closed))
-                .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
-                .frame(width: side, height: side)
-
-            Rectangle()
-                .fill(.black)
-                .frame(width: vm.closedNotchSize.width + -cornerRadiusInsets.closed.top)
-
             HStack(spacing: 6) {
+                Image(nsImage: musicManager.albumArt)
+                    .resizable()
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: MusicPlayerImageSizes.cornerRadiusInset.closed))
+                    .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
+                    .frame(width: side, height: side)
+
                 Group {
                     if useMusicVisualizer {
                         Rectangle()
@@ -620,15 +616,19 @@ struct ContentView: View {
                     }
                 }
                 .frame(width: side, height: side)
-
-                Text(TimerManager.clockString(from: timerManager.mode == .countdown
-                    ? timerManager.remainingForDisplay(at: timerManager.now)
-                    : timerManager.elapsed(at: timerManager.now)))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .fixedSize()
             }
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width + -cornerRadiusInsets.closed.top)
+
+            Text(TimerManager.clockString(from: timerManager.mode == .countdown
+                ? timerManager.remainingForDisplay(at: timerManager.now)
+                : timerManager.elapsed(at: timerManager.now)))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(width: side * 2 + 6, alignment: .center)
         }
         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
