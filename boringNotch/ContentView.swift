@@ -368,6 +368,9 @@ struct ContentView: View {
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
+                      } else if timerManager.isRunning && !coordinator.expandingView.show && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
+                          MusicAndTimerLiveActivity()
+                              .frame(alignment: .center)
                       } else if timerManager.isRunning && vm.notchState == .closed && !vm.hideOnClosed {
                           // A deliberately started timer is a more
                           // intentional signal than ambient background
@@ -580,6 +583,54 @@ struct ContentView: View {
             height: vm.effectiveClosedNotchHeight,
             alignment: .center
         )
+    }
+
+    /// Music and a running timer at once: album art on the left as usual,
+    /// and the visualizer shares the right side with the timer's readout,
+    /// widening the notch rather than dropping either one.
+    func MusicAndTimerLiveActivity() -> some View {
+        let side = max(0, vm.effectiveClosedNotchHeight - 12)
+        return HStack {
+            Image(nsImage: musicManager.albumArt)
+                .resizable()
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: MusicPlayerImageSizes.cornerRadiusInset.closed))
+                .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
+                .frame(width: side, height: side)
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width + -cornerRadiusInsets.closed.top)
+
+            HStack(spacing: 6) {
+                Group {
+                    if useMusicVisualizer {
+                        Rectangle()
+                            .fill(Defaults[.coloredSpectrogram]
+                                ? Color(nsColor: musicManager.avgColor).gradient
+                                : Color.gray.gradient)
+                            .matchedGeometryEffect(id: "spectrum", in: albumArtNamespace)
+                            .mask {
+                                AudioSpectrumView(isPlaying: $musicManager.isPlaying,
+                                                  bundleIdentifier: musicManager.bundleIdentifier)
+                                    .frame(width: 16, height: 12)
+                            }
+                    } else {
+                        LottieAnimationContainer()
+                    }
+                }
+                .frame(width: side, height: side)
+
+                Text(TimerManager.clockString(from: timerManager.mode == .countdown
+                    ? timerManager.remainingForDisplay(at: timerManager.now)
+                    : timerManager.elapsed(at: timerManager.now)))
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
 
     @ViewBuilder
