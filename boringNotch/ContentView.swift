@@ -27,6 +27,8 @@ struct ContentView: View {
     @ObservedObject var volumeManager = VolumeManager.shared
     @State private var hoverTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
+    @State private var notchWidth: CGFloat = 0
+    @State private var cursorOnRight = false
     @State private var anyDropDebounceTask: Task<Void, Never>?
 
     @State private var gestureProgress: CGFloat = .zero
@@ -164,11 +166,23 @@ struct ContentView: View {
                             .animation(.smooth, value: gestureProgress)
                     }
                     .contentShape(Rectangle())
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { notchWidth = geo.size.width }
+                                .onChange(of: geo.size.width) { _, width in notchWidth = width }
+                        }
+                    )
                     .onHover { hovering in
                         handleHover(hovering)
                     }
+                    .onContinuousHover { phase in
+                        guard case .active(let location) = phase, notchWidth > 0 else { return }
+                        let onRight = location.x > notchWidth / 2
+                        if onRight != cursorOnRight { cursorOnRight = onRight }
+                    }
                     .onTapGesture {
-                        doOpen()
+                        doOpenFromPointer()
                     }
                     .conditionalModifier(Defaults[.enableGestures]) { view in
                         view
@@ -368,7 +382,7 @@ struct ContentView: View {
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
-                      } else if timerManager.isRunning && !coordinator.expandingView.show && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
+                      } else if showsMusicAndTimer {
                           MusicAndTimerLiveActivity()
                               .frame(alignment: .center)
                       } else if timerManager.isRunning && vm.notchState == .closed && !vm.hideOnClosed {
@@ -684,6 +698,23 @@ struct ContentView: View {
         vm.open()
     }
 
+    /// With music and a timer sharing the closed notch, the half the cursor
+    /// is over decides which one opens: left for music, right for the timer.
+    private var showsMusicAndTimer: Bool {
+        timerManager.isRunning && !coordinator.expandingView.show && vm.notchState == .closed
+            && (musicManager.isPlaying || !musicManager.isPlayerIdle)
+            && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
+    }
+
+    /// Only for a hover or click on the notch itself — other opens (a
+    /// finished timer, a file dropped on the shelf) pick their own tab.
+    private func doOpenFromPointer() {
+        if showsMusicAndTimer {
+            coordinator.currentView = cursorOnRight ? .timer : .home
+        }
+        doOpen()
+    }
+
     // MARK: - Hover Management
 
     private func handleHover(_ hovering: Bool) {
@@ -712,7 +743,7 @@ struct ContentView: View {
                           self.isHovering,
                           !self.coordinator.sneakPeek.show else { return }
                     
-                    self.doOpen()
+                    self.doOpenFromPointer()
                 }
             }
         } else {
