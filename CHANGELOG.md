@@ -7,6 +7,40 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.5.0 — 2026-10-02
+
+### Added
+
+- **Timer: type a custom length.** Click the custom chip to pick it; click
+  it again to type a number (Return to set, Esc to cancel). The arrows
+  still work while typing.
+- **Timer: recent lengths.** Every countdown you start is remembered —
+  newest first, no repeats, presets left out, last four kept — as chips
+  beside the presets.
+- **Music and a timer together in the closed notch.** Album art and the
+  visualizer on the left, the countdown on the right. Hover or click the
+  left half to open music, the right half to open the timer.
+- **Auto-updates from this fork.** Builds from this fork's releases now
+  check this fork's own signed update feed instead of upstream's.
+
+### Changed
+
+- **Timer: the custom chip keeps its own number** when you pick a preset,
+  and the arrows step from whatever is selected — 25m then up gives 26m.
+- **Timer: every duration chip is the same size**, custom one included.
+
+### Fixed
+
+- **Lyrics no longer load for the wrong song.** Results are matched by
+  track length, so a remix or cover with the same title isn't picked.
+- **The current lyric line stays centered.** Wrapped lines used to push it
+  steadily toward the bottom of the panel.
+- **Scrolling through lyrics underlines the line you're on**, like
+  Spotify.
+- **Spotify's progress bar no longer runs ~0.2s ahead** of the audio.
+
+---
+
 ## 0.4.0 — 2026-09-15 23:41
 
 ### Added

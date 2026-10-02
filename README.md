@@ -40,6 +40,17 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.5.0 — 2026-10-02
+
+- **Added:** Type a custom timer length, and recent timer lengths as
+  one-tap chips.
+- **Added:** Music and a running timer share the closed notch — hover the
+  left half for music, the right half for the timer.
+- **Added:** Auto-updates from this fork's own release feed.
+- **Fixed:** Lyrics match the right song, the current line stays
+  centered, and scrolling underlines the line you're on.
+- **Fixed:** Spotify progress no longer runs ahead of the audio.
+
 ### 0.4.0 — 2026-09-15
 
 - **Added:** Synced lyrics panel — scrub with two fingers or a mouse wheel,
