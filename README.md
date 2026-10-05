@@ -47,6 +47,7 @@ Everything below this line is original to this fork, on top of upstream
 - **Added:** Music and a running timer share the closed notch — hover the
   left half for music, the right half for the timer.
 - **Added:** Auto-updates from this fork's own release feed.
+- **Fixed:** The timer ring moves smoothly and matches the time exactly.
 - **Fixed:** Lyrics match the right song, the current line stays
   centered, and scrolling underlines the line you're on.
 - **Fixed:** Spotify progress no longer runs ahead of the audio.
