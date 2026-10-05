@@ -29,6 +29,7 @@ struct ContentView: View {
     @State private var isHovering: Bool = false
     @State private var notchWidth: CGFloat = 0
     @State private var cursorOnRight = false
+    @State private var openedByTimerFinish = false
     @State private var anyDropDebounceTask: Task<Void, Never>?
 
     @State private var gestureProgress: CGFloat = .zero
@@ -332,9 +333,32 @@ struct ContentView: View {
             // there until acknowledged, not vanish on its own.
             coordinator.currentView = .timer
             if vm.notchState == .closed {
+                openedByTimerFinish = true
                 doOpen()
             }
+            // Already looking at this screen when it finished. Deferred so
+            // every other screen has marked itself first.
+            if isHovering {
+                DispatchQueue.main.async { acknowledgeTimerFinish() }
+            }
         }
+        .onChange(of: vm.notchState) { _, state in
+            if state == .closed { openedByTimerFinish = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .timerFinishAcknowledged)) { note in
+            guard openedByTimerFinish, !isHovering, vm.notchState == .open,
+                  (note.object as? String) != vm.screenUUID else { return }
+            openedByTimerFinish = false
+            vm.close()
+        }
+    }
+
+    /// Every screen's notch opens when a timer finishes. Once it's been seen
+    /// on one of them, the rest have done their job and close.
+    private func acknowledgeTimerFinish() {
+        guard timerManager.justFinished != nil else { return }
+        openedByTimerFinish = false
+        NotificationCenter.default.post(name: .timerFinishAcknowledged, object: vm.screenUUID)
     }
 
     @ViewBuilder
@@ -733,6 +757,8 @@ struct ContentView: View {
                 isHovering = true
             }
             
+            acknowledgeTimerFinish()
+
             if vm.notchState == .closed && Defaults[.enableHaptics] {
                 haptics.toggle()
             }
@@ -960,4 +986,8 @@ struct CursorLock: NSViewRepresentable {
         // Clicks belong to whatever is underneath.
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
+}
+
+extension Notification.Name {
+    static let timerFinishAcknowledged = Notification.Name("timerFinishAcknowledged")
 }
