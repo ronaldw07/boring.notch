@@ -35,6 +35,8 @@ Newest first. Times are local (PDT).
 - **The timer ring moves smoothly and matches the time exactly.** It used
   to step once a second, and its rounded ends made 50% look like ~52%. The
   countdown also ends on the dot instead of up to a second late.
+- **A finished timer no longer stays open on every monitor.** Once you
+  hover it on one, the pop-ups on the others close.
 - **Lyrics no longer load for the wrong song.** Results are matched by
   track length, so a remix or cover with the same title isn't picked.
 - **The current lyric line stays centered.** Wrapped lines used to push it
