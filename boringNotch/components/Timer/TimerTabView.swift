@@ -14,11 +14,48 @@ import SwiftUI
 
 private let presetMinutes = [1, 5, 10, 25]
 
+private enum TimerLength {
+    static let maxSeconds = 180 * 60
+
+    static func isPreset(_ seconds: Int) -> Bool {
+        seconds % 60 == 0 && presetMinutes.contains(seconds / 60)
+    }
+
+    /// "45s", "5m", "2:30" — whole minutes stay short, anything with
+    /// leftover seconds is spelled out.
+    static func label(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)s" }
+        if seconds % 60 == 0 { return "\(seconds / 60)m" }
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// Typing works like a microwave: the last two digits are seconds, the
+    /// rest minutes, so 45 is 0:45 and 230 is 2:30.
+    static func typedText(fromDigits digits: String) -> String {
+        guard let n = Int(digits) else { return "" }
+        return String(format: "%d:%02d", n / 100, n % 100)
+    }
+
+    static func seconds(fromDigits digits: String) -> Int {
+        guard let n = Int(digits) else { return 0 }
+        return (n / 100) * 60 + n % 100
+    }
+
+    /// 5s steps under a minute, whole minutes above it.
+    static func stepped(_ seconds: Int, up: Bool) -> Int {
+        let s = max(1, seconds)
+        if up {
+            return s < 60 ? min(60, (s / 5 + 1) * 5) : min(maxSeconds, (s / 60 + 1) * 60)
+        }
+        return s <= 60 ? max(1, ((s - 1) / 5) * 5) : ((s - 1) / 60) * 60
+    }
+}
+
 struct TimerTabView: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject private var timer = TimerManager.shared
-    @Default(.timerCustomMinutes) private var customMinutes
-    @Default(.timerRecentMinutes) private var recentMinutes
+    @Default(.timerCustomSeconds) private var customSeconds
+    @Default(.timerRecentSeconds) private var recentSeconds
     @State private var finishedPulse = false
     @State private var isEditingCustom = false
     @State private var customText = ""
@@ -28,8 +65,8 @@ struct TimerTabView: View {
     /// change the row's height, and sized so the tab as a whole fits the
     /// same space Home, Shelf and Clipboard are given.
     private static let readoutSlotHeight: CGFloat = 88
-    /// Fits "180m", so the custom chip is the same width showing or editing.
-    private static let customChipContentWidth: CGFloat = 26
+    /// Fits "59:59", so the custom chip is the same width showing or editing.
+    private static let customChipContentWidth: CGFloat = 34
 
     var body: some View {
         VStack(spacing: 8) {
@@ -148,25 +185,22 @@ struct TimerTabView: View {
     private var presetRow: some View {
         HStack(spacing: 6) {
             ForEach(presetMinutes, id: \.self) { minutes in
-                presetChip(minutes: minutes)
+                durationChip(seconds: minutes * 60)
             }
             HStack(spacing: 2) {
                 customLabel
-                Stepper("", value: stepperMinutes, in: 1...180)
+                Stepper("", onIncrement: { stepCustom(up: true) }, onDecrement: { stepCustom(up: false) })
                     .labelsHidden()
                     .fixedSize()
             }
-            .onChange(of: customMinutes) { _, minutes in
-                if isEditingCustom { customText = "\(minutes)" }
-            }
 
-            if !recentMinutes.isEmpty {
+            if !recentSeconds.isEmpty {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.gray)
                     .padding(.leading, 4)
-                ForEach(recentMinutes, id: \.self) { minutes in
-                    presetChip(minutes: minutes)
+                ForEach(recentSeconds, id: \.self) { seconds in
+                    durationChip(seconds: seconds)
                 }
             }
         }
@@ -177,31 +211,30 @@ struct TimerTabView: View {
 
     @ViewBuilder
     private var customLabel: some View {
-        let atCustomValue = timer.targetDuration == TimeInterval(customMinutes * 60)
+        let atCustomValue = timer.targetDuration == TimeInterval(customSeconds)
         // Highlight stays off when the value is also a preset, so two chips
         // never light up at once — but that has no bearing on what a tap does.
-        let isSelected = atCustomValue && !presetMinutes.contains(customMinutes)
+        let isSelected = atCustomValue && !TimerLength.isPreset(customSeconds)
         Group {
             if isEditingCustom {
-                HStack(spacing: 0) {
-                    TextField("", text: $customText)
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 22)
-                        .focused($customFieldFocused)
-                        .onSubmit(commitCustomEdit)
-                        .onExitCommand(perform: endCustomEdit)
-                        .onChange(of: customText) { _, text in
-                            let digits = String(text.filter(\.isNumber).prefix(3))
-                            if digits != text { customText = digits }
-                        }
-                        .onChange(of: customFieldFocused) { _, focused in
-                            if !focused && isEditingCustom { commitCustomEdit() }
-                        }
-                    Text("m")
-                }
-                .frame(width: Self.customChipContentWidth)
-                .foregroundStyle(.white)
+                // Starts empty with the current length as a placeholder, so
+                // typing replaces it instead of appending to it.
+                TextField("", text: $customText, prompt: Text(TimerManager.clockString(from: TimeInterval(customSeconds))))
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.center)
+                    .frame(width: Self.customChipContentWidth)
+                    .foregroundStyle(.white)
+                    .focused($customFieldFocused)
+                    .onSubmit(commitCustomEdit)
+                    .onExitCommand(perform: endCustomEdit)
+                    .onChange(of: customText) { _, text in
+                        let digits = String(text.filter(\.isNumber).drop(while: { $0 == "0" }).prefix(5))
+                        let formatted = digits.isEmpty ? "" : TimerLength.typedText(fromDigits: digits)
+                        if formatted != text { customText = formatted }
+                    }
+                    .onChange(of: customFieldFocused) { _, focused in
+                        if !focused && isEditingCustom { commitCustomEdit() }
+                    }
             } else {
                 // First tap picks it like any preset; a tap while it's
                 // already picked opens it for typing.
@@ -209,11 +242,13 @@ struct TimerTabView: View {
                     if atCustomValue {
                         beginCustomEdit()
                     } else {
-                        timer.setTargetDuration(TimeInterval(customMinutes * 60))
+                        timer.setTargetDuration(TimeInterval(customSeconds))
                     }
                 } label: {
-                    Text("\(customMinutes)m")
+                    Text(TimerLength.label(customSeconds))
                         .foregroundStyle(isSelected ? .white : .gray)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .frame(width: Self.customChipContentWidth)
                 }
                 .buttonStyle(.plain)
@@ -225,28 +260,25 @@ struct TimerTabView: View {
     /// Steps from whatever is selected — a preset included — and the result
     /// becomes the custom value, so the custom slot keeps its own number
     /// until the arrows or typing actually change it.
-    private var stepperMinutes: Binding<Int> {
-        Binding(
-            get: { max(1, Int(timer.targetDuration / 60)) },
-            set: { minutes in
-                customMinutes = minutes
-                timer.setTargetDuration(TimeInterval(minutes * 60))
-            }
-        )
+    private func stepCustom(up: Bool) {
+        let next = TimerLength.stepped(Int(timer.targetDuration), up: up)
+        customSeconds = next
+        timer.setTargetDuration(TimeInterval(next))
     }
 
     private func beginCustomEdit() {
-        customText = "\(customMinutes)"
+        customText = ""
         NotchKeyboardFocus.begin()
         isEditingCustom = true
         DispatchQueue.main.async { customFieldFocused = true }
     }
 
     private func commitCustomEdit() {
-        if let value = Int(customText) {
-            customMinutes = min(max(value, 1), 180)
+        let digits = customText.filter(\.isNumber)
+        if !digits.isEmpty {
+            customSeconds = min(max(TimerLength.seconds(fromDigits: digits), 1), TimerLength.maxSeconds)
             // Same value as before still counts as picking it.
-            timer.setTargetDuration(TimeInterval(customMinutes * 60))
+            timer.setTargetDuration(TimeInterval(customSeconds))
         }
         endCustomEdit()
     }
@@ -257,12 +289,12 @@ struct TimerTabView: View {
         NotchKeyboardFocus.end()
     }
 
-    private func presetChip(minutes: Int) -> some View {
-        let isSelected = timer.targetDuration == TimeInterval(minutes * 60)
+    private func durationChip(seconds: Int) -> some View {
+        let isSelected = timer.targetDuration == TimeInterval(seconds)
         return Button {
-            timer.setTargetDuration(TimeInterval(minutes * 60))
+            timer.setTargetDuration(TimeInterval(seconds))
         } label: {
-            Text("\(minutes)m")
+            Text(TimerLength.label(seconds))
                 .foregroundStyle(isSelected ? .white : .gray)
                 .modifier(ChipStyle(isSelected: isSelected))
         }
@@ -317,9 +349,9 @@ struct TimerTabView: View {
     /// already one tap away, and capped so the row never outgrows the tab.
     private func recordRecent() {
         guard !timer.isRunning else { return }
-        let minutes = max(1, Int(timer.targetDuration / 60))
-        guard !presetMinutes.contains(minutes) else { return }
-        recentMinutes = Array(([minutes] + recentMinutes.filter { $0 != minutes }).prefix(4))
+        let seconds = max(1, Int(timer.targetDuration))
+        guard !TimerLength.isPreset(seconds) else { return }
+        recentSeconds = Array(([seconds] + recentSeconds.filter { $0 != seconds }).prefix(4))
     }
 
     private func reset() {

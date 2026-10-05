@@ -218,6 +218,6 @@ extension Defaults.Keys {
     static let timerAnchorDate = Key<Date?>("timerAnchorDate", default: nil)
     static let timerAccumulated = Key<TimeInterval>("timerAccumulated", default: 0)
     static let timerTargetDuration = Key<TimeInterval>("timerTargetDuration", default: 5 * 60)
-    static let timerCustomMinutes = Key<Int>("timerCustomMinutes", default: 15)
-    static let timerRecentMinutes = Key<[Int]>("timerRecentMinutes", default: [])
+    static let timerCustomSeconds = Key<Int>("timerCustomSeconds", default: 15 * 60)
+    static let timerRecentSeconds = Key<[Int]>("timerRecentSeconds", default: [])
 }
