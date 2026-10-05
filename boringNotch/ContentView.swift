@@ -711,6 +711,13 @@ struct ContentView: View {
     private func doOpenFromPointer() {
         if showsMusicAndTimer {
             coordinator.currentView = cursorOnRight ? .timer : .home
+        } else if timerManager.justFinished != nil
+            && (musicManager.isPlaying || !musicManager.isPlayerIdle)
+            && coordinator.musicLiveActivityEnabled
+        {
+            // A finished timer leaves the notch parked on the Timer tab;
+            // with music going, reaching for the notch means the music.
+            coordinator.currentView = .home
         }
         doOpen()
     }
