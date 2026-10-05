@@ -81,13 +81,20 @@ struct TimerTabView: View {
             // across the width it already has, it needs no extra height at
             // all, so the panel stays exactly the size every other tab is.
             HStack(spacing: 18) {
-                ZStack {
-                    if timer.mode == .countdown {
-                        CircularProgressView(progress: ringProgress, color: ringColor)
-                            .frame(width: Self.readoutSlotHeight, height: Self.readoutSlotHeight)
-                    }
+                // Ring and readout are both drawn from the timeline's own clock
+                // rather than the manager's once-a-second tick, so the ring
+                // glides instead of stepping and the two can never disagree.
+                // Paused when nothing is running: neither value depends on
+                // the date then.
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !timer.isRunning)) { timeline in
+                    ZStack {
+                        if timer.mode == .countdown {
+                            TimerRing(progress: ringProgress(at: timeline.date), color: ringColor)
+                                .frame(width: Self.readoutSlotHeight, height: Self.readoutSlotHeight)
+                        }
 
-                    readout
+                        readout(at: timeline.date)
+                    }
                 }
                 // Height pinned, width left to the content: the stopwatch's
                 // readout is wider than the ring it stands in for, and
@@ -133,8 +140,9 @@ struct TimerTabView: View {
 
     // MARK: - Readout
 
-    private var readout: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 1) {
+    private func readout(at date: Date) -> some View {
+        let displayedSeconds = displayedSeconds(at: date)
+        return HStack(alignment: .lastTextBaseline, spacing: 1) {
             Text(TimerManager.clockString(from: displayedSeconds))
                 .font(.system(size: timer.mode == .countdown ? 20 : 28, weight: .semibold, design: .monospaced))
 
@@ -362,15 +370,18 @@ struct TimerTabView: View {
 
     // MARK: - Derived display state
 
-    private var displayedSeconds: TimeInterval {
+    /// A timeline date can land a hair before the anchor it's measured
+    /// from, which would read as slightly more than the full length (a
+    /// flash of "5:01" on a 5:00 timer) — hence the clamps.
+    private func displayedSeconds(at date: Date) -> TimeInterval {
         timer.mode == .countdown
-            ? timer.remainingForDisplay(at: timer.now)
-            : timer.elapsed(at: timer.now)
+            ? ceil(min(timer.targetDuration, timer.remaining(at: date)))
+            : max(0, timer.elapsed(at: date))
     }
 
-    private var ringProgress: Double {
+    private func ringProgress(at date: Date) -> Double {
         guard timer.targetDuration > 0 else { return 0 }
-        return max(0, min(1, timer.remaining(at: timer.now) / timer.targetDuration))
+        return max(0, min(1, timer.remaining(at: date) / timer.targetDuration))
     }
 
     private var ringColor: Color {
@@ -383,6 +394,33 @@ struct TimerTabView: View {
 
     private var showsPresetRow: Bool {
         timer.mode == .countdown && !timer.isRunning
+    }
+}
+
+/// The countdown ring. A round cap overhangs the end of its arc by half the
+/// line width on both ends, so a plain trim reads a few percent past its
+/// real value (50% looks like ~52%). Pulling each end in by that overhang
+/// makes the visible arc exactly `progress` of the circle.
+private struct TimerRing: View {
+    let progress: Double
+    let color: Color
+    private static let lineWidth: CGFloat = 6
+
+    var body: some View {
+        GeometryReader { geo in
+            let diameter = min(geo.size.width, geo.size.height)
+            let overhang = Self.lineWidth / 2 / (.pi * diameter)
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.2), lineWidth: Self.lineWidth)
+                if progress > 2 * overhang {
+                    Circle()
+                        .trim(from: overhang, to: progress - overhang)
+                        .stroke(color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+            }
+        }
     }
 }
 

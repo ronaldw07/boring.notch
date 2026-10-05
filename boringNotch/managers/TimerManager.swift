@@ -143,12 +143,23 @@ final class TimerManager: ObservableObject {
         mode == .stopwatch ? .milliseconds(30) : .seconds(1)
     }
 
+    /// A countdown ticks just after each displayed second changes, worked out
+    /// from the anchor every time, instead of a fixed second after the last
+    /// tick — those drift later and later, leaving the display up to a second
+    /// behind and the finish late. The last tick lands on the end itself.
+    private func nextTickDelay() -> Duration {
+        guard mode == .countdown else { return tickInterval }
+        let left = remaining(at: .now)
+        let untilDisplayChanges = left - max(0, ceil(left) - 1)
+        return .seconds(max(0.001, untilDisplayChanges) + 0.002)
+    }
+
     private func startTicking() {
         tickTask?.cancel()
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                try? await Task.sleep(for: self.tickInterval)
+                try? await Task.sleep(for: self.nextTickDelay())
                 guard !Task.isCancelled else { return }
                 self.now = .now
                 self.checkCountdownCompletion(at: self.now)
