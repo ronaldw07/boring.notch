@@ -11,9 +11,10 @@ Newest first. Times are local (PDT).
 
 ### Added
 
-- **Timer: type a custom length.** Click the custom chip to pick it; click
-  it again to type a number (Return to set, Esc to cancel). The arrows
-  still work while typing.
+- **Timer: lengths down to the second.** Click the custom chip to pick it;
+  click it again to type a length like a microwave (`45` is 0:45, `230` is
+  2:30; Return to set, Esc to cancel). The arrows step 5 seconds under a
+  minute and a whole minute above it. Recent lengths keep their seconds.
 - **Timer: recent lengths.** Every countdown you start is remembered —
   newest first, no repeats, presets left out, last four kept — as chips
   beside the presets.

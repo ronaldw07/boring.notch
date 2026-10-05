@@ -42,8 +42,8 @@ Everything below this line is original to this fork, on top of upstream
 
 ### 0.5.0 — 2026-10-02
 
-- **Added:** Type a custom timer length, and recent timer lengths as
-  one-tap chips.
+- **Added:** Set timers down to the second by typing a custom length, and
+  recent lengths as one-tap chips.
 - **Added:** Music and a running timer share the closed notch — hover the
   left half for music, the right half for the timer.
 - **Added:** Auto-updates from this fork's own release feed.
