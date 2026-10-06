@@ -3,36 +3,21 @@
     <channel>
         <title>boringNotch</title>
         <item>
-            <title>0.5.0</title>
-            <pubDate>Mon, 05 Oct 2026 00:31:18 -0700</pubDate>
+            <title>0.5.1</title>
+            <pubDate>Mon, 05 Oct 2026 21:45:02 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1362</sparkle:version>
-            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:version>1365</sparkle:version>
+            <sparkle:shortVersionString>0.5.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Added</h3>
+            <description><![CDATA[<h3>Fixed</h3>
 <ul>
-<li><strong>Timer: lengths down to the second.</strong> Click the custom chip to pick it; click it again to type a length like a microwave (<code>45</code> is 0:45, <code>230</code> is 2:30; Return to set, Esc to cancel). The arrows step 5 seconds under a minute and a whole minute above it. Recent lengths keep their seconds.</li>
-<li><strong>Timer: recent lengths.</strong> Every countdown you start is remembered — newest first, no repeats, presets left out, last four kept — as chips beside the presets.</li>
-<li><strong>Music and a timer together in the closed notch.</strong> Album art and the visualizer on the left, the countdown on the right. Hover or click the left half to open music, the right half to open the timer.</li>
-<li><strong>Auto-updates from this fork.</strong> Builds from this fork&#x27;s releases now check this fork&#x27;s own signed update feed instead of upstream&#x27;s.</li>
-</ul>
-<h3>Changed</h3>
-<ul>
-<li><strong>Timer: the custom chip keeps its own number</strong> when you pick a preset, and the arrows step from whatever is selected — 25m then up gives 26m.</li>
-<li><strong>Timer: every duration chip is the same size</strong>, custom one included.</li>
-</ul>
-<h3>Fixed</h3>
-<ul>
-<li><strong>The timer ring moves smoothly and matches the time exactly.</strong> It used to step once a second, and its rounded ends made 50% look like ~52%. The countdown also ends on the dot instead of up to a second late.</li>
-<li><strong>A finished timer no longer stays open on every monitor.</strong> Once you hover it on one, the pop-ups on the others close.</li>
-<li><strong>Lyrics no longer load for the wrong song.</strong> Results are matched by track length, so a remix or cover with the same title isn&#x27;t picked.</li>
-<li><strong>The current lyric line stays centered.</strong> Wrapped lines used to push it steadily toward the bottom of the panel.</li>
-<li><strong>Scrolling through lyrics underlines the line you&#x27;re on</strong>, like Spotify.</li>
-<li><strong>Spotify&#x27;s progress bar no longer runs ~0.2s ahead</strong> of the audio.</li>
+<li><strong>Changing a paused timer&#x27;s length starts it fresh.</strong> Time already used carried over, so switching a paused 45m to 50m resumed at 44:56 instead of 50:00. Picking the same length again still keeps your progress.</li>
+<li><strong>Changing the length after a timer finishes</strong> clears the red finished state and shows the new full length.</li>
+<li><strong>Pressing play while typing a length</strong> uses what you typed instead of quietly dropping it.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.5.0/boringNotch.dmg" length="9012989" type="application/octet-stream" sparkle:edSignature="40amnvwgIAlJPrYZuyJsZ3ZusIol5jGsGRs84gkbwZVY0qqNP1TQYOUtZtUMZofpZtRNXgl98fUe65DKvy8NDw=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.5.1/boringNotch.dmg" length="9013557" type="application/octet-stream" sparkle:edSignature="rvvnRgSsvRD3ARoGLTY+g6nCy2Fcyx/n3oihvklOq8oth0j7OUtHTTpwtSyXJac2ZptCHnm8Y0h0w5TEU/ZDCg=="/>
         </item>
     </channel>
 </rss>
