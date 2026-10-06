@@ -3,21 +3,19 @@
     <channel>
         <title>boringNotch</title>
         <item>
-            <title>0.5.1</title>
-            <pubDate>Mon, 05 Oct 2026 21:45:02 -0700</pubDate>
+            <title>0.5.2</title>
+            <pubDate>Mon, 05 Oct 2026 22:15:06 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1365</sparkle:version>
-            <sparkle:shortVersionString>0.5.1</sparkle:shortVersionString>
+            <sparkle:version>1368</sparkle:version>
+            <sparkle:shortVersionString>0.5.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<h3>Fixed</h3>
 <ul>
-<li><strong>Changing a paused timer&#x27;s length starts it fresh.</strong> Time already used carried over, so switching a paused 45m to 50m resumed at 44:56 instead of 50:00. Picking the same length again still keeps your progress.</li>
-<li><strong>Changing the length after a timer finishes</strong> clears the red finished state and shows the new full length.</li>
-<li><strong>Pressing play while typing a length</strong> uses what you typed instead of quietly dropping it.</li>
+<li><strong>Stopwatch time is never wiped by a timer length change.</strong> The 0.5.1 &quot;new length starts fresh&quot; fix applied to the stopwatch too.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.5.1/boringNotch.dmg" length="9013557" type="application/octet-stream" sparkle:edSignature="rvvnRgSsvRD3ARoGLTY+g6nCy2Fcyx/n3oihvklOq8oth0j7OUtHTTpwtSyXJac2ZptCHnm8Y0h0w5TEU/ZDCg=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.5.2/boringNotch.dmg" length="9013274" type="application/octet-stream" sparkle:edSignature="53Bd8hjPZcQ2yCDTJC+mXFLJIwaIIBBoYvccZnLDBEAGgBxe37CdtuC38kMSoKeELQ2PkNOvcPoC4NgPyFlwCA=="/>
         </item>
     </channel>
 </rss>
