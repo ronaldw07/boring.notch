@@ -40,6 +40,10 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.5.2 — 2026-10-05
+
+- **Fixed:** Stopwatch time is never wiped by a timer length change.
+
 ### 0.5.1 — 2026-10-05
 
 - **Fixed:** Changing a paused or finished timer's length starts it fresh

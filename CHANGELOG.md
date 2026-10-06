@@ -7,6 +7,15 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.5.2 — 2026-10-05
+
+### Fixed
+
+- **Stopwatch time is never wiped by a timer length change.** The 0.5.1
+  "new length starts fresh" fix applied to the stopwatch too.
+
+---
+
 ## 0.5.1 — 2026-10-05
 
 ### Fixed
