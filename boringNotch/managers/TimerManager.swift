@@ -96,7 +96,9 @@ final class TimerManager: ObservableObject {
         // A new length is a new timer. Time already counted, or a finish,
         // belonged to the old one — carrying it over is what made a paused
         // 45m switched to 50m resume at 44:56 instead of 50:00.
-        if accumulated > 0 || justFinished != nil {
+        // Countdown only: the length means nothing to a stopwatch, and its
+        // time mustn't be wiped by one.
+        if mode == .countdown && (accumulated > 0 || justFinished != nil) {
             accumulated = 0
             justFinished = nil
             now = .now
