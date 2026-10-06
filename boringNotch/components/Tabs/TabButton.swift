@@ -16,7 +16,8 @@ struct TabButton: View {
     var body: some View {
         Button(action: onClick) {
             Image(systemName: icon)
-                .padding(.horizontal, 15)
+                // Five tabs have to fit left of the notch.
+                .padding(.horizontal, 11)
                 .contentShape(Capsule())
         }
         .buttonStyle(PlainButtonStyle())

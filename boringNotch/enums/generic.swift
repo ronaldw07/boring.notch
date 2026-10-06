@@ -29,6 +29,7 @@ public enum NotchViews: CaseIterable {
     case shelf
     case clipboard
     case timer
+    case calendar
 }
 
 enum SettingsEnum {

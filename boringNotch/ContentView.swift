@@ -485,6 +485,8 @@ struct ContentView: View {
                         ClipboardView()
                     case .timer:
                         TimerTabView()
+                    case .calendar:
+                        CalendarTabView()
                     }
                 }
                 .transition(
