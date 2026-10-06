@@ -90,9 +90,18 @@ final class TimerManager: ObservableObject {
     }
 
     func setTargetDuration(_ duration: TimeInterval) {
-        guard !isRunning else { return }
+        guard !isRunning, duration != targetDuration else { return }
         targetDuration = duration
         Defaults[.timerTargetDuration] = duration
+        // A new length is a new timer. Time already counted, or a finish,
+        // belonged to the old one — carrying it over is what made a paused
+        // 45m switched to 50m resume at 44:56 instead of 50:00.
+        if accumulated > 0 || justFinished != nil {
+            accumulated = 0
+            justFinished = nil
+            now = .now
+            persist()
+        }
     }
 
     func start() {

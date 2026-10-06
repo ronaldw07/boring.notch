@@ -349,6 +349,9 @@ struct TimerTabView: View {
     }
 
     private func startTimer() {
+        // Otherwise a length still being typed is committed after the timer
+        // is already running, and quietly dropped.
+        if isEditingCustom { commitCustomEdit() }
         if timer.mode == .countdown { recordRecent() }
         timer.start()
     }
