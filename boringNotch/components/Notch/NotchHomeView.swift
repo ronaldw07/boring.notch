@@ -701,7 +701,11 @@ struct NotchHomeView: View {
 
     private var mainContent: some View {
         HStack(alignment: .top, spacing: 15) {
-            MusicPlayerView(albumArtNamespace: albumArtNamespace)
+            // The enlarged mirror takes the player's room too.
+            if !(shouldShowCamera && vm.isMirrorEnlarged) {
+                MusicPlayerView(albumArtNamespace: albumArtNamespace)
+                    .transition(.opacity)
+            }
 
             // Mirror, lyrics, and calendar share one slot: whichever is
             // active takes over rather than squeezing the others down.

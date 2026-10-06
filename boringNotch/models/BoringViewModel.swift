@@ -59,6 +59,10 @@ class BoringViewModel: NSObject, ObservableObject {
     
     let webcamManager = WebcamManager.shared
     @Published var isCameraExpanded: Bool = false
+    /// The mirror blown up across the whole content row, music player
+    /// hidden. Separate from `isCameraExpanded`, which only means the mirror
+    /// owns the shared slot.
+    @Published var isMirrorEnlarged: Bool = false
     @Published var isRequestingAuthorization: Bool = false
     @Published var isLyricsExpanded: Bool = false
     // Calendar is the default slot content — unlike camera/lyrics, which

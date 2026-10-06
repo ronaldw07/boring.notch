@@ -25,6 +25,9 @@ private let maximumPreviewScale: CGFloat = 3
 /// Matches CalendarView's own frame so swapping between the two causes no
 /// layout jump.
 private let mirrorSlotSize = CGSize(width: 215, height: 130)
+/// The enlarged mirror: 16:9, centered in the row the music player gives up.
+/// The notch grows down by the height difference.
+private let enlargedMirrorSize = CGSize(width: 420, height: 236)
 /// Horizontal travel, in points, that covers the whole zoom range.
 private let zoomDragTravel: CGFloat = 150
 private let zoomIndicatorLinger: Duration = .milliseconds(900)
@@ -75,7 +78,14 @@ struct CameraPreviewView: View {
                     .allowsHitTesting(false)
             }
         }
-        .frame(width: mirrorSlotSize.width, height: mirrorSlotSize.height)
+        .overlay(alignment: .topTrailing) {
+            if webcamManager.isSessionRunning {
+                enlargeButton
+                    .padding(6)
+                    .opacity(isHoveringPreview ? 1 : 0)
+            }
+        }
+        .frame(width: slotSize.width, height: slotSize.height)
         .onTapGesture {
             handleCameraTap()
         }
@@ -101,16 +111,46 @@ struct CameraPreviewView: View {
             // calendar can never win the slot back since this flag never
             // cleared.
             vm.isCameraExpanded = false
+            if vm.isMirrorEnlarged {
+                vm.isMirrorEnlarged = false
+                vm.setExtraContentHeight(0)
+            }
         }
+    }
+
+    private var slotSize: CGSize {
+        vm.isMirrorEnlarged ? enlargedMirrorSize : mirrorSlotSize
     }
 
     /// The rectangular mirror fills the whole slot. The circular one is
     /// squared off to the slot's shorter side and centered, so it reads as
     /// an actual circle rather than a stretched oval.
     private var contentSize: CGSize {
-        guard Defaults[.mirrorShape] == .circle else { return mirrorSlotSize }
-        let side = min(mirrorSlotSize.width, mirrorSlotSize.height)
+        guard Defaults[.mirrorShape] == .circle else { return slotSize }
+        let side = min(slotSize.width, slotSize.height)
         return CGSize(width: side, height: side)
+    }
+
+    /// Same pair of symbols as the clipboard's expand button.
+    private var enlargeButton: some View {
+        Button(action: toggleEnlarged) {
+            Image(systemName: vm.isMirrorEnlarged
+                ? "arrow.down.right.and.arrow.up.left"
+                : "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(.black.opacity(0.55)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleEnlarged() {
+        let enlarging = !vm.isMirrorEnlarged
+        withAnimation(vm.animationLibrary.collapseCurve) {
+            vm.isMirrorEnlarged = enlarging
+        }
+        vm.setExtraContentHeight(enlarging ? enlargedMirrorSize.height - mirrorSlotSize.height : 0)
     }
 
     /// Turns the ruler's label into the factor the video layer is actually
