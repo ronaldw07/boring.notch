@@ -7,6 +7,20 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.5.1 — 2026-10-05
+
+### Fixed
+
+- **Changing a paused timer's length starts it fresh.** Time already used
+  carried over, so switching a paused 45m to 50m resumed at 44:56 instead
+  of 50:00. Picking the same length again still keeps your progress.
+- **Changing the length after a timer finishes** clears the red finished
+  state and shows the new full length.
+- **Pressing play while typing a length** uses what you typed instead of
+  quietly dropping it.
+
+---
+
 ## 0.5.0 — 2026-10-02
 
 ### Added
