@@ -3,19 +3,25 @@
     <channel>
         <title>boringNotch</title>
         <item>
-            <title>0.5.2</title>
-            <pubDate>Mon, 05 Oct 2026 22:15:06 -0700</pubDate>
+            <title>0.6.0</title>
+            <pubDate>Tue, 06 Oct 2026 18:12:03 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1368</sparkle:version>
-            <sparkle:shortVersionString>0.5.2</sparkle:shortVersionString>
+            <sparkle:version>1373</sparkle:version>
+            <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Fixed</h3>
+            <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>Stopwatch time is never wiped by a timer length change.</strong> The 0.5.1 &quot;new length starts fresh&quot; fix applied to the stopwatch too.</li>
+<li><strong>Calendar tab.</strong> A fifth tab showing the day as one wide timeline: hours run left to right, events sit in lanes as blocks sized by their real start and end, all-day events are chips up top, and a red line marks now with earlier hours dimmed. Scroll the day sideways with two fingers or a mouse wheel, step between days with the arrows, click an event to open it, and use the expand button to give overlapping events more room.</li>
+<li><strong>Mirror: an expand button.</strong> Hover the camera and press the corner button to enlarge it to a 420×236 preview across the whole row. The music player steps aside and the notch grows to fit; it resets when the mirror or the notch closes.</li>
+<li><strong>Option+1 to 5 switch tabs</strong> while the notch is open: Home, Shelf, Clipboard, Timer, Calendar. The keys are only claimed while a notch is open, and need no extra permission.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li><strong>Tab icons sit a little closer together</strong> so five fit beside the notch.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.5.2/boringNotch.dmg" length="9013274" type="application/octet-stream" sparkle:edSignature="53Bd8hjPZcQ2yCDTJC+mXFLJIwaIIBBoYvccZnLDBEAGgBxe37CdtuC38kMSoKeELQ2PkNOvcPoC4NgPyFlwCA=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.6.0/boringNotch.dmg" length="9101748" type="application/octet-stream" sparkle:edSignature="QcGYNokCxmxjmAXCQmMKlL1Q8N9hRgkZrPv9MhhQVK92GcJymAYK8Ruo/Ri494pyq5GnBhW5a607gAOotyxGCg=="/>
         </item>
     </channel>
 </rss>
