@@ -40,6 +40,12 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.6.0 — 2026-10-06
+
+- **Added:** Calendar tab with a wide, scrollable timeline of the day.
+- **Added:** Expand button on the mirror for a much bigger preview.
+- **Added:** Option+1 to 5 switch tabs while the notch is open.
+
 ### 0.5.2 — 2026-10-05
 
 - **Fixed:** Stopwatch time is never wiped by a timer length change.

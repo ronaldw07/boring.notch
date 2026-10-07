@@ -7,6 +7,31 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.6.0 — 2026-10-06
+
+### Added
+
+- **Calendar tab.** A fifth tab showing the day as one wide timeline:
+  hours run left to right, events sit in lanes as blocks sized by their
+  real start and end, all-day events are chips up top, and a red line
+  marks now with earlier hours dimmed. Scroll the day sideways with two
+  fingers or a mouse wheel, step between days with the arrows, click an
+  event to open it, and use the expand button to give overlapping events
+  more room.
+- **Mirror: an expand button.** Hover the camera and press the corner
+  button to enlarge it to a 420×236 preview across the whole row. The
+  music player steps aside and the notch grows to fit; it resets when the
+  mirror or the notch closes.
+- **Option+1 to 5 switch tabs** while the notch is open: Home, Shelf,
+  Clipboard, Timer, Calendar. The keys are only claimed while a notch is
+  open, and need no extra permission.
+
+### Changed
+
+- **Tab icons sit a little closer together** so five fit beside the notch.
+
+---
+
 ## 0.5.2 — 2026-10-05
 
 ### Fixed
