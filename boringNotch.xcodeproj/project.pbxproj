@@ -87,6 +87,7 @@
 		14C08BB62C8DE42D000F8AA0 /* CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */; };
 		AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */; };
 		AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02ClipboardMgrFILE00 /* ClipboardManager.swift */; };
+		AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */; };
 		AA03ClipboardViewBLD00 /* ClipboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA03ClipboardViewFILE0 /* ClipboardView.swift */; };
 		AA04TimerManagerBLD000 /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA04TimerManagerFILE00 /* TimerManager.swift */; };
 		AA05TimerTabViewBLD000 /* TimerTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA05TimerTabViewFILE00 /* TimerTabView.swift */; };
@@ -260,6 +261,7 @@
 		14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarManager.swift; sourceTree = "<group>"; };
 		AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSpectrumTap.swift; sourceTree = "<group>"; };
 		AA02ClipboardMgrFILE00 /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
+		AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchTabHotkeys.swift; sourceTree = "<group>"; };
 		AA03ClipboardViewFILE0 /* ClipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardView.swift; sourceTree = "<group>"; };
 		AA04TimerManagerFILE00 /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
 		AA05TimerTabViewFILE00 /* TimerTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerTabView.swift; sourceTree = "<group>"; };
@@ -529,6 +531,7 @@
 				14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */,
 				AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */,
 				AA02ClipboardMgrFILE00 /* ClipboardManager.swift */,
+				AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */,
 				AA04TimerManagerFILE00 /* TimerManager.swift */,
 				B1F0A0012E60000100000001 /* BrightnessManager.swift */,
 				59D8C23B2E589FAA00147B33 /* VolumeManager.swift */,
@@ -1008,6 +1011,7 @@
 				14C08BB62C8DE42D000F8AA0 /* CalendarManager.swift in Sources */,
 				AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */,
 				AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */,
+				AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */,
 				AA03ClipboardViewBLD00 /* ClipboardView.swift in Sources */,
 				AA04TimerManagerBLD000 /* TimerManager.swift in Sources */,
 				AA05TimerTabViewBLD000 /* TimerTabView.swift in Sources */,

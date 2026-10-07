@@ -285,6 +285,7 @@ class BoringViewModel: NSObject, ObservableObject {
             self.notchSize = openNotchSize
             self.notchState = .open
         }
+        NotchTabHotkeys.shared.notchOpened(self)
 
         // Force music information update when notch is opened
         MusicManager.shared.forceUpdate()
@@ -336,6 +337,7 @@ class BoringViewModel: NSObject, ObservableObject {
             self.closedNotchSize = self.notchSize
             self.notchState = .closed
         }
+        NotchTabHotkeys.shared.notchClosed(self)
 
         // Shrink any expanded tab content (e.g. the clipboard's expanded
         // list) in step with the notch's own close animation — see
