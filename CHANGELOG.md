@@ -7,6 +7,17 @@ Newest first. Times are local (PDT).
 
 ---
 
+## Unreleased
+
+### Added
+
+- **Calendar refreshes every 3 seconds while the notch is open.** It asks
+  macOS to pull from Google and iCloud, then re-reads the day, and stops
+  the moment the notch closes. macOS decides whether a pull is needed, so
+  the timing isn't guaranteed.
+
+---
+
 ## 0.6.0 — 2026-10-06
 
 ### Added

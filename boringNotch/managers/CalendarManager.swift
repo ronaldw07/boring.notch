@@ -28,6 +28,13 @@ class CalendarManager: ObservableObject {
 
     private var eventStoreChangedObserver: NSObjectProtocol?
 
+    /// How often the open notch asks macOS to pull from Google and re-reads.
+    private static let liveRefreshInterval: Duration = .seconds(3)
+    /// Each calendar view on screen holds one, so the loop runs only while
+    /// at least one is visible — nothing polls with the notch closed.
+    private var liveRefreshHolders = 0
+    private var liveRefreshTask: Task<Void, Never>?
+
     private init() {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
@@ -183,6 +190,26 @@ class CalendarManager: ObservableObject {
         return Calendar.current.startOfDay(for: date)
     }
 
+    func beginLiveRefresh() {
+        liveRefreshHolders += 1
+        guard liveRefreshTask == nil else { return }
+        liveRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.calendarService.pullRemoteChanges()
+                await self.updateEvents()
+                try? await Task.sleep(for: Self.liveRefreshInterval)
+            }
+        }
+    }
+
+    func endLiveRefresh() {
+        liveRefreshHolders = max(0, liveRefreshHolders - 1)
+        guard liveRefreshHolders == 0 else { return }
+        liveRefreshTask?.cancel()
+        liveRefreshTask = nil
+    }
+
     func updateCurrentDate(_ date: Date) async {
         currentWeekStartDate = Calendar.current.startOfDay(for: date)
         await updateEvents()
@@ -203,7 +230,9 @@ class CalendarManager: ObservableObject {
             to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
             calendars: calendarIDs
         )
-        self.events = eventsResult
+        if eventsResult != events {
+            events = eventsResult
+        }
     }
     
     func setReminderCompleted(reminderID: String, completed: Bool) async {

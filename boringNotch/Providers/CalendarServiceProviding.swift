@@ -14,6 +14,7 @@ protocol CalendarServiceProviding {
     func requestAccess(to type: EKEntityType) async throws -> Bool
     func calendars() async -> [CalendarModel]
     func events(from start: Date, to end: Date, calendars: [String]) async -> [EventModel]
+    func pullRemoteChanges()
 }
 
 class CalendarService: CalendarServiceProviding {
@@ -54,6 +55,12 @@ class CalendarService: CalendarServiceProviding {
         return calendars.map { CalendarModel(from: $0) }
     }
     
+    /// Asks macOS to fetch from remote accounts (Google, iCloud...) now.
+    /// macOS decides whether a fetch is actually needed.
+    func pullRemoteChanges() {
+        store.refreshSourcesIfNecessary()
+    }
+
     func events(from start: Date, to end: Date, calendars ids: [String]) async -> [EventModel] {
         let allCalendars = await self.calendars()
         let filteredCalendars = allCalendars.filter { ids.isEmpty || ids.contains($0.id) }

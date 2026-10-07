@@ -237,10 +237,14 @@ struct CalendarView: View {
             }
         }
         .onAppear {
+            calendarManager.beginLiveRefresh()
             Task {
                 await calendarManager.updateCurrentDate(Date.now)
                 selectedDate = Date.now
             }
+        }
+        .onDisappear {
+            calendarManager.endLiveRefresh()
         }
     }
 }

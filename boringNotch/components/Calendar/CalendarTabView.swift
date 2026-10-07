@@ -89,9 +89,11 @@ struct CalendarTabView: View {
             // Same as the clipboard: always opens at the normal size.
             isExpanded = false
             vm.setExtraContentHeight(0)
+            calendarManager.beginLiveRefresh()
             show(Calendar.current.startOfDay(for: .now))
         }
         .onDisappear {
+            calendarManager.endLiveRefresh()
             vm.isHoveringCalendar = false
             if isExpanded {
                 isExpanded = false
