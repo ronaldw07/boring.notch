@@ -3,25 +3,24 @@
     <channel>
         <title>boringNotch</title>
         <item>
-            <title>0.6.0</title>
-            <pubDate>Tue, 06 Oct 2026 18:12:03 -0700</pubDate>
+            <title>0.6.1</title>
+            <pubDate>Mon, 12 Oct 2026 19:18:54 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1373</sparkle:version>
-            <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
+            <sparkle:version>1377</sparkle:version>
+            <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>Calendar tab.</strong> A fifth tab showing the day as one wide timeline: hours run left to right, events sit in lanes as blocks sized by their real start and end, all-day events are chips up top, and a red line marks now with earlier hours dimmed. Scroll the day sideways with two fingers or a mouse wheel, step between days with the arrows, click an event to open it, and use the expand button to give overlapping events more room.</li>
-<li><strong>Mirror: an expand button.</strong> Hover the camera and press the corner button to enlarge it to a 420×236 preview across the whole row. The music player steps aside and the notch grows to fit; it resets when the mirror or the notch closes.</li>
-<li><strong>Option+1 to 5 switch tabs</strong> while the notch is open: Home, Shelf, Clipboard, Timer, Calendar. The keys are only claimed while a notch is open, and need no extra permission.</li>
+<li><strong>Calendar refreshes every 3 seconds while the notch is open.</strong> It asks macOS to pull from Google and iCloud, then re-reads the day, and stops the moment the notch closes. macOS decides whether a pull is needed, so the timing isn&#x27;t guaranteed.</li>
+<li><strong>Timer: an undo button.</strong> After any reset, an undo arrow appears beside the stop button and puts back the time and running state you had. It goes away after 8 seconds, or when you start, stop, change the length or switch modes.</li>
 </ul>
 <h3>Changed</h3>
 <ul>
-<li><strong>Tab icons sit a little closer together</strong> so five fit beside the notch.</li>
+<li><strong>Timer: tapping the selected length again starts it over.</strong> Pick 25m while 25m is already selected and the countdown returns to the full length; a running timer restarts and keeps going. Before, it kept your progress.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.6.0/boringNotch.dmg" length="9101748" type="application/octet-stream" sparkle:edSignature="QcGYNokCxmxjmAXCQmMKlL1Q8N9hRgkZrPv9MhhQVK92GcJymAYK8Ruo/Ri494pyq5GnBhW5a607gAOotyxGCg=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.6.1/boringNotch.dmg" length="9117082" type="application/octet-stream" sparkle:edSignature="sq10NXuNcYjCkfCTCz0UilJR7xNgTHwHfxHrJksGUoIgQgT/3HOjrG85Y+oKf4lCs6JJ7DhN1ipWd8xAVthiAA=="/>
         </item>
     </channel>
 </rss>
