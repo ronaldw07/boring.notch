@@ -32,9 +32,23 @@ final class TimerManager: ObservableObject {
     /// after a reset is still a change `.onChange` can observe.
     @Published private(set) var justFinished: Date?
 
+    /// True for a few seconds after a reset, while `undoReset()` can still
+    /// put the timer back.
+    @Published private(set) var canUndoReset = false
+
     private var anchorDate: Date?
     private var accumulated: TimeInterval
     private var tickTask: Task<Void, Never>?
+
+    /// What a reset threw away.
+    private struct ResetUndo {
+        let elapsed: TimeInterval
+        let wasRunning: Bool
+    }
+
+    private var resetUndo: ResetUndo?
+    private var undoExpiry: Task<Void, Never>?
+    private static let undoWindow: Duration = .seconds(8)
 
     private init() {
         mode = Defaults[.timerMode]
@@ -84,7 +98,7 @@ final class TimerManager: ObservableObject {
 
     func setMode(_ newMode: TimerMode) {
         guard newMode != mode else { return }
-        reset()
+        reset(undoable: false)
         mode = newMode
         Defaults[.timerMode] = newMode
     }
@@ -93,6 +107,7 @@ final class TimerManager: ObservableObject {
         guard !isRunning, duration != targetDuration else { return }
         targetDuration = duration
         Defaults[.timerTargetDuration] = duration
+        clearUndo()
         // A new length is a new timer. Time already counted, or a finish,
         // belonged to the old one — carrying it over is what made a paused
         // 45m switched to 50m resume at 44:56 instead of 50:00.
@@ -117,6 +132,7 @@ final class TimerManager: ObservableObject {
             accumulated = 0
         }
 
+        clearUndo()
         anchorDate = .now
         now = anchorDate!
         isRunning = true
@@ -127,6 +143,7 @@ final class TimerManager: ObservableObject {
 
     func pause() {
         guard isRunning, let anchorDate else { return }
+        clearUndo()
         accumulated += Date.now.timeIntervalSince(anchorDate)
         self.anchorDate = nil
         isRunning = false
@@ -134,7 +151,12 @@ final class TimerManager: ObservableObject {
         tickTask?.cancel()
     }
 
-    func reset() {
+    func reset(undoable: Bool = true) {
+        if undoable {
+            rememberForUndo()
+        } else {
+            clearUndo()
+        }
         anchorDate = nil
         accumulated = 0
         isRunning = false
@@ -142,6 +164,66 @@ final class TimerManager: ObservableObject {
         persist()
         tickTask?.cancel()
         now = .now
+    }
+
+    /// Picking the length that's already selected: back to the full length.
+    /// A running timer starts over and keeps running. Nothing happens if
+    /// there's nothing to start over from.
+    func restartCountdown() {
+        guard mode == .countdown, elapsed(at: .now) > 0 || justFinished != nil else { return }
+        rememberForUndo()
+        accumulated = 0
+        justFinished = nil
+        if isRunning {
+            anchorDate = .now
+            now = anchorDate!
+        }
+        persist()
+        now = .now
+    }
+
+    /// Puts back what the last reset or restart threw away.
+    func undoReset() {
+        guard let undo = resetUndo else { return }
+        clearUndo()
+        tickTask?.cancel()
+        accumulated = undo.elapsed
+        justFinished = nil
+        if undo.wasRunning {
+            anchorDate = .now
+            isRunning = true
+            now = anchorDate!
+            persist()
+            startTicking()
+        } else {
+            anchorDate = nil
+            isRunning = false
+            persist()
+            now = .now
+        }
+    }
+
+    private func rememberForUndo() {
+        let elapsed = elapsed(at: .now)
+        guard elapsed > 0 || justFinished != nil else {
+            clearUndo()
+            return
+        }
+        resetUndo = ResetUndo(elapsed: elapsed, wasRunning: isRunning)
+        canUndoReset = true
+        undoExpiry?.cancel()
+        undoExpiry = Task { [weak self] in
+            try? await Task.sleep(for: Self.undoWindow)
+            guard !Task.isCancelled else { return }
+            self?.clearUndo()
+        }
+    }
+
+    private func clearUndo() {
+        undoExpiry?.cancel()
+        undoExpiry = nil
+        resetUndo = nil
+        if canUndoReset { canUndoReset = false }
     }
 
     // MARK: - Ticking
@@ -181,6 +263,7 @@ final class TimerManager: ObservableObject {
     private func checkCountdownCompletion(at date: Date) {
         guard mode == .countdown, isRunning, remaining(at: date) <= 0 else { return }
         justFinished = date
+        clearUndo()
         NSSound(named: "Glass")?.play()
         pause()
     }

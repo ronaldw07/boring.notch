@@ -300,7 +300,12 @@ struct TimerTabView: View {
     private func durationChip(seconds: Int) -> some View {
         let isSelected = timer.targetDuration == TimeInterval(seconds)
         return Button {
-            timer.setTargetDuration(TimeInterval(seconds))
+            // Picking the selected length again starts it over.
+            if isSelected {
+                withAnimation(.smooth) { timer.restartCountdown() }
+            } else {
+                timer.setTargetDuration(TimeInterval(seconds))
+            }
         } label: {
             Text(TimerLength.label(seconds))
                 .foregroundStyle(isSelected ? .white : .gray)
@@ -345,6 +350,22 @@ struct TimerTabView: View {
             .buttonStyle(.plain)
             .disabled(!timer.isRunning)
             .opacity(timer.isRunning ? 1 : 0.4)
+
+            // Always laid out, so it appearing doesn't shift the buttons.
+            Button {
+                withAnimation(.smooth) { timer.undoReset() }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+            }
+            .buttonStyle(.plain)
+            .help("Undo reset")
+            .opacity(timer.canUndoReset ? 1 : 0)
+            .allowsHitTesting(timer.canUndoReset)
+            .animation(.smooth, value: timer.canUndoReset)
         }
     }
 
