@@ -40,6 +40,12 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.6.1 — 2026-10-12
+
+- **Added:** Calendar refreshes every 3 seconds while the notch is open.
+- **Added:** Undo button after resetting the timer.
+- **Changed:** Tapping the selected timer length again starts it over.
+
 ### 0.6.0 — 2026-10-06
 
 - **Added:** Calendar tab with a wide, scrollable timeline of the day.

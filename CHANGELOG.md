@@ -9,12 +9,27 @@ Newest first. Times are local (PDT).
 
 ## Unreleased
 
+---
+
+## 0.6.1 — 2026-10-12
+
 ### Added
 
 - **Calendar refreshes every 3 seconds while the notch is open.** It asks
   macOS to pull from Google and iCloud, then re-reads the day, and stops
   the moment the notch closes. macOS decides whether a pull is needed, so
   the timing isn't guaranteed.
+- **Timer: an undo button.** After any reset, an undo arrow appears beside
+  the stop button and puts back the time and running state you had. It
+  goes away after 8 seconds, or when you start, stop, change the length or
+  switch modes.
+
+### Changed
+
+- **Timer: tapping the selected length again starts it over.** Pick 25m
+  while 25m is already selected and the countdown returns to the full
+  length; a running timer restarts and keeps going. Before, it kept your
+  progress.
 
 ---
 
