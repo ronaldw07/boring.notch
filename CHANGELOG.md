@@ -11,6 +11,25 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.6.2 — 2026-10-14
+
+### Changed
+
+- **Updates are found within the hour.** The app checks for a new version
+  at launch and then every hour, instead of about once a day, and no longer
+  asks first whether to check automatically. Turn it off in Settings.
+  Copies already on 0.6.1 or earlier keep the slower checks until they take
+  this update.
+- **Permissions stay granted across updates.** Builds are now signed with a
+  stable identity, so macOS stops asking again for system audio, calendar
+  and camera after every update. Each person is asked once more on this
+  update, then not again.
+- **Download and GitHub links point at this fork**, not the original
+  project. The README drops the Homebrew command and the original's star
+  chart, and lists Apple Silicon only.
+
+---
+
 ## 0.6.1 — 2026-10-12
 
 ### Added
