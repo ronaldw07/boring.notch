@@ -47,7 +47,12 @@ xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration Rel
   build >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; fail "build failed"; }
 
 APP="$WORK/build/Build/Products/Release/boringNotch.app"
-codesign --deep --force --sign - "$APP"
+# Sign with a real identity, not ad-hoc: macOS ties permissions (system audio,
+# calendar, camera) to the signature, and an ad-hoc one changes every build,
+# so each update would ask everyone for them all over again.
+SIGN_IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')
+[ -n "$SIGN_IDENTITY" ] || fail "no Apple Development signing identity in the Keychain"
+codesign --deep --force --sign "$SIGN_IDENTITY" "$APP"
 
 mkdir -p "$WORK/stage" "$WORK/feed"
 cp -R "$APP" "$WORK/stage/"
