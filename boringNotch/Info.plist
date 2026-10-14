@@ -9,6 +9,8 @@
 	</dict>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>boringNotch reads the audio your music app is playing so the notch visualizer reacts to the real sound.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>SUEnableDownloaderService</key>
 	<true/>
 	<key>SUEnableInstallerLauncherService</key>
@@ -17,6 +19,8 @@
 	<string>https://raw.githubusercontent.com/ronaldw07/boring.notch/main/updater/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>MZEeQJs8kecrczArBMXq+D8VKt2XiuUnQ2L5eCmW1UQ=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict/>
