@@ -9,7 +9,6 @@
 
 <p align="center">
   <a title="Crowdin" target="_blank" href="https://crowdin.com/project/boring-notch"><img src="https://badges.crowdin.net/boring-notch/localized.svg"></a>
-  <img src="https://github.com/TheBoredTeam/boring.notch/actions/workflows/cicd.yml/badge.svg" alt="TheBoringNotch Build & Test" style="margin-right: 10px;" />
   <a href="https://discord.gg/c8JXA7qrPm">
     <img src="https://dcbadge.limes.pink/api/server/https://discord.gg/c8JXA7qrPm?style=flat" alt="Discord Badge" />
   </a>
@@ -146,13 +145,13 @@ Everything below this line is original to this fork, on top of upstream
 
 **System Requirements:**
 - macOS **14 Sonoma** or later
-- Apple Silicon or Intel Mac
+- Apple Silicon Mac (this fork's builds are not available for Intel)
 
 ---
 
 ### Option 1: Download and Install Manually
 
-<a href="https://github.com/TheBoredTeam/boring.notch/releases/latest/download/boringNotch.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="Download for macOS" /></a>
+<a href="https://github.com/ronaldw07/boring.notch/releases/latest/download/boringNotch.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="Download for macOS" /></a>
 
 Once downloaded, open the `.dmg` and move **Boring Notch** to your `/Applications` folder.
 
@@ -190,13 +189,7 @@ Then open the app normally.
 
 ---
 
-### Option 2: Install via Homebrew
-
-You can also install using [Homebrew](https://brew.sh). The Homebrew installation automatically bypasses the macOS security warning described above.
-
-```bash
-brew install --cask TheBoredTeam/boring-notch/boring-notch
-```
+This fork has no Homebrew cask. The original project's cask installs the original app, not this fork.
 
 ## Usage
 
@@ -241,7 +234,7 @@ brew install --cask TheBoredTeam/boring-notch/boring-notch
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/TheBoredTeam/boring.notch.git
+   git clone https://github.com/ronaldw07/boring.notch.git
    cd boring.notch
    ```
 
@@ -260,22 +253,6 @@ We’re all about good vibes and awesome contributions! Read [CONTRIBUTING.md](C
 ## Join our Discord Server
 
 <a href="https://discord.gg/GvYcYpAKTu" target="_blank"><img src="https://iili.io/28m3GHv.png" alt="Join The Boring Server!" style="height: 60px !important;width: 217px !important;" ></a>
-
-## Star History
-<!-- BROKEN: GitHub now restricts the stargazer API for privacy reasons
-<a href="https://www.star-history.com/#TheBoredTeam/boring.notch&Timeline">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=TheBoredTeam/boring.notch&type=Timeline&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=TheBoredTeam/boring.notch&type=Timeline" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=TheBoredTeam/boring.notch&type=Timeline" />
- </picture>
-</a>
--->
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-dark.svg">
-   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-light.svg">
-   <img src="https://raw.githubusercontent.com/TheBoredTeam/org-star-chart-updater/main/projects/boring.notch/chart-light.svg" alt="TheBoredTeam/boring.notch GitHub star history">
- </picture>
 
 ## Support us on Ko-fi!
 <!-- <a href="https://www.buymeacoffee.com/jfxh67wvfxq" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-red.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a> -->
