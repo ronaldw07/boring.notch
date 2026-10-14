@@ -3,24 +3,21 @@
     <channel>
         <title>boringNotch</title>
         <item>
-            <title>0.6.1</title>
-            <pubDate>Mon, 12 Oct 2026 19:18:54 -0700</pubDate>
+            <title>0.6.2</title>
+            <pubDate>Wed, 14 Oct 2026 00:47:40 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1377</sparkle:version>
-            <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
+            <sparkle:version>1382</sparkle:version>
+            <sparkle:shortVersionString>0.6.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Added</h3>
+            <description><![CDATA[<h3>Changed</h3>
 <ul>
-<li><strong>Calendar refreshes every 3 seconds while the notch is open.</strong> It asks macOS to pull from Google and iCloud, then re-reads the day, and stops the moment the notch closes. macOS decides whether a pull is needed, so the timing isn&#x27;t guaranteed.</li>
-<li><strong>Timer: an undo button.</strong> After any reset, an undo arrow appears beside the stop button and puts back the time and running state you had. It goes away after 8 seconds, or when you start, stop, change the length or switch modes.</li>
-</ul>
-<h3>Changed</h3>
-<ul>
-<li><strong>Timer: tapping the selected length again starts it over.</strong> Pick 25m while 25m is already selected and the countdown returns to the full length; a running timer restarts and keeps going. Before, it kept your progress.</li>
+<li><strong>Updates are found within the hour.</strong> The app checks for a new version at launch and then every hour, instead of about once a day, and no longer asks first whether to check automatically. Turn it off in Settings. Copies already on 0.6.1 or earlier keep the slower checks until they take this update.</li>
+<li><strong>Permissions stay granted across updates.</strong> Builds are now signed with a stable identity, so macOS stops asking again for system audio, calendar and camera after every update. Each person is asked once more on this update, then not again.</li>
+<li><strong>Download and GitHub links point at this fork</strong>, not the original project. The README drops the Homebrew command and the original&#x27;s star chart, and lists Apple Silicon only.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.6.1/boringNotch.dmg" length="9117082" type="application/octet-stream" sparkle:edSignature="sq10NXuNcYjCkfCTCz0UilJR7xNgTHwHfxHrJksGUoIgQgT/3HOjrG85Y+oKf4lCs6JJ7DhN1ipWd8xAVthiAA=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.6.2/boringNotch.dmg" length="9197288" type="application/octet-stream" sparkle:edSignature="5R9Wjb/ShAlWtsxznboY4QpxNVWwOSqHZK/PBAt+fhtcEAGorfWjgDeMjGhV1h3qJcv6GPPMWmQU9q1amrfGDA=="/>
         </item>
     </channel>
 </rss>
