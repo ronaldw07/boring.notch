@@ -11,6 +11,44 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.7.0 — 2026-10-15
+
+### Added
+
+- **A volume panel beside the player.** A slim master slider with a glass
+  knob that turns to clear Liquid Glass as you drag it, and a slider for
+  each open music, video, social or browser app, plus anything making
+  sound. Turn an app down without touching the rest. An app is only
+  processed while its slider is below 100%. macOS asks once to allow audio
+  capture.
+- **Edit events from the Calendar tab.** Drag an event to move it, or drag
+  either end to resize, in 15 minute steps, saved to your calendar.
+- **A details box for each event.** Click an event for its time, calendar,
+  location, guests and notes, with Open in Calendar and Delete. Deleting a
+  repeating event asks whether to remove this event, this and following,
+  or all of them.
+- **Google Tasks on the Calendar tab.** Tasks due on the day you're viewing
+  show above the timeline and can be ticked off. Google Tasks don't sync to
+  the Mac's calendar, so this signs in to Google directly with your own
+  Cloud client; set it up in Settings › Calendar. Nothing changes until you
+  sign in.
+
+### Changed
+
+- **Overlapping events stack top to bottom.** Events starting within an
+  hour of each other get their own rows instead of being squeezed side by
+  side, and event blocks are solid so the hour lines no longer cut through
+  them.
+- **The Calendar tab asks for calendar access each time it opens.** If
+  access was denied, it points you to System Settings.
+- **The small calendar beside the player is gone**, replaced by the volume
+  panel. The full Calendar tab is unchanged.
+
+### Fixed
+
+- **The volume slider shows your real volume** after the output device
+  changes (AirPods, a monitor), instead of a stale reading until you move it.
+
 ## 0.6.2 — 2026-10-14
 
 ### Changed

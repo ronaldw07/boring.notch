@@ -39,6 +39,16 @@ Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch th
 Everything below this line is original to this fork, on top of upstream
 **2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
 
+### 0.7.0 — 2026-10-15
+
+- **Added:** Volume panel beside the player, with a master slider and a
+  volume slider for each app.
+- **Added:** Drag to move and resize events in the Calendar tab, plus a
+  details box with delete.
+- **Added:** Google Tasks on the Calendar tab (sign in with your own
+  Google Cloud client).
+- **Changed:** Overlapping events stack top to bottom.
+
 ### 0.6.1 — 2026-10-12
 
 - **Added:** Calendar refreshes every 3 seconds while the notch is open.
