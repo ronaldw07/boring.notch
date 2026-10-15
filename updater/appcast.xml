@@ -3,21 +3,32 @@
     <channel>
         <title>boringNotch</title>
         <item>
-            <title>0.6.2</title>
-            <pubDate>Wed, 14 Oct 2026 00:47:40 -0700</pubDate>
+            <title>0.7.0</title>
+            <pubDate>Thu, 15 Oct 2026 14:33:07 -0700</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1382</sparkle:version>
-            <sparkle:shortVersionString>0.6.2</sparkle:shortVersionString>
+            <sparkle:version>1387</sparkle:version>
+            <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Changed</h3>
+            <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>Updates are found within the hour.</strong> The app checks for a new version at launch and then every hour, instead of about once a day, and no longer asks first whether to check automatically. Turn it off in Settings. Copies already on 0.6.1 or earlier keep the slower checks until they take this update.</li>
-<li><strong>Permissions stay granted across updates.</strong> Builds are now signed with a stable identity, so macOS stops asking again for system audio, calendar and camera after every update. Each person is asked once more on this update, then not again.</li>
-<li><strong>Download and GitHub links point at this fork</strong>, not the original project. The README drops the Homebrew command and the original&#x27;s star chart, and lists Apple Silicon only.</li>
+<li><strong>A volume panel beside the player.</strong> A slim master slider with a glass knob that turns to clear Liquid Glass as you drag it, and a slider for each open music, video, social or browser app, plus anything making sound. Turn an app down without touching the rest. An app is only processed while its slider is below 100%. macOS asks once to allow audio capture.</li>
+<li><strong>Edit events from the Calendar tab.</strong> Drag an event to move it, or drag either end to resize, in 15 minute steps, saved to your calendar.</li>
+<li><strong>A details box for each event.</strong> Click an event for its time, calendar, location, guests and notes, with Open in Calendar and Delete. Deleting a repeating event asks whether to remove this event, this and following, or all of them.</li>
+<li><strong>Google Tasks on the Calendar tab.</strong> Tasks due on the day you&#x27;re viewing show above the timeline and can be ticked off. Google Tasks don&#x27;t sync to the Mac&#x27;s calendar, so this signs in to Google directly with your own Cloud client; set it up in Settings › Calendar. Nothing changes until you sign in.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li><strong>Overlapping events stack top to bottom.</strong> Events starting within an hour of each other get their own rows instead of being squeezed side by side, and event blocks are solid so the hour lines no longer cut through them.</li>
+<li><strong>The Calendar tab asks for calendar access each time it opens.</strong> If access was denied, it points you to System Settings.</li>
+<li><strong>The small calendar beside the player is gone</strong>, replaced by the volume panel. The full Calendar tab is unchanged.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li><strong>The volume slider shows your real volume</strong> after the output device changes (AirPods, a monitor), instead of a stale reading until you move it.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.6.2/boringNotch.dmg" length="9197288" type="application/octet-stream" sparkle:edSignature="5R9Wjb/ShAlWtsxznboY4QpxNVWwOSqHZK/PBAt+fhtcEAGorfWjgDeMjGhV1h3qJcv6GPPMWmQU9q1amrfGDA=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.7.0/boringNotch.dmg" length="9317272" type="application/octet-stream" sparkle:edSignature="NRiiKqfALgW5WDjPFFCoukFLQB2c86UL21PmUObqPEkUC3TLUHCcj+1H5ZvPKTj8xLHnvuZj1QoR0mmoJxElDQ=="/>
         </item>
     </channel>
 </rss>
