@@ -88,6 +88,8 @@
 		AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */; };
 		AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02ClipboardMgrFILE00 /* ClipboardManager.swift */; };
 		AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */; };
+		AA10GoogleTasksBLD0000 /* GoogleTasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10GoogleTasksFILE000 /* GoogleTasksManager.swift */; };
+		AA11LoopbackAuthBLD000 /* LoopbackAuthServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11LoopbackAuthFILE00 /* LoopbackAuthServer.swift */; };
 		AA09VolPanelBLD00000 /* VolumePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09VolPanelFILE000000 /* VolumePanelView.swift */; };
 		AA09AppVolMgrBLD0000 /* AppVolumeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09AppVolMgrFILE0000 /* AppVolumeManager.swift */; };
 		AA09AppVolTapBLD0000 /* AppVolumeTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09AppVolTapFILE000 /* AppVolumeTap.swift */; };
@@ -265,6 +267,8 @@
 		AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSpectrumTap.swift; sourceTree = "<group>"; };
 		AA02ClipboardMgrFILE00 /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchTabHotkeys.swift; sourceTree = "<group>"; };
+		AA10GoogleTasksFILE000 /* GoogleTasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTasksManager.swift; sourceTree = "<group>"; };
+		AA11LoopbackAuthFILE00 /* LoopbackAuthServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackAuthServer.swift; sourceTree = "<group>"; };
 		AA09VolPanelFILE000000 /* VolumePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumePanelView.swift; sourceTree = "<group>"; };
 		AA09AppVolMgrFILE0000 /* AppVolumeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVolumeManager.swift; sourceTree = "<group>"; };
 		AA09AppVolTapFILE000 /* AppVolumeTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVolumeTap.swift; sourceTree = "<group>"; };
@@ -478,6 +482,7 @@
 				14288DD62C6E015000B9F80C /* AudioPlayer.swift */,
 				5955950C2E900ED800C66711 /* ApplicationRelauncher.swift */,
 				14288E0B2C6F8EC000B9F80C /* AppIcons.swift */,
+				AA11LoopbackAuthFILE00 /* LoopbackAuthServer.swift */,
 			);
 			path = helpers;
 			sourceTree = "<group>";
@@ -539,6 +544,7 @@
 				AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */,
 				AA02ClipboardMgrFILE00 /* ClipboardManager.swift */,
 				AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */,
+				AA10GoogleTasksFILE000 /* GoogleTasksManager.swift */,
 				AA09AppVolMgrFILE0000 /* AppVolumeManager.swift */,
 				AA09AppVolTapFILE000 /* AppVolumeTap.swift */,
 				AA04TimerManagerFILE00 /* TimerManager.swift */,
@@ -1029,6 +1035,8 @@
 				AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */,
 				AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */,
 				AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */,
+				AA10GoogleTasksBLD0000 /* GoogleTasksManager.swift in Sources */,
+				AA11LoopbackAuthBLD000 /* LoopbackAuthServer.swift in Sources */,
 				AA09VolPanelBLD00000 /* VolumePanelView.swift in Sources */,
 				AA09AppVolMgrBLD0000 /* AppVolumeManager.swift in Sources */,
 				AA09AppVolTapBLD0000 /* AppVolumeTap.swift in Sources */,

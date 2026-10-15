@@ -721,6 +721,9 @@ struct CalendarSettings: View {
     @Default(.hideCompletedReminders) var hideCompletedReminders
     @Default(.hideAllDayEvents) var hideAllDayEvents
     @Default(.autoScrollToNextEvent) var autoScrollToNextEvent
+    @Default(.googleClientID) var googleClientID
+    @Default(.googleClientSecret) var googleClientSecret
+    @ObservedObject private var googleTasks = GoogleTasksManager.shared
 
     var body: some View {
         Form {
@@ -738,6 +741,28 @@ struct CalendarSettings: View {
             }
             Defaults.Toggle(key: .showFullEventTitles) {
                 Text("Always show full event titles")
+            }
+            Section(header: Text("Google Tasks")) {
+                if googleTasks.isSignedIn {
+                    HStack {
+                        Text("Signed in. Tasks due on the day you're viewing show above the timeline.")
+                        Spacer()
+                        Button("Sign out") { googleTasks.signOut() }
+                    }
+                } else {
+                    TextField("Client ID", text: $googleClientID)
+                    SecureField("Client secret", text: $googleClientSecret)
+                    Button(googleTasks.isSigningIn ? "Waiting for browser…" : "Sign in with Google") {
+                        Task { await googleTasks.signIn() }
+                    }
+                    .disabled(googleClientID.isEmpty || googleTasks.isSigningIn)
+                    Text("Google Tasks don't sync to the Mac's Calendar, so this signs in to Google directly. In console.cloud.google.com: create a project, enable the Google Tasks API, set up the OAuth consent screen (add yourself as a test user), then Credentials › Create credentials › OAuth client ID › Desktop app. Paste its client ID and secret here.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                if let message = googleTasks.statusMessage {
+                    Text(message).font(.caption).foregroundColor(.red)
+                }
             }
             Section(header: Text("Calendars")) {
                 if calendarManager.calendarAuthorizationStatus != .fullAccess {
