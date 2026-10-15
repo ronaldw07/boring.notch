@@ -695,8 +695,8 @@ struct NotchHomeView: View {
         Defaults[.showLyricsButton] && Defaults[.enableLyrics] && vm.isLyricsExpanded
     }
 
-    private var shouldShowCalendarPanel: Bool {
-        Defaults[.showCalendar] && vm.isCalendarExpanded
+    private var shouldShowVolumePanel: Bool {
+        vm.isVolumeExpanded
     }
 
     private var mainContent: some View {
@@ -707,7 +707,7 @@ struct NotchHomeView: View {
                     .transition(.opacity)
             }
 
-            // Mirror, lyrics, and calendar share one slot: whichever is
+            // Mirror, lyrics, and volume share one slot: whichever is
             // active takes over rather than squeezing the others down.
             if shouldShowCamera {
                 CameraPreviewView(webcamManager: webcamManager)
@@ -720,12 +720,8 @@ struct NotchHomeView: View {
                     .opacity(vm.notchState == .closed ? 0 : 1)
                     .blur(radius: vm.notchState == .closed ? 20 : 0)
                     .transition(.opacity)
-            } else if shouldShowCalendarPanel {
-                CalendarView()
-                    .frame(width: 215)
-                    .onHover { isHovering in
-                        vm.isHoveringCalendar = isHovering
-                    }
+            } else if shouldShowVolumePanel {
+                VolumePanelView()
                     .environmentObject(vm)
                     .transition(.opacity)
             }

@@ -65,10 +65,10 @@ class BoringViewModel: NSObject, ObservableObject {
     @Published var isMirrorEnlarged: Bool = false
     @Published var isRequestingAuthorization: Bool = false
     @Published var isLyricsExpanded: Bool = false
-    // Calendar is the default slot content — unlike camera/lyrics, which
-    // are opt-in per session, an empty slot here just leaves the music
-    // player stretched across the space with nothing beside it.
-    @Published var isCalendarExpanded: Bool = true
+    // The volume panel is the default slot content — unlike camera/lyrics,
+    // which are opt-in per session, an empty slot here just leaves the
+    // music player stretched across the space with nothing beside it.
+    @Published var isVolumeExpanded: Bool = true
     
     deinit {
         destroy()
@@ -177,7 +177,7 @@ class BoringViewModel: NSObject, ObservableObject {
                 webcamManager.startSession()
                 isCameraExpanded = true
                 isLyricsExpanded = false
-                isCalendarExpanded = false
+                isVolumeExpanded = false
                 // The preview only exists in the Home tab's layout — the
                 // button itself is visible everywhere, so pressing it from
                 // Shelf/Clipboard/Timer looked like nothing happened.
@@ -230,17 +230,17 @@ class BoringViewModel: NSObject, ObservableObject {
             webcamManager.stopSession()
         }
         isCameraExpanded = false
-        isCalendarExpanded = false
+        isVolumeExpanded = false
         isLyricsExpanded = true
         coordinator.currentView = .home
     }
 
-    /// Camera, lyrics, and calendar share one slot on the right — picking
+    /// Camera, lyrics, and volume share one slot on the right — picking
     /// one is a selection among the three, not an independent on/off flag,
     /// so activating any of them always clears the other two.
-    func toggleCalendarView() {
-        if isCalendarExpanded {
-            isCalendarExpanded = false
+    func toggleVolumeView() {
+        if isVolumeExpanded {
+            isVolumeExpanded = false
             return
         }
         if webcamManager.isSessionRunning {
@@ -248,7 +248,7 @@ class BoringViewModel: NSObject, ObservableObject {
         }
         isCameraExpanded = false
         isLyricsExpanded = false
-        isCalendarExpanded = true
+        isVolumeExpanded = true
         coordinator.currentView = .home
     }
 

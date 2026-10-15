@@ -88,6 +88,9 @@
 		AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */; };
 		AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02ClipboardMgrFILE00 /* ClipboardManager.swift */; };
 		AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */; };
+		AA09VolPanelBLD00000 /* VolumePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09VolPanelFILE000000 /* VolumePanelView.swift */; };
+		AA09AppVolMgrBLD0000 /* AppVolumeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09AppVolMgrFILE0000 /* AppVolumeManager.swift */; };
+		AA09AppVolTapBLD0000 /* AppVolumeTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09AppVolTapFILE000 /* AppVolumeTap.swift */; };
 		AA03ClipboardViewBLD00 /* ClipboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA03ClipboardViewFILE0 /* ClipboardView.swift */; };
 		AA04TimerManagerBLD000 /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA04TimerManagerFILE00 /* TimerManager.swift */; };
 		AA05TimerTabViewBLD000 /* TimerTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA05TimerTabViewFILE00 /* TimerTabView.swift */; };
@@ -262,6 +265,9 @@
 		AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSpectrumTap.swift; sourceTree = "<group>"; };
 		AA02ClipboardMgrFILE00 /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchTabHotkeys.swift; sourceTree = "<group>"; };
+		AA09VolPanelFILE000000 /* VolumePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumePanelView.swift; sourceTree = "<group>"; };
+		AA09AppVolMgrFILE0000 /* AppVolumeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVolumeManager.swift; sourceTree = "<group>"; };
+		AA09AppVolTapFILE000 /* AppVolumeTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVolumeTap.swift; sourceTree = "<group>"; };
 		AA03ClipboardViewFILE0 /* ClipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardView.swift; sourceTree = "<group>"; };
 		AA04TimerManagerFILE00 /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
 		AA05TimerTabViewFILE00 /* TimerTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerTabView.swift; sourceTree = "<group>"; };
@@ -504,6 +510,7 @@
 				149E0B982C737D26006418B1 /* Webcam */,
 				AA04ClipboardGroup0000 /* Clipboard */,
 				AA06TimerGroup00000000 /* Timer */,
+				AA09VolumeGroup0000000 /* Volume */,
 				B18654312C6F45AE000B926A /* Live activities */,
 				B18654302C6F4590000B926A /* Settings */,
 				B186542F2C6F455E000B926A /* Notch */,
@@ -532,6 +539,8 @@
 				AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */,
 				AA02ClipboardMgrFILE00 /* ClipboardManager.swift */,
 				AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */,
+				AA09AppVolMgrFILE0000 /* AppVolumeManager.swift */,
+				AA09AppVolTapFILE000 /* AppVolumeTap.swift */,
 				AA04TimerManagerFILE00 /* TimerManager.swift */,
 				B1F0A0012E60000100000001 /* BrightnessManager.swift */,
 				59D8C23B2E589FAA00147B33 /* VolumeManager.swift */,
@@ -545,6 +554,14 @@
 				AA03ClipboardViewFILE0 /* ClipboardView.swift */,
 			);
 			path = Clipboard;
+			sourceTree = "<group>";
+		};
+		AA09VolumeGroup0000000 /* Volume */ = {
+			isa = PBXGroup;
+			children = (
+				AA09VolPanelFILE000000 /* VolumePanelView.swift */,
+			);
+			path = Volume;
 			sourceTree = "<group>";
 		};
 		AA06TimerGroup00000000 /* Timer */ = {
@@ -1012,6 +1029,9 @@
 				AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */,
 				AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */,
 				AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */,
+				AA09VolPanelBLD00000 /* VolumePanelView.swift in Sources */,
+				AA09AppVolMgrBLD0000 /* AppVolumeManager.swift in Sources */,
+				AA09AppVolTapBLD0000 /* AppVolumeTap.swift in Sources */,
 				AA03ClipboardViewBLD00 /* ClipboardView.swift in Sources */,
 				AA04TimerManagerBLD000 /* TimerManager.swift in Sources */,
 				AA05TimerTabViewBLD000 /* TimerTabView.swift in Sources */,
