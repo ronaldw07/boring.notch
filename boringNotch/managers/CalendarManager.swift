@@ -112,6 +112,31 @@ class CalendarManager: ObservableObject {
         }
     }
     
+    /// Run each time the Calendar tab opens. Asks for access while macOS
+    /// still will (it shows its popup only until answered once); after a
+    /// denial the popup can't come back, so point at System Settings instead.
+    func requestAccessForTab() async {
+        await checkCalendarAuthorization()
+        let status = EKEventStore.authorizationStatus(for: .event)
+        guard status == .denied || status == .restricted else { return }
+
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Calendar Access Required"
+        alert.informativeText = "Allow boringNotch to read your calendars in System Settings to see your events."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
+            NSWorkspace.shared.open(url)
+        }
+
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.deactivate()
+    }
+
     func checkReminderAuthorization() async {
         let status = EKEventStore.authorizationStatus(for: .reminder)
         DispatchQueue.main.async {
@@ -208,6 +233,20 @@ class CalendarManager: ObservableObject {
         guard liveRefreshHolders == 0 else { return }
         liveRefreshTask?.cancel()
         liveRefreshTask = nil
+    }
+
+    /// Moves or resizes an event, then reloads so the screen shows what the
+    /// calendar actually holds.
+    func moveEvent(_ event: EventModel, to start: Date, end: Date) async -> Bool {
+        let moved = await calendarService.moveEvent(id: event.id, originalStart: event.start, to: start, end: end)
+        await updateEvents()
+        return moved
+    }
+
+    func deleteEvent(_ event: EventModel, scope: EventDeletionScope) async -> Bool {
+        let deleted = await calendarService.deleteEvent(id: event.id, originalStart: event.start, scope: scope)
+        await updateEvents()
+        return deleted
     }
 
     func updateCurrentDate(_ date: Date) async {

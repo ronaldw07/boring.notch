@@ -15,6 +15,14 @@ protocol CalendarServiceProviding {
     func calendars() async -> [CalendarModel]
     func events(from start: Date, to end: Date, calendars: [String]) async -> [EventModel]
     func pullRemoteChanges()
+    func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool
+    func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool
+}
+
+enum EventDeletionScope {
+    case thisEvent
+    case thisAndFollowing
+    case allEvents
 }
 
 class CalendarService: CalendarServiceProviding {
@@ -59,6 +67,59 @@ class CalendarService: CalendarServiceProviding {
     /// macOS decides whether a fetch is actually needed.
     func pullRemoteChanges() {
         store.refreshSourcesIfNecessary()
+    }
+
+    /// A recurring event shares one identifier across occurrences, so the
+    /// original start picks the right one. Nil if it's gone or its calendar
+    /// is read-only (subscribed calendars, birthdays...).
+    private func editableOccurrence(id: String, originalStart: Date) -> EKEvent? {
+        guard hasAccess(to: .event) else { return nil }
+        let window = store.predicateForEvents(
+            withStart: originalStart.addingTimeInterval(-86_400),
+            end: originalStart.addingTimeInterval(2 * 86_400),
+            calendars: nil
+        )
+        return store.events(matching: window).first {
+            $0.calendarItemIdentifier == id
+                && abs($0.startDate.timeIntervalSince(originalStart)) < 1
+                && $0.calendar.allowsContentModifications
+        }
+    }
+
+    func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool {
+        guard let occurrence = editableOccurrence(id: id, originalStart: originalStart) else { return false }
+        do {
+            switch scope {
+            case .thisEvent:
+                try store.remove(occurrence, span: .thisEvent, commit: true)
+            case .thisAndFollowing:
+                try store.remove(occurrence, span: .futureEvents, commit: true)
+            case .allEvents:
+                // The identifier resolves to the series itself, so removing
+                // from there onward takes every occurrence.
+                let series = store.calendarItem(withIdentifier: id) as? EKEvent ?? occurrence
+                try store.remove(series, span: .futureEvents, commit: true)
+            }
+            return true
+        } catch {
+            NSLog("CalendarService: couldn't delete event: \(error)")
+            return false
+        }
+    }
+
+    /// Reschedules one occurrence.
+    func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool {
+        guard let event = editableOccurrence(id: id, originalStart: originalStart) else { return false }
+
+        event.startDate = start
+        event.endDate = end
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            return true
+        } catch {
+            NSLog("CalendarService: couldn't move event: \(error)")
+            return false
+        }
     }
 
     func events(from start: Date, to end: Date, calendars ids: [String]) async -> [EventModel] {
