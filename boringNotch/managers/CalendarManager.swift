@@ -125,7 +125,7 @@ class CalendarManager: ObservableObject {
 
         let alert = NSAlert()
         alert.messageText = "Calendar Access Required"
-        alert.informativeText = "Allow boringNotch to read your calendars in System Settings to see your events."
+        alert.informativeText = "Allow Chora to read your calendars in System Settings to see your events."
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn,

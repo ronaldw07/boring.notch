@@ -67,7 +67,7 @@ final class AppVolumeTap {
 
     private func start(name: String, gain: GainBox) -> Bool {
         let description = CATapDescription(stereoMixdownOfProcesses: Array(processObjectIDs))
-        description.name = "boringNotch \(name)"
+        description.name = "Chora \(name)"
         description.uuid = UUID()
         description.isPrivate = true
         // The original path goes silent, so the only thing heard is what the
@@ -85,7 +85,7 @@ final class AppVolumeTap {
         guard let outputUID = Self.defaultOutputDeviceUID() else { return false }
 
         let aggregateDescription: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "boringNotch \(name)",
+            kAudioAggregateDeviceNameKey: "Chora \(name)",
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
             kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,

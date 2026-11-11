@@ -252,7 +252,7 @@ final class AudioSpectrumTap: ObservableObject {
     @available(macOS 14.2, *)
     private func startTap(processObjectID: AudioObjectID) -> Bool {
         let description = CATapDescription(monoMixdownOfProcesses: [processObjectID])
-        description.name = "boringNotch Visualizer"
+        description.name = "Chora Visualizer"
         description.uuid = UUID()
         description.isPrivate = true
         description.muteBehavior = .unmuted
@@ -267,7 +267,7 @@ final class AudioSpectrumTap: ObservableObject {
         guard let outputUID = defaultOutputDeviceUID() else { return false }
 
         let aggregateDescription: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "boringNotch Visualizer",
+            kAudioAggregateDeviceNameKey: "Chora Visualizer",
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
             kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,

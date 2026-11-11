@@ -8,7 +8,7 @@
 		<true/>
 	</dict>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>boringNotch reads the audio your music app is playing so the notch visualizer reacts to the real sound.</string>
+	<string>Chora reads the audio your music app is playing so the notch visualizer reacts to the real sound.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUEnableDownloaderService</key>

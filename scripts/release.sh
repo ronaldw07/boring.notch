@@ -46,7 +46,7 @@ xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration Rel
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
   build >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; fail "build failed"; }
 
-APP="$WORK/build/Build/Products/Release/boringNotch.app"
+APP="$WORK/build/Build/Products/Release/Chora.app"
 # Sign with a real identity, not ad-hoc: macOS ties permissions (system audio,
 # calendar, camera) to the signature, and an ad-hoc one changes every build,
 # so each update would ask everyone for them all over again.
@@ -99,7 +99,7 @@ grep -q "<sparkle:version>$BUILD</sparkle:version>" "$WORK/feed/appcast.xml" || 
 grep -q "sparkle:edSignature" "$WORK/feed/appcast.xml" || fail "appcast isn't signed"
 
 # Release first, feed second — so the feed never points at a missing file.
-{ cat "$WORK/notes.md"; printf '\n---\n\nInstall: drag the app to Applications, then run\n`xattr -dr com.apple.quarantine /Applications/boringNotch.app`\nbefore opening it (the build is unsigned). Already installed? It updates itself.\n'; } > "$WORK/release-notes.md"
+{ cat "$WORK/notes.md"; printf '\n---\n\nInstall: drag the app to Applications, then run\n`xattr -dr com.apple.quarantine /Applications/Chora.app`\nbefore opening it (the build is unsigned). Already installed? It updates itself.\n'; } > "$WORK/release-notes.md"
 gh release create "$TAG" "$WORK/feed/Chora.dmg" --repo "$REPO" --title "$TAG" --notes-file "$WORK/release-notes.md"
 
 cp "$WORK/feed/appcast.xml" updater/appcast.xml
