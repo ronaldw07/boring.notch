@@ -161,7 +161,7 @@ Everything below this line is original to this fork, on top of upstream
 
 ### Option 1: Download and Install Manually
 
-<a href="https://github.com/ronaldw07/boring.notch/releases/latest/download/boringNotch.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="Download for macOS" /></a>
+<a href="https://github.com/ronaldw07/boring.notch/releases/latest/download/Chora.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="Download for macOS" /></a>
 
 Once downloaded, open the `.dmg` and move **Boring Notch** to your `/Applications` folder.
 

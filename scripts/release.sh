@@ -57,7 +57,7 @@ codesign --deep --force --sign "$SIGN_IDENTITY" "$APP"
 mkdir -p "$WORK/stage" "$WORK/feed"
 cp -R "$APP" "$WORK/stage/"
 ln -s /Applications "$WORK/stage/Applications"
-hdiutil create -quiet -volname "Boring Notch" -srcfolder "$WORK/stage" -ov -format UDZO "$WORK/feed/boringNotch.dmg"
+hdiutil create -quiet -volname "Chora" -srcfolder "$WORK/stage" -ov -format UDZO "$WORK/feed/Chora.dmg"
 
 # This version's changelog section: markdown for the release page, html for
 # the update dialog.
@@ -87,7 +87,7 @@ for l in out:
     l = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", l)
     l = re.sub(r"`(.+?)`", r"<code>\1</code>", l)
     out_html.append(l + ("</li>" if l.startswith("<li>") else ""))
-open(f"{work}/feed/boringNotch.html", "w").write("\n".join(out_html) + "\n")
+open(f"{work}/feed/Chora.html", "w").write("\n".join(out_html) + "\n")
 PY
 
 "$TOOLS/generate_appcast" \
@@ -99,8 +99,8 @@ grep -q "<sparkle:version>$BUILD</sparkle:version>" "$WORK/feed/appcast.xml" || 
 grep -q "sparkle:edSignature" "$WORK/feed/appcast.xml" || fail "appcast isn't signed"
 
 # Release first, feed second — so the feed never points at a missing file.
-{ cat "$WORK/notes.md"; printf '\n---\n\nInstall: drag Boring Notch to Applications, then run\n`xattr -dr com.apple.quarantine /Applications/boringNotch.app`\nbefore opening it (the build is unsigned). Already installed? It updates itself.\n'; } > "$WORK/release-notes.md"
-gh release create "$TAG" "$WORK/feed/boringNotch.dmg" --repo "$REPO" --title "$TAG" --notes-file "$WORK/release-notes.md"
+{ cat "$WORK/notes.md"; printf '\n---\n\nInstall: drag the app to Applications, then run\n`xattr -dr com.apple.quarantine /Applications/boringNotch.app`\nbefore opening it (the build is unsigned). Already installed? It updates itself.\n'; } > "$WORK/release-notes.md"
+gh release create "$TAG" "$WORK/feed/Chora.dmg" --repo "$REPO" --title "$TAG" --notes-file "$WORK/release-notes.md"
 
 cp "$WORK/feed/appcast.xml" updater/appcast.xml
 git add updater/appcast.xml
