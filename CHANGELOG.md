@@ -11,6 +11,21 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.0 — 2026-11-11
+
+### Changed
+
+- **The app is now Chora.** A new icon, and the Chora name everywhere you
+  see it: Finder, the menu bar, Settings, the welcome screens and the
+  permission prompts. Your settings, clipboard history and shelf carry
+  over, and updates keep coming as before. An existing copy keeps its old
+  file name until you rename it to Chora in Applications.
+- **Updates install on their own.** New versions now download in the
+  background and install when you quit, without asking first. Turn this
+  off with Automatically download updates in Settings.
+
+---
+
 ## 0.7.0 — 2026-10-15
 
 ### Added
