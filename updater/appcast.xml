@@ -1,34 +1,22 @@
 <?xml version="1.0" standalone="yes"?>
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
-        <title>boringNotch</title>
+        <title>Chora</title>
         <item>
-            <title>0.7.0</title>
-            <pubDate>Thu, 15 Oct 2026 14:33:07 -0700</pubDate>
+            <title>0.8.0</title>
+            <pubDate>Wed, 11 Nov 2026 12:14:55 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1387</sparkle:version>
-            <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
+            <sparkle:version>1392</sparkle:version>
+            <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Added</h3>
+            <description><![CDATA[<h3>Changed</h3>
 <ul>
-<li><strong>A volume panel beside the player.</strong> A slim master slider with a glass knob that turns to clear Liquid Glass as you drag it, and a slider for each open music, video, social or browser app, plus anything making sound. Turn an app down without touching the rest. An app is only processed while its slider is below 100%. macOS asks once to allow audio capture.</li>
-<li><strong>Edit events from the Calendar tab.</strong> Drag an event to move it, or drag either end to resize, in 15 minute steps, saved to your calendar.</li>
-<li><strong>A details box for each event.</strong> Click an event for its time, calendar, location, guests and notes, with Open in Calendar and Delete. Deleting a repeating event asks whether to remove this event, this and following, or all of them.</li>
-<li><strong>Google Tasks on the Calendar tab.</strong> Tasks due on the day you&#x27;re viewing show above the timeline and can be ticked off. Google Tasks don&#x27;t sync to the Mac&#x27;s calendar, so this signs in to Google directly with your own Cloud client; set it up in Settings › Calendar. Nothing changes until you sign in.</li>
-</ul>
-<h3>Changed</h3>
-<ul>
-<li><strong>Overlapping events stack top to bottom.</strong> Events starting within an hour of each other get their own rows instead of being squeezed side by side, and event blocks are solid so the hour lines no longer cut through them.</li>
-<li><strong>The Calendar tab asks for calendar access each time it opens.</strong> If access was denied, it points you to System Settings.</li>
-<li><strong>The small calendar beside the player is gone</strong>, replaced by the volume panel. The full Calendar tab is unchanged.</li>
-</ul>
-<h3>Fixed</h3>
-<ul>
-<li><strong>The volume slider shows your real volume</strong> after the output device changes (AirPods, a monitor), instead of a stale reading until you move it.</li>
+<li><strong>The app is now Chora.</strong> A new icon, and the Chora name everywhere you see it: Finder, the menu bar, Settings, the welcome screens and the permission prompts. Your settings, clipboard history and shelf carry over, and updates keep coming as before. An existing copy keeps its old file name until you rename it to Chora in Applications.</li>
+<li><strong>Updates install on their own.</strong> New versions now download in the background and install when you quit, without asking first. Turn this off with Automatically download updates in Settings.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.7.0/boringNotch.dmg" length="9317272" type="application/octet-stream" sparkle:edSignature="NRiiKqfALgW5WDjPFFCoukFLQB2c86UL21PmUObqPEkUC3TLUHCcj+1H5ZvPKTj8xLHnvuZj1QoR0mmoJxElDQ=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.0/Chora.dmg" length="9252926" type="application/octet-stream" sparkle:edSignature="lCvra+MiOu9UU4BtupY73PS65qwxFwLIOjPkB76R5iVP0G6NXdZEF8XklSOch65RwUipJTIj63jeoM4Cru1hCg=="/>
         </item>
     </channel>
 </rss>
