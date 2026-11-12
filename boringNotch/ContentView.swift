@@ -193,7 +193,7 @@ struct ContentView: View {
                     }
                     .conditionalModifier(Defaults[.closeGestureEnabled] && Defaults[.enableGestures]) { view in
                         view
-                            .panGesture(direction: .up) { translation, phase in
+                            .panGesture(direction: .up, ignoresMouseWheel: true) { translation, phase in
                                 handleUpGesture(translation: translation, phase: phase)
                             }
                     }

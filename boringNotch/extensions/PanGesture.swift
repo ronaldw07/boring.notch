@@ -23,10 +23,13 @@ extension View {
     ///   scroll monitor. Turn it off where the same area already owns a drag of
     ///   its own — a `DragGesture(minimumDistance: 0)` on a parent will
     ///   otherwise compete with it.
+    /// - Parameter ignoresMouseWheel: Only trackpad swipes count. A mouse wheel
+    ///   flick is too easy to make by accident to trigger this gesture.
     func panGesture(
         direction: PanDirection,
         threshold: CGFloat = 4,
         usesDragGesture: Bool = true,
+        ignoresMouseWheel: Bool = false,
         action: @escaping (CGFloat, NSEvent.Phase) -> Void
     ) -> some View {
         self
@@ -41,7 +44,7 @@ extension View {
                         .onEnded { _ in action(0, .ended) }
                 )
             }
-            .background(ScrollMonitor(direction: direction, threshold: threshold, action: action))
+            .background(ScrollMonitor(direction: direction, threshold: threshold, ignoresMouseWheel: ignoresMouseWheel, action: action))
     }
 }
 
@@ -77,6 +80,7 @@ private final class ScrollGestureArbiter {
 private struct ScrollMonitor: NSViewRepresentable {
     let direction: PanDirection
     let threshold: CGFloat
+    let ignoresMouseWheel: Bool
     let action: (CGFloat, NSEvent.Phase) -> Void
 
     func makeNSView(context: Context) -> NSView {
@@ -88,12 +92,13 @@ private struct ScrollMonitor: NSViewRepresentable {
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) { coordinator.removeMonitor() }
 
     func makeCoordinator() -> Coordinator { 
-        Coordinator(direction: direction, threshold: threshold, action: action) 
+        Coordinator(direction: direction, threshold: threshold, ignoresMouseWheel: ignoresMouseWheel, action: action)
     }
 
     @MainActor final class Coordinator: NSObject {
         private let direction: PanDirection
         private let threshold: CGFloat
+        private let ignoresMouseWheel: Bool
         private let action: (CGFloat, NSEvent.Phase) -> Void
         private var monitor: Any?
         private var accumulated: CGFloat = 0
@@ -101,9 +106,10 @@ private struct ScrollMonitor: NSViewRepresentable {
             private var endTask: Task<Void, Never>?
         private let noiseThreshold: CGFloat = 0.2
 
-        init(direction: PanDirection, threshold: CGFloat, action: @escaping (CGFloat, NSEvent.Phase) -> Void) {
+        init(direction: PanDirection, threshold: CGFloat, ignoresMouseWheel: Bool, action: @escaping (CGFloat, NSEvent.Phase) -> Void) {
             self.direction = direction
             self.threshold = threshold
+            self.ignoresMouseWheel = ignoresMouseWheel
             self.action = action
         }
 
@@ -147,6 +153,8 @@ private struct ScrollMonitor: NSViewRepresentable {
         }
 
         private func handleScroll(_ event: NSEvent) {
+            // Mouse wheels report imprecise deltas; trackpads report precise ones.
+            if ignoresMouseWheel && !event.hasPreciseScrollingDeltas { return }
             if event.phase == .ended || event.momentumPhase == .ended {
                 if active {
                     action(accumulated.magnitude, .ended)
