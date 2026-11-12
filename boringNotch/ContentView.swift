@@ -950,6 +950,10 @@ struct GeneralDropTargetDelegate: DropDelegate {
 /// The view never takes part in hit testing, so buttons and the scrubber
 /// underneath keep receiving their clicks as normal.
 struct CursorLock: NSViewRepresentable {
+    /// A view inside the notch that wants its own cursor (the calendar's
+    /// resize arrows) sets this while the pointer is over it.
+    static var cursorOverride: ((NSEvent) -> NSCursor)?
+
     func makeNSView(context: Context) -> NSView {
         LockedCursorView()
     }
@@ -962,15 +966,15 @@ struct CursorLock: NSViewRepresentable {
         }
 
         override func cursorUpdate(with event: NSEvent) {
-            NSCursor.arrow.set()
+            (CursorLock.cursorOverride?(event) ?? .arrow).set()
         }
 
         override func mouseMoved(with event: NSEvent) {
-            NSCursor.arrow.set()
+            (CursorLock.cursorOverride?(event) ?? .arrow).set()
         }
 
         override func mouseEntered(with event: NSEvent) {
-            NSCursor.arrow.set()
+            (CursorLock.cursorOverride?(event) ?? .arrow).set()
         }
 
         override func updateTrackingAreas() {

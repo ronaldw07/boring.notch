@@ -846,6 +846,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
         var onRelease: ((CGPoint, NSView) -> Void)?
         var cursorAt: ((CGPoint) -> NSCursor)?
         private var isDragging = false
+        private var dragCursor: NSCursor = .arrow
 
         override var isFlipped: Bool { true }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -864,13 +865,28 @@ private struct TimelineScrollCapture: NSViewRepresentable {
             convert(event.locationInWindow, from: nil)
         }
 
+        private func cursor(for event: NSEvent) -> NSCursor {
+            isDragging ? dragCursor : (cursorAt?(point(of: event)) ?? .arrow)
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            CursorLock.cursorOverride = { [weak self] in self?.cursor(for: $0) ?? .arrow }
+            cursor(for: event).set()
+        }
+
         override func mouseMoved(with event: NSEvent) {
-            guard !isDragging else { return }
-            (cursorAt?(point(of: event)) ?? .arrow).set()
+            cursor(for: event).set()
         }
 
         override func mouseExited(with event: NSEvent) {
+            guard !isDragging else { return }
+            CursorLock.cursorOverride = nil
             NSCursor.arrow.set()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { CursorLock.cursorOverride = nil }
         }
 
         override func scrollWheel(with event: NSEvent) {
@@ -882,12 +898,16 @@ private struct TimelineScrollCapture: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
+            let grabbed = cursorAt?(point(of: event)) ?? .arrow
+            dragCursor = grabbed == .openHand ? .closedHand : grabbed
             isDragging = true
             onPress?(point(of: event))
+            dragCursor.set()
         }
 
         override func mouseDragged(with event: NSEvent) {
             onDrag?(point(of: event))
+            dragCursor.set()
         }
 
         override func mouseUp(with event: NSEvent) {
