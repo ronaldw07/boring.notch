@@ -43,8 +43,18 @@ public final class CGSSpace {
     }
 }
 
+/// The notch never becomes the active app, and macOS ignores cursor changes
+/// from background apps, so without this the app behind the notch decides
+/// the pointer (an I-beam over a text area) instead of the calendar's arrows.
+public func allowCursorChangesInBackground() {
+    let connection = _CGSDefaultConnection()
+    _ = CGSSetConnectionProperty(connection, connection, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
+}
+
 // CGSSpace stuff:
 fileprivate typealias CGSConnectionID = UInt
+@_silgen_name("CGSSetConnectionProperty")
+fileprivate func CGSSetConnectionProperty(_ cid: CGSConnectionID, _ target: CGSConnectionID, _ key: CFString, _ value: CFTypeRef) -> Int32
 fileprivate typealias CGSSpaceID = UInt64
 @_silgen_name("_CGSDefaultConnection")
 fileprivate func _CGSDefaultConnection() -> CGSConnectionID

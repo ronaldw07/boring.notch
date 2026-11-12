@@ -345,6 +345,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        allowCursorChangesInBackground()
+
         // `.shared` is a lazy singleton, and its init is what starts the
         // pasteboard poll loop — without touching it here, nothing does that
         // until ClipboardView first appears (the user opens the Clipboard
