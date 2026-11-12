@@ -3,19 +3,29 @@
     <channel>
         <title>Chora</title>
         <item>
-            <title>0.8.2</title>
-            <pubDate>Wed, 11 Nov 2026 20:00:56 -0800</pubDate>
+            <title>0.8.3</title>
+            <pubDate>Thu, 12 Nov 2026 14:31:10 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1399</sparkle:version>
-            <sparkle:shortVersionString>0.8.2</sparkle:shortVersionString>
+            <sparkle:version>1404</sparkle:version>
+            <sparkle:shortVersionString>0.8.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Fixed</h3>
+            <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>Resize arrows in the Calendar.</strong> Hovering the left or right end of an event now shows the two-arrow cursor, and it stays while you drag. The middle shows a hand, closed while dragging.</li>
+<li><strong>Calendar: the day top to bottom.</strong> A new button next to expand switches the Calendar between the wide timeline and a day that runs down the notch, like a phone calendar. Events at the same time sit side by side. Drag an event&#x27;s top or bottom edge to change when it starts or ends.</li>
+<li><strong>Calendar: drag the notch taller.</strong> In the top-to-bottom view, drag the grabber on the notch&#x27;s bottom edge to make the day as tall as you like. The expand button then shrinks it back to normal, and grows it again to the size you last dragged to.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li><strong>Lyrics are on by default.</strong></li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li><strong>Resize arrows now really show.</strong> The notch couldn&#x27;t change the pointer while another app was in front, so the arrows and hand over calendar events never appeared and the app behind decided the pointer instead.</li>
+<li><strong>Calendar size after closing or switching tabs.</strong> An expanded calendar no longer comes back cut off at the bottom.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.2/Chora.dmg" length="9277291" type="application/octet-stream" sparkle:edSignature="dOEcZSw/jWF74es42+4vgI9yz88L9AjASvBQjBpo0x5DQgGBSbk29aMjlFdNEnSYlxT301+P0eQAaSB/JbHiBA=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.3/Chora.dmg" length="9299109" type="application/octet-stream" sparkle:edSignature="axLjCsrCdQuwpx7/ky1Csb3svIqhSQzruam9ckDhvAxO5U7NRIxNGq1IamfvsAuTaWBfwfBbLWbPDxPXbcvsDg=="/>
         </item>
     </channel>
 </rss>
