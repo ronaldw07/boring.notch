@@ -11,6 +11,23 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.1 — 2026-11-11
+
+### Added
+
+- **Calendar: undo.** After you move, resize or delete an event, a bar
+  under the timeline says what changed, with an Undo button. Undo takes
+  changes back one at a time, newest first, for as long as the Calendar
+  tab is open. A deleted event comes back exactly as it was, guests and
+  repeating events included.
+
+### Fixed
+
+- **A mouse wheel no longer closes the notch.** Scrolling with a mouse
+  over the open notch used to close it. Only a trackpad swipe up does now.
+
+---
+
 ## 0.8.0 — 2026-11-11
 
 ### Changed
