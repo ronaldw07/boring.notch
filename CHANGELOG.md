@@ -11,6 +11,14 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.2 — 2026-11-11
+
+### Fixed
+
+- **Resize arrows in the Calendar.** Hovering the left or right end of an event now shows the two-arrow cursor, and it stays while you drag. The middle shows a hand, closed while dragging.
+
+---
+
 ## 0.8.1 — 2026-11-11
 
 ### Added
