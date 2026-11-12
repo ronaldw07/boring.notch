@@ -291,6 +291,23 @@ class BoringViewModel: NSObject, ObservableObject {
         MusicManager.shared.forceUpdate()
     }
 
+    /// True while the bottom edge is being dragged, so the cursor running a
+    /// little ahead of the growing panel doesn't count as leaving the notch.
+    var isResizingNotch = false
+
+    /// Follows a drag on the bottom edge: no animation, window and panel in
+    /// the same step, since the pointer is already moving them smoothly.
+    @MainActor
+    func setExtraContentHeightImmediately(_ height: CGFloat) {
+        guard height != extraContentHeight else { return }
+        windowExtraHeight = height
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            extraContentHeight = height
+        }
+    }
+
     /// Grows or shrinks the room a tab's content gets beyond the notch's own
     /// size — the clipboard's expanded list, the timer's taller countdown
     /// layout, or (via `close()`) collapsing either of those back to zero.

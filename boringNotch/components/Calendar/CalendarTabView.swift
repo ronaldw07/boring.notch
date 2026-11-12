@@ -5,13 +5,29 @@
 //  The day as one wide horizontal timeline: hours run left to right and
 //  events sit in lanes as blocks sized by their real start and end. Scroll
 //  sideways with two fingers or a mouse wheel; the expand button grows the
-//  notch so overlapping events get room of their own.
+//  notch so overlapping events get room of their own. A header button turns
+//  it into a vertical day like Google Calendar's: hours run down, events
+//  that overlap sit side by side, and it scrolls up and down.
 //
 
 import AppKit
 import Defaults
 import EventKit
 import SwiftUI
+
+/// Height math for dragging the notch's bottom edge.
+enum NotchResize {
+    /// Within this of the normal size, a drag lands exactly on it.
+    static let snap: CGFloat = 12
+
+    /// Extra height after dragging the edge `dragged` points down (negative
+    /// is up) from a start of `start`: never below the normal size or past
+    /// `maximum`, and snapped to the normal size when close to it.
+    static func extra(start: CGFloat, dragged: CGFloat, maximum: CGFloat) -> CGFloat {
+        let raw = min(max(start + dragged, 0), max(0, maximum))
+        return raw < snap ? 0 : raw.rounded()
+    }
+}
 
 /// Pure lane math, kept out of the view.
 enum DayTimelineLayout {
@@ -21,6 +37,9 @@ enum DayTimelineLayout {
         /// Seconds from the start of the day, clamped to it.
         let start: TimeInterval
         let end: TimeInterval
+        /// Vertical view only: how many columns its group of overlapping
+        /// events is split into; `lane` is its column.
+        var columns = 1
         var id: String { event.id }
     }
 
@@ -62,19 +81,8 @@ enum DayTimelineLayout {
     /// that's free by its start. A lane stays taken for at least
     /// `footprint`, so near-simultaneous events stack top to bottom.
     static func place(_ events: [EventModel], dayStart: Date, dayLength: TimeInterval) -> [Placed] {
-        let spans = events.compactMap { event -> (EventModel, TimeInterval, TimeInterval)? in
-            let rawStart = event.start.timeIntervalSince(dayStart)
-            let rawEnd = event.end.timeIntervalSince(dayStart)
-            // Must actually touch the day: one ending right at midnight
-            // belongs to the day before.
-            guard rawStart < dayLength, rawEnd > 0 || rawStart >= 0 else { return nil }
-            let start = max(rawStart, 0)
-            let end = min(max(rawEnd, start + minimumDuration), dayLength)
-            return (event, start, end)
-        }
         var laneEnds: [TimeInterval] = []
-        return spans
-            .sorted { ($0.1, $1.2) < ($1.1, $0.2) }
+        return spans(events, dayStart: dayStart, dayLength: dayLength)
             .map { event, start, end in
                 let lane = laneEnds.firstIndex { $0 <= start } ?? laneEnds.count
                 let taken = max(end, start + footprint)
@@ -86,6 +94,71 @@ enum DayTimelineLayout {
                 return Placed(event: event, lane: lane, start: start, end: end)
             }
     }
+
+    /// For the vertical view, like Google Calendar's day: events that
+    /// overlap sit side by side and share the width. Events are taken
+    /// earliest first into the first free column; a group ends where nothing
+    /// in it is still running, and every event in a group gets the same
+    /// column count.
+    static func columns(_ events: [EventModel], dayStart: Date, dayLength: TimeInterval,
+                        footprint: TimeInterval) -> [Placed] {
+        let found = spans(events, dayStart: dayStart, dayLength: dayLength)
+        let slots = columnSlots(found.map { ($0.1, $0.2) }, footprint: footprint)
+        return zip(found, slots).map { span, slot in
+            Placed(event: span.0, lane: slot.column, start: span.1, end: span.2, columns: slot.count)
+        }
+    }
+
+    /// Column and group column count for spans already sorted by start.
+    /// A span holds its column for at least `footprint`, so a very short
+    /// event still has room for its title.
+    static func columnSlots(_ spans: [(start: TimeInterval, end: TimeInterval)],
+                            footprint: TimeInterval) -> [(column: Int, count: Int)] {
+        var slots: [(column: Int, count: Int)] = []
+        var groupStart = 0
+        var columnEnds: [TimeInterval] = []
+        var groupEnd = -TimeInterval.infinity
+
+        func closeGroup() {
+            for index in groupStart ..< slots.count {
+                slots[index].count = columnEnds.count
+            }
+            groupStart = slots.count
+            columnEnds = []
+        }
+
+        for span in spans {
+            if span.start >= groupEnd { closeGroup() }
+            let taken = max(span.end, span.start + footprint)
+            let column = columnEnds.firstIndex { $0 <= span.start } ?? columnEnds.count
+            if column == columnEnds.count {
+                columnEnds.append(taken)
+            } else {
+                columnEnds[column] = taken
+            }
+            groupEnd = max(groupEnd, taken)
+            slots.append((column, 1))
+        }
+        closeGroup()
+        return slots
+    }
+
+    /// Timed events that touch the day, clamped to it, earliest first
+    /// (longest first on a tie).
+    private static func spans(_ events: [EventModel], dayStart: Date,
+                              dayLength: TimeInterval) -> [(EventModel, TimeInterval, TimeInterval)] {
+        events.compactMap { event -> (EventModel, TimeInterval, TimeInterval)? in
+            let rawStart = event.start.timeIntervalSince(dayStart)
+            let rawEnd = event.end.timeIntervalSince(dayStart)
+            // Must actually touch the day: one ending right at midnight
+            // belongs to the day before.
+            guard rawStart < dayLength, rawEnd > 0 || rawStart >= 0 else { return nil }
+            let start = max(rawStart, 0)
+            let end = min(max(rawEnd, start + minimumDuration), dayLength)
+            return (event, start, end)
+        }
+        .sorted { ($0.1, $1.2) < ($1.1, $0.2) }
+    }
 }
 
 struct CalendarTabView: View {
@@ -94,9 +167,18 @@ struct CalendarTabView: View {
     @ObservedObject private var googleTasks = GoogleTasksManager.shared
 
     @State private var day: Date = Calendar.current.startOfDay(for: .now)
+    @AppStorage("calendarVerticalView") private var isVertical = false
+    /// How far the timeline is scrolled along its time axis.
     @State private var offset: CGFloat = 0
-    @State private var viewportWidth: CGFloat = 0
+    @State private var viewportSize: CGSize = .zero
     @State private var isExpanded = false
+    /// Vertical view: how much taller than its normal size the notch has
+    /// been dragged or expanded. Zero is the normal size.
+    @State private var verticalExtra: CGFloat = 0
+    /// Height at the start of a drag on the bottom edge.
+    @State private var resizeStartExtra: CGFloat?
+    /// The size the expand button goes back to: the last one dragged to.
+    @AppStorage("calendarVerticalExtraHeight") private var rememberedVerticalExtra: Double = 0
     @State private var selectedEvent: EventModel?
     @State private var activeDrag: ActiveDrag?
     @State private var preview: Preview?
@@ -131,20 +213,41 @@ struct CalendarTabView: View {
     /// left for what's next.
     private static let nowAnchor: CGFloat = 1.0 / 3
 
+    // Vertical view.
+    private static let hourHeight: CGFloat = 40
+    private static let gutterWidth: CGFloat = 34
+    /// A block is never shorter than this, so its title stays readable.
+    private static let minBlockHeight: CGFloat = 14
+    /// Extra height over the strip's, so the day reaches the notch's lower edge.
+    private static let verticalFillHeight: CGFloat = 30
+    /// How much taller the expand button makes the vertical view before
+    /// any size has been dragged to.
+    private static let verticalExtraHeight: CGFloat = 140
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             header
             if hasTasks {
                 tasksStrip
             }
-            timeline
-                // Hung just under the timeline, in the strip you can see:
-                // the view's own bottom edge runs past the notch's visible
-                // edge, so a message pinned there is drawn out of sight.
+            Group {
+                if isVertical { verticalTimeline } else { timeline }
+            }
+                // Hung just under the strip, where there's room you can
+                // see: the view's own bottom edge runs past the notch's
+                // visible edge, so a message pinned there is drawn out of
+                // sight. The vertical day runs almost to that edge, so
+                // there it sits inside the timeline's corner instead.
                 .overlay(alignment: .bottomTrailing) {
                     undoToast
-                        .alignmentGuide(.bottom) { $0[.top] - 4 }
+                        .alignmentGuide(.bottom) { isVertical ? $0[.bottom] + 12 : $0[.top] - 4 }
                         .padding(.trailing, 10)
+                }
+                .overlay(alignment: .bottom) {
+                    if isVertical && selectedEvent == nil {
+                        resizeHandle
+                            .alignmentGuide(.bottom) { $0[.bottom] - 10 }
+                    }
                 }
         }
         .padding(.horizontal, 14)
@@ -164,6 +267,7 @@ struct CalendarTabView: View {
         .onAppear {
             // Same as the clipboard: always opens at the normal size.
             isExpanded = false
+            verticalExtra = 0
             vm.setExtraContentHeight(0)
             calendarManager.beginLiveRefresh()
             show(Calendar.current.startOfDay(for: .now))
@@ -176,9 +280,39 @@ struct CalendarTabView: View {
             calendarManager.endLiveRefresh()
             vm.isHoveringCalendar = false
             isExpanded = false
-            vm.setExtraContentHeight(0)
+            verticalExtra = 0
+            vm.isResizingNotch = false
+            // A quick close-and-reopen can mount the next calendar before this
+            // one finishes leaving; don't shrink the panel out from under it.
+            if !(vm.notchState == .open && vm.coordinator.currentView == .calendar) {
+                vm.setExtraContentHeight(0)
+            }
+        }
+        // Closing shrinks the panel back to normal, so the calendar's own
+        // size has to follow, or reopening shows the old size in a short panel.
+        .onChange(of: vm.notchState) {
+            guard vm.notchState == .open else {
+                resetSize()
+                return
+            }
+            applyExtraHeight()
+        }
+        // Switching to another tab and straight back can keep this view
+        // without an onAppear or onDisappear, while the other tab has
+        // already shrunk the panel. So if anything else changes the panel's
+        // height, drop back to the normal size and ask for that again.
+        .onChange(of: vm.extraContentHeight) {
+            guard vm.extraContentHeight != desiredExtraHeight, resizeStartExtra == nil else { return }
+            resetSize()
+            if vm.notchState == .open && vm.coordinator.currentView == .calendar {
+                applyExtraHeight()
+            }
         }
         .onChange(of: visibleLaneCount) { applyExtraHeight() }
+        .onChange(of: isVertical) {
+            verticalExtra = 0
+            applyExtraHeight()
+        }
         .onChange(of: hasTasks) { applyExtraHeight() }
         // Google tasks for the shown day, refreshed while the tab is open.
         .task(id: "\(day.timeIntervalSince1970)-\(googleTasks.isSignedIn)") {
@@ -209,7 +343,12 @@ struct CalendarTabView: View {
     }
 
     private var placed: [DayTimelineLayout.Placed] {
-        DayTimelineLayout.place(events.filter { !$0.isAllDay }, dayStart: day, dayLength: dayLength)
+        let timed = events.filter { !$0.isAllDay }
+        guard isVertical else {
+            return DayTimelineLayout.place(timed, dayStart: day, dayLength: dayLength)
+        }
+        let footprint = TimeInterval(Self.minBlockHeight / Self.hourHeight) * 3600
+        return DayTimelineLayout.columns(timed, dayStart: day, dayLength: dayLength, footprint: footprint)
     }
 
     private var laneCount: Int {
@@ -231,11 +370,29 @@ struct CalendarTabView: View {
     }
 
     private var hiddenCount: Int {
-        placed.filter { $0.lane >= visibleLaneCount }.count
+        guard !isVertical else { return 0 }
+        return placed.filter { $0.lane >= visibleLaneCount }.count
     }
 
     private var trackWidth: CGFloat {
         CGFloat(dayLength / 3600) * Self.hourWidth
+    }
+
+    /// Points per hour along the time axis, whichever way it runs.
+    private var hourSize: CGFloat {
+        isVertical ? Self.hourHeight : Self.hourWidth
+    }
+
+    private func position(for seconds: TimeInterval) -> CGFloat {
+        CGFloat(seconds / 3600) * hourSize
+    }
+
+    private var trackLength: CGFloat {
+        position(for: dayLength)
+    }
+
+    private var viewportLength: CGFloat {
+        isVertical ? viewportSize.height : viewportSize.width
     }
 
     private static func lanesHeight(count: Int, laneHeight: CGFloat) -> CGFloat {
@@ -294,6 +451,7 @@ struct CalendarTabView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.gray)
             }
+            orientationButton
             expandButton
         }
         .frame(height: 22)
@@ -380,10 +538,48 @@ struct CalendarTabView: View {
         }
     }
 
+    /// Shows the layout it switches to: stacked rows for the day running
+    /// down, side-by-side columns for the strip running across.
+    private var orientationButton: some View {
+        Button(action: toggleOrientation) {
+            Image(systemName: isVertical ? "rectangle.split.3x1" : "rectangle.split.1x2")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+        }
+        .buttonStyle(.plain)
+        .help(isVertical ? "Show the day across" : "Show the day down")
+    }
+
+    /// Vertical view: anything taller than normal counts as expanded, so a
+    /// drag on the bottom edge turns this into the shrink button.
+    private var showsExpanded: Bool {
+        isVertical ? verticalExtra > 0 : isExpanded
+    }
+
+    /// A grabber on the notch's bottom edge: drag it to make the day taller
+    /// or shorter.
+    private var resizeHandle: some View {
+        Capsule()
+            .fill(.white.opacity(resizeStartExtra == nil ? 0.22 : 0.5))
+            .frame(width: 36, height: 3)
+            .frame(maxWidth: .infinity)
+            .frame(height: 14)
+            .overlay {
+                NotchResizeCapture(
+                    onBegin: beginResize,
+                    onDrag: resize(by:),
+                    onEnd: endResize
+                )
+                .frame(width: 160)
+            }
+    }
+
     /// Same pair of symbols as the clipboard's expand button.
     private var expandButton: some View {
         Button(action: toggleExpanded) {
-            Image(systemName: isExpanded
+            Image(systemName: showsExpanded
                 ? "arrow.down.right.and.arrow.up.left"
                 : "arrow.up.left.and.arrow.down.right")
                 .font(.system(size: 9, weight: .bold))
@@ -439,8 +635,8 @@ struct CalendarTabView: View {
                     .mask(edgeFade)
                     .overlay { emptyState }
             }
-            .onAppear { setViewportWidth(geometry.size.width) }
-            .onChange(of: geometry.size.width) { _, width in setViewportWidth(width) }
+            .onAppear { setViewportSize(geometry.size) }
+            .onChange(of: geometry.size) { _, size in setViewportSize(size) }
         }
         .frame(height: Self.hourRowHeight + lanesHeight)
         // On top of the track so it gets the scroll and click events; see
@@ -450,6 +646,7 @@ struct CalendarTabView: View {
             // backdrop instead of the timeline underneath.
             if selectedEvent == nil {
                 TimelineScrollCapture(
+                    isVertical: false,
                     onScroll: scroll(by:),
                     onPress: press(at:),
                     onDrag: drag(to:),
@@ -528,6 +725,132 @@ struct CalendarTabView: View {
         )
     }
 
+    // MARK: - Vertical timeline
+
+    private var verticalTimelineHeight: CGFloat {
+        // Taller than the strip, which has to leave room for its hour row:
+        // a vertical day can use the whole space under the header.
+        let base = Self.hourRowHeight
+            + Self.lanesHeight(count: Self.collapsedLaneCount, laneHeight: Self.collapsedLaneHeight)
+            + Self.verticalFillHeight
+        return base + verticalExtra
+    }
+
+    private var verticalTimeline: some View {
+        GeometryReader { geometry in
+            TimelineView(.everyMinute) { context in
+                verticalTrack(now: context.date, width: geometry.size.width)
+                    // Clipping hides the hours scrolled above the view but
+                    // doesn't stop them taking clicks, and they sit over the
+                    // header's buttons. Clicks here go to the capture view.
+                    .allowsHitTesting(false)
+                    .offset(y: -offset)
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                    .clipped()
+                    .mask(verticalEdgeFade)
+                    .overlay { emptyState }
+            }
+            .onAppear { setViewportSize(geometry.size) }
+            .onChange(of: geometry.size) { _, size in setViewportSize(size) }
+        }
+        .frame(height: verticalTimelineHeight)
+        .overlay {
+            if selectedEvent == nil {
+                TimelineScrollCapture(
+                    isVertical: true,
+                    onScroll: scroll(by:),
+                    onPress: press(at:),
+                    onDrag: drag(to:),
+                    onRelease: release(at:in:),
+                    cursorAt: cursor(at:)
+                )
+            }
+        }
+        .onHover { vm.isHoveringCalendar = $0 }
+    }
+
+    /// Where a block sits in the vertical track, gutter included.
+    private func verticalFrame(of item: DayTimelineLayout.Placed, start: TimeInterval,
+                               end: TimeInterval, width: CGFloat) -> CGRect {
+        let columnWidth = max(0, width - Self.gutterWidth) / CGFloat(item.columns)
+        let height = max(position(for: end) - position(for: start), Self.minBlockHeight)
+        return CGRect(
+            x: Self.gutterWidth + CGFloat(item.lane) * columnWidth,
+            y: position(for: start),
+            width: columnWidth,
+            height: height
+        )
+    }
+
+    private func verticalTrack(now: Date, width: CGFloat) -> some View {
+        let hours = Int(dayLength / 3600)
+        let nowSeconds = now.timeIntervalSince(day)
+        let showsNow = nowSeconds >= 0 && nowSeconds < dayLength
+        let contentWidth = max(0, width - Self.gutterWidth)
+
+        return ZStack(alignment: .topLeading) {
+            ForEach(0 ..< hours, id: \.self) { hour in
+                Text(hourLabel(hour))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.gray)
+                    .frame(width: Self.gutterWidth - 8, alignment: .trailing)
+                    .offset(y: position(for: TimeInterval(hour) * 3600) - 6)
+                Rectangle()
+                    .fill(.white.opacity(0.08))
+                    .frame(width: contentWidth, height: 1)
+                    .offset(x: Self.gutterWidth, y: position(for: TimeInterval(hour) * 3600))
+            }
+
+            ForEach(placed) { item in
+                let shown = preview?.id == item.id ? preview : nil
+                let start = shown?.start ?? item.start
+                let end = shown?.end ?? item.end
+                let frame = verticalFrame(of: item, start: start, end: end, width: width)
+                TimelineEventBlock(
+                    event: item.event,
+                    isCurrent: item.event.start <= now && now < item.event.end,
+                    isExpanded: frame.height >= 28,
+                    previewRange: shown.map { (day.addingTimeInterval($0.start), day.addingTimeInterval($0.end)) },
+                    showsGrips: frame.height > 30,
+                    isVertical: true
+                )
+                .frame(width: max(4, frame.width - 2), height: max(4, frame.height - 1))
+                .offset(x: frame.minX + 1, y: frame.minY + 0.5)
+                .zIndex(shown == nil ? 0 : 1)
+            }
+
+            if showsNow {
+                // Time already gone, dimmed.
+                Rectangle()
+                    .fill(.black.opacity(0.4))
+                    .frame(width: contentWidth, height: position(for: nowSeconds))
+                    .offset(x: Self.gutterWidth)
+                Rectangle()
+                    .fill(.red)
+                    .frame(width: contentWidth + 4, height: 1.5)
+                    .offset(x: Self.gutterWidth - 4, y: position(for: nowSeconds) - 0.75)
+                Circle()
+                    .fill(.red)
+                    .frame(width: 6, height: 6)
+                    .offset(x: Self.gutterWidth - 6, y: position(for: nowSeconds) - 3)
+            }
+        }
+        .frame(width: width, height: trackLength, alignment: .topLeading)
+    }
+
+    private var verticalEdgeFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .white, location: 0.05),
+                .init(color: .white, location: 0.95),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     @ViewBuilder
     private var emptyState: some View {
         let status = calendarManager.calendarAuthorizationStatus
@@ -569,10 +892,10 @@ struct CalendarTabView: View {
         }
     }
 
-    private func setViewportWidth(_ width: CGFloat) {
-        guard width != viewportWidth else { return }
-        let isFirst = viewportWidth == 0
-        viewportWidth = width
+    private func setViewportSize(_ size: CGSize) {
+        guard size != viewportSize else { return }
+        let isFirst = viewportSize == .zero
+        viewportSize = size
         if isFirst {
             scrollToDefault()
         } else {
@@ -582,17 +905,17 @@ struct CalendarTabView: View {
 
     /// Today opens on "now"; any other day on its first event, or 8am.
     private func scrollToDefault() {
-        guard viewportWidth > 0 else { return }
+        guard viewportLength > 0 else { return }
         if isToday {
-            offset = clamped(x(for: Date.now.timeIntervalSince(day)) - viewportWidth * Self.nowAnchor)
+            offset = clamped(position(for: Date.now.timeIntervalSince(day)) - viewportLength * Self.nowAnchor)
         } else {
             let first = placed.map(\.start).min() ?? 8 * 3600
-            offset = clamped(x(for: first) - Self.hourWidth / 2)
+            offset = clamped(position(for: first) - hourSize / 2)
         }
     }
 
     private func clamped(_ value: CGFloat) -> CGFloat {
-        min(max(value, 0), max(0, trackWidth - viewportWidth))
+        min(max(value, 0), max(0, trackLength - viewportLength))
     }
 
     private func scroll(by delta: CGFloat) {
@@ -602,6 +925,25 @@ struct CalendarTabView: View {
     /// The block under a point, and which part of it: the edges resize,
     /// the middle moves.
     private func hit(at point: CGPoint) -> (item: DayTimelineLayout.Placed, mode: DayTimelineLayout.DragMode)? {
+        isVertical ? verticalHit(at: point) : horizontalHit(at: point)
+    }
+
+    /// Top and bottom edges resize, the rest moves.
+    private func verticalHit(at point: CGPoint) -> (item: DayTimelineLayout.Placed, mode: DayTimelineLayout.DragMode)? {
+        let trackPoint = CGPoint(x: point.x, y: point.y + offset)
+        // Last drawn is on top.
+        guard let item = placed.last(where: {
+            verticalFrame(of: $0, start: $0.start, end: $0.end, width: viewportSize.width).contains(trackPoint)
+        }) else { return nil }
+
+        let frame = verticalFrame(of: item, start: item.start, end: item.end, width: viewportSize.width)
+        let grab = min(Self.edgeGrab, frame.height / 3)
+        if trackPoint.y - frame.minY <= grab { return (item, .resizeStart) }
+        if frame.maxY - trackPoint.y <= grab { return (item, .resizeEnd) }
+        return (item, .move)
+    }
+
+    private func horizontalHit(at point: CGPoint) -> (item: DayTimelineLayout.Placed, mode: DayTimelineLayout.DragMode)? {
         let trackX = point.x + offset
         let laneStride = laneHeight + Self.laneSpacing
         let y = point.y - Self.hourRowHeight
@@ -627,8 +969,9 @@ struct CalendarTabView: View {
     private func drag(to point: CGPoint) {
         guard var current = activeDrag else { return }
         let dx = point.x - current.startPoint.x
+        let dy = point.y - current.startPoint.y
         if !current.moved {
-            guard hypot(dx, point.y - current.startPoint.y) >= Self.dragThreshold else { return }
+            guard hypot(dx, dy) >= Self.dragThreshold else { return }
             current.moved = true
             activeDrag = current
         }
@@ -639,7 +982,7 @@ struct CalendarTabView: View {
             start: current.item.start,
             end: current.item.end,
             mode: current.mode,
-            delta: TimeInterval(dx / Self.hourWidth) * 3600,
+            delta: TimeInterval((isVertical ? dy : dx) / hourSize) * 3600,
             dayLength: dayLength
         )
         preview = Preview(id: current.item.id, start: span.start, end: span.end)
@@ -674,7 +1017,7 @@ struct CalendarTabView: View {
         guard let found = hit(at: point), found.item.event.type.isEvent else { return .arrow }
         switch found.mode {
         case .move: return .openHand
-        case .resizeStart, .resizeEnd: return .resizeLeftRight
+        case .resizeStart, .resizeEnd: return isVertical ? .resizeUpDown : .resizeLeftRight
         }
     }
 
@@ -703,25 +1046,103 @@ struct CalendarTabView: View {
     }
 
     @MainActor
+    private func toggleOrientation() {
+        preview = nil
+        activeDrag = nil
+        isVertical.toggle()
+        // The other layout measures itself as it appears, then scrolls to now.
+        viewportSize = .zero
+    }
+
+    /// Room the vertical day can grow into: the screen, less the notch's
+    /// own height and the task strip.
+    private var maxVerticalExtra: CGFloat {
+        let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
+        guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return Self.verticalExtraHeight }
+        return max(0, screenHeight - windowSize.height - strip)
+    }
+
+    @MainActor
+    private func beginResize() {
+        resizeStartExtra = verticalExtra
+        vm.isResizingNotch = true
+    }
+
+    @MainActor
+    private func resize(by distance: CGFloat) {
+        guard let start = resizeStartExtra else { return }
+        let extra = NotchResize.extra(start: start, dragged: distance, maximum: maxVerticalExtra)
+        guard extra != verticalExtra else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { verticalExtra = extra }
+        let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
+        vm.setExtraContentHeightImmediately(extra + strip)
+    }
+
+    @MainActor
+    private func endResize() {
+        resizeStartExtra = nil
+        vm.isResizingNotch = false
+        if verticalExtra > 0 {
+            rememberedVerticalExtra = Double(verticalExtra)
+        }
+    }
+
+    @MainActor
     private func toggleExpanded() {
+        guard !isVertical else {
+            toggleVerticalSize()
+            return
+        }
         withAnimation(vm.animationLibrary.collapseCurve) {
             isExpanded.toggle()
         }
         applyExtraHeight()
     }
 
+    /// Shrinks back to the normal size, remembering the current one, or grows
+    /// back to the size it was last dragged to.
+    @MainActor
+    private func toggleVerticalSize() {
+        let target: CGFloat
+        if verticalExtra > 0 {
+            rememberedVerticalExtra = Double(verticalExtra)
+            target = 0
+        } else {
+            let remembered = CGFloat(rememberedVerticalExtra)
+            target = min(remembered > 0 ? remembered : Self.verticalExtraHeight, maxVerticalExtra)
+        }
+        withAnimation(vm.animationLibrary.collapseCurve) {
+            verticalExtra = target
+        }
+        applyExtraHeight()
+    }
+
+    /// Back to the normal size, without touching the panel: whatever closed
+    /// the notch or switched tabs has already shrunk it.
+    @MainActor
+    private func resetSize() {
+        isExpanded = false
+        verticalExtra = 0
+        resizeStartExtra = nil
+        vm.isResizingNotch = false
+    }
+
     /// The notch grows for the task strip and, expanded, for extra rows —
     /// capped against the screen, like the clipboard's.
     @MainActor
     private func applyExtraHeight() {
+        vm.setExtraContentHeight(desiredExtraHeight)
+    }
+
+    private var desiredExtraHeight: CGFloat {
         let collapsed = Self.lanesHeight(count: Self.collapsedLaneCount, laneHeight: Self.collapsedLaneHeight)
-        let rows = isExpanded ? max(0, lanesHeight - collapsed) : 0
+        let rows = isVertical ? verticalExtra : (isExpanded ? max(0, lanesHeight - collapsed) : 0)
         let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
-        var total = rows + strip
-        if let screenHeight = getScreenFrame(vm.screenUUID)?.height {
-            total = min(total, max(0, screenHeight - windowSize.height))
-        }
-        vm.setExtraContentHeight(total)
+        let total = rows + strip
+        guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return total }
+        return min(total, max(0, screenHeight - windowSize.height))
     }
 }
 
@@ -733,20 +1154,23 @@ private struct TimelineEventBlock: View {
     var previewRange: (Date, Date)?
     /// Hidden on blocks too narrow to fit them beside the title.
     var showsGrips = true
+    /// In the vertical day: text from the top, grips on the top and bottom.
+    var isVertical = false
 
     var body: some View {
         let color = Color(nsColor: event.calendar.color)
-        HStack(spacing: 0) {
+        HStack(alignment: isVertical ? .top : .center, spacing: 0) {
             Rectangle()
                 .fill(color)
                 .frame(width: 3)
             content
                 .padding(.horizontal, 5)
+                .padding(.top, isVertical ? 1 : 0)
             Spacer(minLength: 0)
         }
         // Grips on both ends: drag these to change the start or end time.
-        .overlay(alignment: .leading) { if showsGrips { grip.padding(.leading, 5) } }
-        .overlay(alignment: .trailing) { if showsGrips { grip.padding(.trailing, 2) } }
+        .overlay(alignment: isVertical ? .top : .leading) { if showsGrips { grip.padding(isVertical ? .top : .leading, isVertical ? 2 : 5) } }
+        .overlay(alignment: isVertical ? .bottom : .trailing) { if showsGrips { grip.padding(isVertical ? .bottom : .trailing, 2) } }
         // Solid, so the hour lines behind don't show through the block.
         .background {
             ZStack {
@@ -764,7 +1188,7 @@ private struct TimelineEventBlock: View {
     private var grip: some View {
         Capsule()
             .fill(.white.opacity(0.35))
-            .frame(width: 2.5, height: 10)
+            .frame(width: isVertical ? 10 : 2.5, height: isVertical ? 2.5 : 10)
     }
 
     @ViewBuilder
@@ -815,6 +1239,7 @@ private struct TimelineEventBlock: View {
 /// vertical notches scroll sideways too, scaled up the same way the lyrics
 /// panel does it.
 private struct TimelineScrollCapture: NSViewRepresentable {
+    var isVertical: Bool
     var onScroll: (CGFloat) -> Void
     var onPress: (CGPoint) -> Void
     var onDrag: (CGPoint) -> Void
@@ -832,6 +1257,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     }
 
     private func update(_ view: CaptureView) {
+        view.isVertical = isVertical
         view.onScroll = onScroll
         view.onPress = onPress
         view.onDrag = onDrag
@@ -840,6 +1266,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     }
 
     final class CaptureView: NSView {
+        var isVertical = false
         var onScroll: ((CGFloat) -> Void)?
         var onPress: ((CGPoint) -> Void)?
         var onDrag: ((CGPoint) -> Void)?
@@ -866,34 +1293,41 @@ private struct TimelineScrollCapture: NSViewRepresentable {
         }
 
         private func cursor(for event: NSEvent) -> NSCursor {
-            isDragging ? dragCursor : (cursorAt?(point(of: event)) ?? .arrow)
+            if isDragging { return dragCursor }
+            let point = point(of: event)
+            // A missed exit leaves this view's claim in place; outside it,
+            // the header's buttons get the plain arrow.
+            guard bounds.contains(point) else { return .arrow }
+            return cursorAt?(point) ?? .arrow
         }
 
         override func mouseEntered(with event: NSEvent) {
-            CursorLock.cursorOverride = { [weak self] in self?.cursor(for: $0) ?? .arrow }
+            CursorLock.claim(self) { [weak self] in self?.cursor(for: $0) ?? .arrow }
             cursor(for: event).set()
         }
 
         override func mouseMoved(with event: NSEvent) {
+            // Claimed here too, not just on enter: the enter is missed when
+            // the view appears or resizes under a pointer that's already in it.
+            CursorLock.claim(self) { [weak self] in self?.cursor(for: $0) ?? .arrow }
             cursor(for: event).set()
         }
 
         override func mouseExited(with event: NSEvent) {
             guard !isDragging else { return }
-            CursorLock.cursorOverride = nil
-            NSCursor.arrow.set()
+            CursorLock.release(self)
         }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if window == nil { CursorLock.cursorOverride = nil }
+            if window == nil { CursorLock.release(self) }
         }
 
         override func scrollWheel(with event: NSEvent) {
             let scale: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 8
-            let delta = abs(event.scrollingDeltaX) >= abs(event.scrollingDeltaY)
-                ? event.scrollingDeltaX
-                : event.scrollingDeltaY
+            let delta = isVertical || abs(event.scrollingDeltaX) < abs(event.scrollingDeltaY)
+                ? event.scrollingDeltaY
+                : event.scrollingDeltaX
             onScroll?(delta * scale)
         }
 
@@ -914,6 +1348,101 @@ private struct TimelineScrollCapture: NSViewRepresentable {
             isDragging = false
             onRelease?(point(of: event), self)
             (cursorAt?(point(of: event)) ?? .arrow).set()
+        }
+    }
+}
+
+/// Takes a drag on the notch's bottom edge. It reads the pointer in screen
+/// coordinates: the window grows down under the pointer while it drags, so
+/// anything measured inside the window would move with it.
+private struct NotchResizeCapture: NSViewRepresentable {
+    var onBegin: () -> Void
+    var onDrag: (CGFloat) -> Void
+    var onEnd: () -> Void
+
+    func makeNSView(context: Context) -> HandleView {
+        let view = HandleView()
+        update(view)
+        return view
+    }
+
+    func updateNSView(_ nsView: HandleView, context: Context) {
+        update(nsView)
+    }
+
+    private func update(_ view: HandleView) {
+        view.onBegin = onBegin
+        view.onDrag = onDrag
+        view.onEnd = onEnd
+    }
+
+    final class HandleView: NSView {
+        var onBegin: (() -> Void)?
+        var onDrag: ((CGFloat) -> Void)?
+        var onEnd: (() -> Void)?
+        private var startY: CGFloat?
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(NSTrackingArea(
+                rect: .zero,
+                options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self
+            ))
+        }
+
+        /// Arrows while dragging or over the grabber; a missed exit doesn't
+        /// leave them stuck elsewhere.
+        private func cursor(for event: NSEvent) -> NSCursor {
+            startY != nil || bounds.contains(convert(event.locationInWindow, from: nil))
+                ? .resizeUpDown : .arrow
+        }
+
+        private func claimCursor() {
+            CursorLock.claim(self) { [weak self] in self?.cursor(for: $0) ?? .arrow }
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            claimCursor()
+            NSCursor.resizeUpDown.set()
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            claimCursor()
+            cursor(for: event).set()
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            guard startY == nil else { return }
+            CursorLock.release(self)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { CursorLock.release(self) }
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            startY = NSEvent.mouseLocation.y
+            claimCursor()
+            onBegin?()
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let startY else { return }
+            // Screen y grows upward; dragging down makes the notch taller.
+            onDrag?(startY - NSEvent.mouseLocation.y)
+            NSCursor.resizeUpDown.set()
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            startY = nil
+            onEnd?()
+            let inside = bounds.contains(convert(event.locationInWindow, from: nil))
+            if !inside { CursorLock.release(self) }
         }
     }
 }

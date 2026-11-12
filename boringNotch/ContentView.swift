@@ -802,6 +802,7 @@ struct ContentView: View {
                     // height) catches the false exit before acting on it.
                     if self.vm.notchState == .open
                         && !self.vm.isBatteryPopoverActive
+                        && !self.vm.isResizingNotch
                         && !SharingStateManager.shared.preventNotchClose
                         && !self.vm.isMouseHovering() {
                         self.vm.close()
@@ -952,7 +953,22 @@ struct GeneralDropTargetDelegate: DropDelegate {
 struct CursorLock: NSViewRepresentable {
     /// A view inside the notch that wants its own cursor (the calendar's
     /// resize arrows) sets this while the pointer is over it.
-    static var cursorOverride: ((NSEvent) -> NSCursor)?
+    static private(set) var cursorOverride: ((NSEvent) -> NSCursor)?
+    private static weak var overrideOwner: AnyObject?
+
+    /// Takes the cursor for `owner` until it releases it.
+    static func claim(_ owner: AnyObject, cursor: @escaping (NSEvent) -> NSCursor) {
+        overrideOwner = owner
+        cursorOverride = cursor
+    }
+
+    /// Hands the cursor back, unless another view has claimed it since:
+    /// moving between two such views can deliver the enter before the exit.
+    static func release(_ owner: AnyObject) {
+        guard overrideOwner === owner else { return }
+        overrideOwner = nil
+        cursorOverride = nil
+    }
 
     func makeNSView(context: Context) -> NSView {
         LockedCursorView()
