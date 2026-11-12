@@ -5,6 +5,7 @@
 //  Created by Harsh Vardhan  Goswami  on 08/09/24.
 //
 
+import AppKit
 import Defaults
 import EventKit
 import SwiftUI
@@ -35,9 +36,41 @@ class CalendarManager: ObservableObject {
     private var liveRefreshHolders = 0
     private var liveRefreshTask: Task<Void, Never>?
 
+    // MARK: Undo
+
+    /// A change made in the Calendar tab that can still be taken back.
+    private enum Change {
+        /// Moved or resized; `nowStart` is where the occurrence sits now.
+        case moved(id: String, nowStart: Date, oldStart: Date, oldEnd: Date)
+        /// Hidden from view, deleted from the calendar when the window closes.
+        case deleted(PendingDeletion)
+    }
+
+    /// What the newest change did, e.g. "Moved to 4:00 PM", shown with an
+    /// Undo button; nil when there's nothing to take back. Changes stay
+    /// undoable, newest first, for as long as the Calendar tab stays open.
+    @Published private(set) var undoMessage: String?
+    /// Shown briefly when an undo couldn't be carried out.
+    @Published private(set) var undoFailed = false
+    private var undoStack: [(change: Change, message: String)] = []
+    /// Deletes that aren't done yet; their events stay off the timeline.
+    private var hiddenDeletions: [PendingDeletion] = []
+    private var undoFailedReset: Task<Void, Never>?
+    private var terminateObserver: NSObjectProtocol?
+    private static let undoFailedDisplay: Duration = .seconds(3)
+
     private init() {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
+        // Deletes still waiting on the undo window happen before Chora quits
+        // (including an update relaunch), so a delete is never lost.
+        terminateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closeUndoWindow() }
+        }
         Task {
             await reloadCalendarAndReminderLists()
         }
@@ -45,6 +78,9 @@ class CalendarManager: ObservableObject {
 
     deinit {
         if let observer = eventStoreChangedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = terminateObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -91,20 +127,20 @@ class CalendarManager: ObservableObject {
             self.calendarAuthorizationStatus = granted ? .fullAccess : .denied
             if granted {
                 await reloadCalendarAndReminderLists()
-                events = await calendarService.events(
+                events = visible(await calendarService.events(
                     from: currentWeekStartDate,
                     to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-                    calendars: selectedCalendars.map { $0.id })
+                    calendars: selectedCalendars.map { $0.id }))
             }
         case .restricted, .denied:
             NSLog("Calendar access denied or restricted")
         case .fullAccess:
             NSLog("Full access")
             await reloadCalendarAndReminderLists()
-            events = await calendarService.events(
+            events = visible(await calendarService.events(
                 from: currentWeekStartDate,
                 to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-                calendars: selectedCalendars.map { $0.id })
+                calendars: selectedCalendars.map { $0.id }))
         case .writeOnly:
             NSLog("Write only")
         @unknown default:
@@ -239,14 +275,95 @@ class CalendarManager: ObservableObject {
     /// calendar actually holds.
     func moveEvent(_ event: EventModel, to start: Date, end: Date) async -> Bool {
         let moved = await calendarService.moveEvent(id: event.id, originalStart: event.start, to: start, end: end)
+        if moved {
+            remember(.moved(id: event.id, nowStart: start, oldStart: event.start, oldEnd: event.end),
+                     message: Self.describeMove(from: (event.start, event.end), to: (start, end)))
+        }
         await updateEvents()
         return moved
     }
 
+    /// Takes the event off the timeline at once, but only deletes it from
+    /// the calendar when the tab closes, so undo just cancels it.
+    /// Re-creating a deleted event instead would lose its guests, its link
+    /// to an invite, and its place in a repeating series.
     func deleteEvent(_ event: EventModel, scope: EventDeletionScope) async -> Bool {
-        let deleted = await calendarService.deleteEvent(id: event.id, originalStart: event.start, scope: scope)
+        // Checked now, so a read-only calendar still says so on the spot
+        // rather than the event quietly coming back eight seconds later.
+        guard calendarService.canEdit(id: event.id, originalStart: event.start) else { return false }
+        let pending = PendingDeletion(token: UUID(), id: event.id, originalStart: event.start, scope: scope)
+        hiddenDeletions.append(pending)
+        remember(.deleted(pending), message: "Deleted \(event.title)")
+        events = visible(events)
+        return true
+    }
+
+    /// Takes back the newest change.
+    func undoLastChange() async {
+        guard let change = undoStack.popLast()?.change else { return }
+        undoMessage = undoStack.last?.message
+        switch change {
+        case .moved(let id, let nowStart, let oldStart, let oldEnd):
+            let restored = await calendarService.moveEvent(id: id, originalStart: nowStart, to: oldStart, end: oldEnd)
+            if !restored { showUndoFailed() }
+        case .deleted(let pending):
+            hiddenDeletions.removeAll { $0.token == pending.token }
+        }
         await updateEvents()
-        return deleted
+    }
+
+    /// Ends the chance to undo: waiting deletes are carried out now and the
+    /// list clears. Runs when the Calendar tab closes (leaving the tab or
+    /// closing the notch) or Chora quits.
+    func closeUndoWindow() {
+        let pending = undoStack.compactMap { entry -> PendingDeletion? in
+            if case .deleted(let deletion) = entry.change { return deletion }
+            return nil
+        }
+        undoStack.removeAll()
+        undoMessage = nil
+        for deletion in pending where !calendarService.deleteEventNow(
+            id: deletion.id, originalStart: deletion.originalStart, scope: deletion.scope
+        ) {
+            NSLog("CalendarManager: a delete couldn't be carried out; the event stays")
+        }
+        hiddenDeletions.removeAll()
+        guard !pending.isEmpty else { return }
+        Task { await updateEvents() }
+    }
+
+    private func remember(_ change: Change, message: String) {
+        undoStack.append((change, message))
+        undoMessage = message
+    }
+
+    /// "Moved to 4:00 PM" when the length stayed the same (a drag), else
+    /// "Now 3:30 – 5:30 PM" (a resize).
+    static func describeMove(from old: (start: Date, end: Date), to new: (start: Date, end: Date)) -> String {
+        let time = Date.FormatStyle(date: .omitted, time: .shortened)
+        let sameLength = abs(new.end.timeIntervalSince(new.start) - old.end.timeIntervalSince(old.start)) < 1
+        if sameLength {
+            return "Moved to \(new.start.formatted(time))"
+        }
+        return "Now \(new.start.formatted(time)) – \(new.end.formatted(time))"
+    }
+
+    private func showUndoFailed() {
+        undoFailed = true
+        undoFailedReset?.cancel()
+        undoFailedReset = Task { [weak self] in
+            try? await Task.sleep(for: Self.undoFailedDisplay)
+            guard !Task.isCancelled else { return }
+            self?.undoFailed = false
+        }
+    }
+
+    /// Everything except occurrences a waiting delete is about to take.
+    private func visible(_ list: [EventModel]) -> [EventModel] {
+        guard !hiddenDeletions.isEmpty else { return list }
+        return list.filter { event in
+            !hiddenDeletions.contains { $0.covers(id: event.id, start: event.start) }
+        }
     }
 
     func updateCurrentDate(_ date: Date) async {
@@ -269,17 +386,18 @@ class CalendarManager: ObservableObject {
             to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
             calendars: calendarIDs
         )
-        if eventsResult != events {
-            events = eventsResult
+        let shown = visible(eventsResult)
+        if shown != events {
+            events = shown
         }
     }
     
     func setReminderCompleted(reminderID: String, completed: Bool) async {
         await calendarService.setReminderCompleted(reminderID: reminderID, completed: completed)
         // Refresh events after updating
-        events = await calendarService.events(
+        events = visible(await calendarService.events(
             from: currentWeekStartDate,
             to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-            calendars: selectedCalendars.map { $0.id })
+            calendars: selectedCalendars.map { $0.id }))
     }
 }

@@ -138,11 +138,20 @@ struct CalendarTabView: View {
                 tasksStrip
             }
             timeline
+                // Hung just under the timeline, in the strip you can see:
+                // the view's own bottom edge runs past the notch's visible
+                // edge, so a message pinned there is drawn out of sight.
+                .overlay(alignment: .bottomTrailing) {
+                    undoToast
+                        .alignmentGuide(.bottom) { $0[.top] - 4 }
+                        .padding(.trailing, 10)
+                }
         }
         .padding(.horizontal, 14)
         .padding(.top, 4)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2), value: calendarManager.undoMessage)
         .overlay { detailsOverlay }
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: selectedEvent?.id)
         .onChange(of: calendarManager.events) {
@@ -162,6 +171,8 @@ struct CalendarTabView: View {
         }
         .onDisappear {
             selectedEvent = nil
+            // Leaving the tab ends the undo window: waiting deletes happen now.
+            calendarManager.closeUndoWindow()
             calendarManager.endLiveRefresh()
             vm.isHoveringCalendar = false
             isExpanded = false
@@ -273,6 +284,11 @@ struct CalendarTabView: View {
 
             Spacer(minLength: 0)
 
+            if calendarManager.undoFailed {
+                Text("Couldn't undo that")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.orange)
+            }
             if hiddenCount > 0 {
                 Text("\(hiddenCount) more")
                     .font(.system(size: 10, weight: .medium))
@@ -317,6 +333,50 @@ struct CalendarTabView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.gray)
             }
+        }
+    }
+
+    /// Says what the last change saved, with Undo beside it, like Google
+    /// Calendar's. Undo takes changes back one at a time, newest first; the
+    /// x keeps everything as it is.
+    @ViewBuilder
+    private var undoToast: some View {
+        if let message = calendarManager.undoMessage {
+            HStack(spacing: 10) {
+                Text(message)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Button {
+                    Task { await calendarManager.undoLastChange() }
+                } label: {
+                    Text("Undo")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.effectiveAccent)
+                }
+                .buttonStyle(.plain)
+                Button {
+                    calendarManager.closeUndoWindow()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.gray)
+                        .frame(width: 14, height: 14)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss")
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 6)
+            .frame(height: 22)
+            .background(
+                Capsule()
+                    .fill(Color(white: 0.14))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
+            )
+            .transition(.opacity.combined(with: .offset(y: 4)))
         }
     }
 

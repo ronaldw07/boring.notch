@@ -25,6 +25,26 @@ enum EventDeletionScope {
     case allEvents
 }
 
+/// A delete that's been asked for but not carried out yet, so it can still
+/// be undone: the calendar only deletes once the undo window closes.
+struct PendingDeletion: Equatable {
+    let token: UUID
+    let id: String
+    let originalStart: Date
+    let scope: EventDeletionScope
+
+    /// Whether the occurrence with this identifier and start is one this
+    /// delete takes. Occurrences of a repeating event share an identifier.
+    func covers(id: String, start: Date) -> Bool {
+        guard id == self.id else { return false }
+        switch scope {
+        case .thisEvent: return abs(start.timeIntervalSince(originalStart)) < 1
+        case .thisAndFollowing: return start.timeIntervalSince(originalStart) > -1
+        case .allEvents: return true
+        }
+    }
+}
+
 class CalendarService: CalendarServiceProviding {
     private let store = EKEventStore()
     
@@ -86,7 +106,18 @@ class CalendarService: CalendarServiceProviding {
         }
     }
 
+    /// Whether the occurrence still exists and its calendar allows changes.
+    func canEdit(id: String, originalStart: Date) -> Bool {
+        editableOccurrence(id: id, originalStart: originalStart) != nil
+    }
+
     func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool {
+        deleteEventNow(id: id, originalStart: originalStart, scope: scope)
+    }
+
+    /// The delete itself. Synchronous so it can still run while the app is
+    /// quitting, when there's no time left to await anything.
+    func deleteEventNow(id: String, originalStart: Date, scope: EventDeletionScope) -> Bool {
         guard let occurrence = editableOccurrence(id: id, originalStart: originalStart) else { return false }
         do {
             switch scope {
