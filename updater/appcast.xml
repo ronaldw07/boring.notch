@@ -3,23 +3,19 @@
     <channel>
         <title>Chora</title>
         <item>
-            <title>0.8.1</title>
-            <pubDate>Wed, 11 Nov 2026 19:21:12 -0800</pubDate>
+            <title>0.8.2</title>
+            <pubDate>Wed, 11 Nov 2026 20:00:56 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1396</sparkle:version>
-            <sparkle:shortVersionString>0.8.1</sparkle:shortVersionString>
+            <sparkle:version>1399</sparkle:version>
+            <sparkle:shortVersionString>0.8.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Added</h3>
+            <description><![CDATA[<h3>Fixed</h3>
 <ul>
-<li><strong>Calendar: undo.</strong> After you move, resize or delete an event, a bar under the timeline says what changed, with an Undo button. Undo takes changes back one at a time, newest first, for as long as the Calendar tab is open. A deleted event comes back exactly as it was, guests and repeating events included.</li>
-</ul>
-<h3>Fixed</h3>
-<ul>
-<li><strong>A mouse wheel no longer closes the notch.</strong> Scrolling with a mouse over the open notch used to close it. Only a trackpad swipe up does now.</li>
+<li><strong>Resize arrows in the Calendar.</strong> Hovering the left or right end of an event now shows the two-arrow cursor, and it stays while you drag. The middle shows a hand, closed while dragging.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.1/Chora.dmg" length="9275355" type="application/octet-stream" sparkle:edSignature="3/KW3wQoJopqhx52W2Ce35Cd84WgVBI7+Oigxwd8VwcjZJh1vTDCP/W3lSa6hP4mx/mUyTUR89m8q7bp3DxOCg=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.2/Chora.dmg" length="9277291" type="application/octet-stream" sparkle:edSignature="dOEcZSw/jWF74es42+4vgI9yz88L9AjASvBQjBpo0x5DQgGBSbk29aMjlFdNEnSYlxT301+P0eQAaSB/JbHiBA=="/>
         </item>
     </channel>
 </rss>
