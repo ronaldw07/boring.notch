@@ -135,7 +135,7 @@ extension Defaults.Keys {
     static let sneakPeekStyles = Key<SneakPeekStyle>("sneakPeekStyles", default: .standard)
     static let waitInterval = Key<Double>("waitInterval", default: 3)
     static let showShuffleAndRepeat = Key<Bool>("showShuffleAndRepeat", default: false)
-    static let enableLyrics = Key<Bool>("enableLyrics", default: false)
+    static let enableLyrics = Key<Bool>("enableLyrics", default: true)
     static let pauseMusicOnMute = Key<Bool>("pauseMusicOnMute", default: false)
     static let musicControlSlots = Key<[MusicControlButton]>(
         "musicControlSlots",
