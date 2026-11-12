@@ -3,20 +3,23 @@
     <channel>
         <title>Chora</title>
         <item>
-            <title>0.8.0</title>
-            <pubDate>Wed, 11 Nov 2026 12:14:55 -0800</pubDate>
+            <title>0.8.1</title>
+            <pubDate>Wed, 11 Nov 2026 19:21:12 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1392</sparkle:version>
-            <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+            <sparkle:version>1396</sparkle:version>
+            <sparkle:shortVersionString>0.8.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Changed</h3>
+            <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>The app is now Chora.</strong> A new icon, and the Chora name everywhere you see it: Finder, the menu bar, Settings, the welcome screens and the permission prompts. Your settings, clipboard history and shelf carry over, and updates keep coming as before. An existing copy keeps its old file name until you rename it to Chora in Applications.</li>
-<li><strong>Updates install on their own.</strong> New versions now download in the background and install when you quit, without asking first. Turn this off with Automatically download updates in Settings.</li>
+<li><strong>Calendar: undo.</strong> After you move, resize or delete an event, a bar under the timeline says what changed, with an Undo button. Undo takes changes back one at a time, newest first, for as long as the Calendar tab is open. A deleted event comes back exactly as it was, guests and repeating events included.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li><strong>A mouse wheel no longer closes the notch.</strong> Scrolling with a mouse over the open notch used to close it. Only a trackpad swipe up does now.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.0/Chora.dmg" length="9252926" type="application/octet-stream" sparkle:edSignature="lCvra+MiOu9UU4BtupY73PS65qwxFwLIOjPkB76R5iVP0G6NXdZEF8XklSOch65RwUipJTIj63jeoM4Cru1hCg=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.1/Chora.dmg" length="9275355" type="application/octet-stream" sparkle:edSignature="3/KW3wQoJopqhx52W2Ce35Cd84WgVBI7+Oigxwd8VwcjZJh1vTDCP/W3lSa6hP4mx/mUyTUR89m8q7bp3DxOCg=="/>
         </item>
     </channel>
 </rss>
