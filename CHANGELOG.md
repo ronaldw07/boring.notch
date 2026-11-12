@@ -11,6 +11,24 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.3 — 2026-11-12
+
+### Added
+
+- **Calendar: the day top to bottom.** A new button next to expand switches the Calendar between the wide timeline and a day that runs down the notch, like a phone calendar. Events at the same time sit side by side. Drag an event's top or bottom edge to change when it starts or ends.
+- **Calendar: drag the notch taller.** In the top-to-bottom view, drag the grabber on the notch's bottom edge to make the day as tall as you like. The expand button then shrinks it back to normal, and grows it again to the size you last dragged to.
+
+### Changed
+
+- **Lyrics are on by default.**
+
+### Fixed
+
+- **Resize arrows now really show.** The notch couldn't change the pointer while another app was in front, so the arrows and hand over calendar events never appeared and the app behind decided the pointer instead.
+- **Calendar size after closing or switching tabs.** An expanded calendar no longer comes back cut off at the bottom.
+
+---
+
 ## 0.8.2 — 2026-11-11
 
 ### Fixed
