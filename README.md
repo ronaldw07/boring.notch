@@ -1,287 +1,111 @@
 <h1 align="center">
   <br>
-  <a href="http://theboring.name"><img src="https://framerusercontent.com/images/RFK4vs0kn8pRMuOO58JeyoemXA.png?scale-down-to=256" alt="Boring Notch" width="150"></a>
+  <a href="https://ronaldw07.github.io/chora-site/"><img src="https://ronaldw07.github.io/chora-site/logo.png" alt="Chora" width="120"></a>
   <br>
-  Boring Notch
+  Chora
   <br>
 </h1>
 
-
 <p align="center">
-  <a title="Crowdin" target="_blank" href="https://crowdin.com/project/boring-notch"><img src="https://badges.crowdin.net/boring-notch/localized.svg"></a>
-  <a href="https://discord.gg/c8JXA7qrPm">
-    <img src="https://dcbadge.limes.pink/api/server/https://discord.gg/c8JXA7qrPm?style=flat" alt="Discord Badge" />
-  </a>
-  <a href="https://www.ko-fi.com/alexander5015">
-    <img src="https://srv-cdn.himpfen.io/badges/kofi/kofi-flat.svg" alt="Ko-Fi" />
-  </a>
+  Sound, time and space, right in your MacBook's notch.<br>
+  A per-app volume mixer, a calendar you can edit, a timer and a music player that live at the top of your Mac.
 </p>
 
-> **This is [@ronaldw07](https://github.com/ronaldw07)'s fork** of
-> [TheBoredTeam/boring.notch](https://github.com/TheBoredTeam/boring.notch),
-> with its own ongoing feature work — see [What's New in This Fork](#-whats-new-in-this-fork)
-> below. All credit for the original app goes to TheBoredTeam; this fork
-> builds on top of it.
-
-<!--Welcome to **Boring.Notch**, the coolest way to make your MacBook's notch the star of the show! Forget about those boring status bars—our notch turns into a dynamic music control center, complete with a snazzy visualizer and all the music controls you need. It's like having a mini concert right at the top of your screen! -->
-
-Say hello to **Boring Notch**, the coolest way to make your MacBook’s notch the star of the show! Say goodbye to boring status bars: with Boring Notch, your notch transforms into a dynamic music control center, complete with a vibrant visualizer and all the essential music controls you need. But that’s just the start! Boring Notch also offers calendar integration, a handy file shelf with AirDrop support, a complete MacOS HUD replacement and more!
-
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/2d5f69c1-6e7b-4bc2-a6f1-bb9e27cf88a8" alt="Demo GIF" />
+  <a href="https://github.com/ronaldw07/boring.notch/releases/latest/download/Chora.dmg"><b>Download</b></a> ·
+  <a href="https://ronaldw07.github.io/chora-site/">Website</a> ·
+  <a href="https://ronaldw07.github.io/chora-site/changelog.html">What's new</a> ·
+  <a href="https://discord.gg/8GVjCq4fE5">Discord</a>
 </p>
 
-<!--https://github.com/user-attachments/assets/19b87973-4b3a-4853-b532-7e82d1d6b040-->
----
-
-## 🆕 What's New in This Fork
-
-Everything below this line is original to this fork, on top of upstream
-**2.7.3**. Full history in [CHANGELOG.md](./CHANGELOG.md).
-
-### 0.7.0 — 2026-10-15
-
-- **Added:** Volume panel beside the player, with a master slider and a
-  volume slider for each app.
-- **Added:** Drag to move and resize events in the Calendar tab, plus a
-  details box with delete.
-- **Added:** Google Tasks on the Calendar tab (sign in with your own
-  Google Cloud client).
-- **Changed:** Overlapping events stack top to bottom.
-
-### 0.6.1 — 2026-10-12
-
-- **Added:** Calendar refreshes every 3 seconds while the notch is open.
-- **Added:** Undo button after resetting the timer.
-- **Changed:** Tapping the selected timer length again starts it over.
-
-### 0.6.0 — 2026-10-06
-
-- **Added:** Calendar tab with a wide, scrollable timeline of the day.
-- **Added:** Expand button on the mirror for a much bigger preview.
-- **Added:** Option+1 to 5 switch tabs while the notch is open.
-
-### 0.5.2 — 2026-10-05
-
-- **Fixed:** Stopwatch time is never wiped by a timer length change.
-
-### 0.5.1 — 2026-10-05
-
-- **Fixed:** Changing a paused or finished timer's length starts it fresh
-  at the new length.
-
-### 0.5.0 — 2026-10-02
-
-- **Added:** Set timers down to the second by typing a custom length, and
-  recent lengths as one-tap chips.
-- **Added:** Music and a running timer share the closed notch — hover the
-  left half for music, the right half for the timer.
-- **Added:** Auto-updates from this fork's own release feed.
-- **Fixed:** The timer ring moves smoothly and matches the time exactly.
-- **Fixed:** Lyrics match the right song, the current line stays
-  centered, and scrolling underlines the line you're on.
-- **Fixed:** Spotify progress no longer runs ahead of the audio.
-
-### 0.4.0 — 2026-09-15
-
-- **Added:** Synced lyrics panel — scrub with two fingers or a mouse wheel,
-  click a line to seek, toggled next to the mirror.
-- **Added:** Pause music on mute, resume on unmute (Settings > Media).
-- **Added:** Calendar toggle button, on by default.
-- **Fixed:** Mirror/lyrics/calendar buttons now work from any tab, not just
-  Home.
-- **Fixed:** Calendar no longer polls in the background.
-
-### 0.3.4 — 2026-09-12
-
-- **Added:** Select All / Deselect All button on the shelf, top-right under
-  the battery indicator.
-
-### 0.3.3 — 2026-09-12
-
-- **Fixed:** Dragging several selected shelf items out together now carries
-  all of them, instead of collapsing to just the one card you pressed down on.
-
-### 0.3.2 — 2026-09-12
-
-- **Fixed:** Clipboard history now captures from app launch instead of only
-  after first opening the Clipboard tab — copies made before that were
-  silently missed.
-
-### 0.3.1 — 2026-09-12
-
-- **Fixed:** "Remember last tab" now actually remembers the last tab — it was
-  silently overridden any time the shelf had files on it.
-
-### 0.3.0 — 2026-09-12
-
-- **Added:** Shelf pinning — right-click an item to pin it; pinned items sort
-  to the left and stay there.
-- **Added:** Shelf stacks — dropping several files at once lands as one tile
-  with a count badge, expandable in place, instead of overflowing the row.
-- **Added:** Sticky multi-select — click multiple shelf items to highlight
-  and drag/share them together.
-- **Changed:** Removed the AirDrop / quick-share tile; sharing stays available
-  through right-click and drag-out.
-- **Fixed:** The shelf's horizontal scroll bar, which previously did nothing
-  on drag.
-
-### 0.2.0 — 2026-09-11
-
-- **Added:** Remove buttons and hover highlighting on shelf items.
-- **Added:** Wheel/trackpad scrolling over the shelf row.
-- **Changed:** Timer tab laid out as a row instead of a column, so it no
-  longer grows the notch to fit itself.
-- **Fixed:** Countdown timer no longer skips displaying 4:59.
-
-### 0.1.0 — 2026-09-10
-
-- **Fixed:** Closing the notch now animates instead of teleporting, and no
-  longer flickers or closes early mid-collapse.
-
----
-<!--## Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-- [Roadmap](#-roadmap)
-- [Building from Source](#building-from-source)
-- [Contributing](#-contributing)
-- [Join our Discord Server](#join-our-discord-server)
-- [Star History](#star-history)
-- [Buy us a coffee!](#buy-us-a-coffee)
-- [Acknowledgments](#-acknowledgments)-->
-
-## Installation
-
-**System Requirements:**
-- macOS **14 Sonoma** or later
-- Apple Silicon Mac (this fork's builds are not available for Intel)
+<p align="center">
+  <img src="https://ronaldw07.github.io/chora-site/shots/volume.png" width="49%" alt="A master volume slider and one for each app" />
+  <img src="https://ronaldw07.github.io/chora-site/shots/calendar.png" width="49%" alt="The day as a timeline you can drag" />
+</p>
 
 ---
 
-### Option 1: Download and Install Manually
+## Why Chora
 
-<a href="https://github.com/ronaldw07/boring.notch/releases/latest/download/Chora.dmg" target="_self"><img width="200" src="https://github.com/user-attachments/assets/e3179be1-8416-4b8a-b417-743e1ecc67d6" alt="Download for macOS" /></a>
+The notch is the most visible space on a MacBook, and most apps leave it
+empty. Meanwhile the small things I reach for all day are scattered: turning
+one app down means turning everything down, checking the next meeting means
+opening a calendar, and a timer is yet another app. Each interruption is
+small; together they break focus dozens of times a day.
 
-Once downloaded, open the `.dmg` and move **Boring Notch** to your `/Applications` folder.
+Chora turns the notch into a place to do those things in one glance and one
+action, without opening anything.
 
-> [!IMPORTANT]
-> We don't have an Apple Developer account (yet 👀), so macOS will warn you that Boring Notch is from an unidentified developer on first launch. This is expected behavior.
->
-> You'll need to bypass this before the app will open. You only need to do this once. Use one of the methods below.
+## What it does
 
----
+- **Volume, per app.** A master slider plus one for each app. Turn a call
+  down without touching your music.
+- **A calendar you can edit.** See the day as a wide timeline or top to
+  bottom like a phone calendar. Drag events to move them, pull an edge to
+  change the time, drag the notch taller to see more, and undo any change.
+  Google Tasks sit alongside.
+- **A timer that forgives mistakes.** Lengths down to the second, recent
+  lengths one tap away, and undo after an accidental reset.
+- **Music that shares the space.** Album art, a live visualizer and synced
+  lyrics. A running timer sits beside the music instead of replacing it.
+- **Quick to move around.** ⌥1 to ⌥5 switch tabs, a shelf holds files you
+  drop on the notch, and clipboard history brings back anything you copied.
 
-#### Recommended: Terminal (Always Works)
+## How it's built and shipped
 
-This is the quickest and easiest method. It only requires a single command and works consistently for all users. System Settings can sometimes fail and won't work for non-admin users.
+- **Small releases, often.** 19 versions since September 2026, each with a
+  plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
+  in-app update note and the website's "What's new".
+- **Updates install themselves.** Signed releases go out through an in-app
+  updater, so a fix reaches everyone without a reinstall.
+- **A public roadmap shaped by users.** The website's "Coming soon" list and
+  a feedback form feed what gets built next, and the Discord is where early
+  versions get tried first.
+- **Design rules over feature count.** Every tab has to fit a short, wide
+  space and do one thing fast; anything that needs a full window doesn't
+  belong in the notch.
 
-After moving Boring Notch to your Applications folder, run:
+## Install
+
+Requires an Apple silicon Mac on macOS 14 Sonoma or later.
+
+1. [Download Chora.dmg](https://github.com/ronaldw07/boring.notch/releases/latest/download/Chora.dmg),
+   open it and drag **Chora** to Applications.
+2. Chora isn't notarized by Apple yet, so the first launch needs one
+   Terminal command:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Chora.app
+   ```
+
+3. Open Chora and hover over the notch. Later updates install from inside
+   the app.
+
+## Build from source
+
+Needs macOS 15.6 or later and Xcode 26 or later.
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/boringNotch.app
+git clone https://github.com/ronaldw07/boring.notch.git
+cd boring.notch
+open boringNotch.xcodeproj
 ```
 
-Then open the app normally.
+Then press **Cmd + R**.
 
----
+## Feedback
 
-#### Alternative: System Settings
+Found a bug or want something? Use the
+[feedback form](https://docs.google.com/forms/d/e/1FAIpQLSfXjYQT4DGm7UDg0RwTEFJR07rIt27WWSCMr_0hVcjNfF8teA/viewform)
+or say hi in the [Discord](https://discord.gg/8GVjCq4fE5).
 
-> [!NOTE]
-> This method doesn't work for all users. If this doesn't work, use the Terminal method above.
+## Credits
 
-1. Try to open the app — you'll see a security warning.
-2. Click **OK** to dismiss it.
-3. Open **System Settings** > **Privacy & Security**.
-4. Scroll to the bottom and click **Open Anyway** next to the Boring Notch warning.
-5. Confirm if prompted.
-
----
-
-This fork has no Homebrew cask. The original project's cask installs the original app, not this fork.
-
-## Usage
-
-- Launch the app, and voilà—your notch is now the coolest part of your screen.
-- Hover over the notch to see it expand and reveal all its secrets.
-- Use the controls to manage your music like a rockstar.
-- Click the star in your menu bar to customize your notch to your heart's content.
-
-## 📋 Roadmap
-- [x] Playback live activity 🎧
-- [x] Calendar integration 📆
-- [x] Reminders integration ☑️
-- [x] Mirror 📷
-- [x] Charging indicator and current percentage 🔋
-- [x] Customizable gesture control 👆🏻
-- [x] Shelf functionality with AirDrop 📚
-- [x] Notch sizing customization, finetuning on different display sizes 🖥️
-- [x] System HUD replacements (volume, brightness, backlight) 🎚️💡⌨️
-- [ ] Bluetooth Live Activity (connect/disconnect for bluetooth devices) 
-- [ ] Weather integration ⛅️
-- [ ] Customizable Layout options 🛠️
-- [ ] Lock Screen Widgets 🔒
-- [ ] Extension system 🧩
-- [ ] Notifications (under consideration) 🔔
-<!-- - [ ] Clipboard history manager 📌 `Extension` -->
-<!-- - [ ] Download indicator of different browsers (Safari, Chromium browsers, Firefox) 🌍 `Extension`-->
-<!-- - [ ] Customizable function buttons 🎛️ -->
-<!-- - [ ] App switcher 🪄 -->
-
-<!-- ## 🧩 Extensions
-> [!NOTE]
-> We’re hard at work on some awesome extensions! Stay tuned, and we’ll keep you updated as soon as they’re released. -->
-
-## Building from Source
-
-### Prerequisites
-
-- **macOS 15.6 or later**
-- **Xcode 26 or later**
-
-### Installation
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/ronaldw07/boring.notch.git
-   cd boring.notch
-   ```
-
-2. **Open the Project in Xcode**:
-   ```bash
-   open boringNotch.xcodeproj
-   ```
-
-3. **Build and Run**:
-    - Click the "Run" button or press `Cmd + R`. Watch the magic unfold!
-
-## 🤝 Contributing
-
-We’re all about good vibes and awesome contributions! Read [CONTRIBUTING.md](CONTRIBUTING.md) to learn how you can join the fun!
-
-## Join our Discord Server
-
-<a href="https://discord.gg/GvYcYpAKTu" target="_blank"><img src="https://iili.io/28m3GHv.png" alt="Join The Boring Server!" style="height: 60px !important;width: 217px !important;" ></a>
-
-## Support us on Ko-fi!
-<!-- <a href="https://www.buymeacoffee.com/jfxh67wvfxq" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-red.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a> -->
-<a href="https://www.ko-fi.com/alexander5015" target="_blank"><img src="https://github.com/user-attachments/assets//a76175ef-7e93-475a-8b67-4922ba5964c2" alt="Support us on Ko-fi" style="height: 70px !important;width: 346px !important;" ></a>
-
-## 🎉 Acknowledgments
-
-We would like to express our gratitude to the authors and maintainers of the open-source projects that made this possible. 
-
-## Notable Projects
-- **[MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter)** –  An open-source project that allowed us to use the Now Playing source in macOS 15.4+
-- **[NotchDrop](https://github.com/Lakr233/NotchDrop)** – An open-source project that has been instrumental in developing the first version of the "Shelf" feature in Boring Notch.
-
-For a full list of licenses and attributions, please see the [Third-Party Licenses](./THIRD_PARTY_LICENSES.md) file.
-
-### Icon credits: [@maxtron95](https://github.com/maxtron95)
-### Website credits: [@himanshhhhuv](https://github.com/himanshhhhuv)
-
-- **SwiftUI**: For making us look like coding wizards.
-- **You**: For being awesome and checking out **boring.notch**!
-
-
+Chora is built on [boring.notch](https://github.com/TheBoredTeam/boring.notch)
+by TheBoredTeam, released under GPL-3.0, and is released under the same
+license. Thanks to them and to the open-source projects it relies on,
+including [MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter)
+for Now Playing on macOS 15.4+ and
+[NotchDrop](https://github.com/Lakr233/NotchDrop), which shaped the first
+version of the shelf. Full attributions are in
+[Third-Party Licenses](./THIRD_PARTY_LICENSES).
