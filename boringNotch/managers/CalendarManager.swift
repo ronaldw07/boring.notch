@@ -44,6 +44,8 @@ class CalendarManager: ObservableObject {
         case moved(id: String, nowStart: Date, oldStart: Date, oldEnd: Date)
         /// Hidden from view, deleted from the calendar when the window closes.
         case deleted(PendingDeletion)
+        /// Added by typing; undo deletes it again.
+        case created(id: String, start: Date)
     }
 
     /// What the newest change did, e.g. "Moved to 4:00 PM", shown with an
@@ -283,6 +285,17 @@ class CalendarManager: ObservableObject {
         return moved
     }
 
+    /// The calendar a typed event goes into, for the preview line.
+    var newEventCalendarTitle: String? { calendarService.newEventCalendarTitle }
+
+    /// Adds an event typed into the Calendar tab, with undo.
+    func createEvent(title: String, start: Date, end: Date) async -> Bool {
+        guard let id = await calendarService.createEvent(title: title, start: start, end: end) else { return false }
+        remember(.created(id: id, start: start), message: "Added \(title)")
+        await updateEvents()
+        return true
+    }
+
     /// Takes the event off the timeline at once, but only deletes it from
     /// the calendar when the tab closes, so undo just cancels it.
     /// Re-creating a deleted event instead would lose its guests, its link
@@ -308,6 +321,9 @@ class CalendarManager: ObservableObject {
             if !restored { showUndoFailed() }
         case .deleted(let pending):
             hiddenDeletions.removeAll { $0.token == pending.token }
+        case .created(let id, let start):
+            let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisEvent)
+            if !removed { showUndoFailed() }
         }
         await updateEvents()
     }

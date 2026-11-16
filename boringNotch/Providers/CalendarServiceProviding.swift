@@ -17,6 +17,8 @@ protocol CalendarServiceProviding {
     func pullRemoteChanges()
     func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool
     func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool
+    func createEvent(title: String, start: Date, end: Date) async -> String?
+    var newEventCalendarTitle: String? { get }
 }
 
 enum EventDeletionScope {
@@ -135,6 +137,29 @@ class CalendarService: CalendarServiceProviding {
         } catch {
             NSLog("CalendarService: couldn't delete event: \(error)")
             return false
+        }
+    }
+
+    /// Where new events go: the calendar set as default in Calendar's settings.
+    var newEventCalendarTitle: String? {
+        store.defaultCalendarForNewEvents?.title
+    }
+
+    /// Adds an event to the default calendar. Returns its identifier, or
+    /// nil if there's no default calendar or it won't take changes.
+    func createEvent(title: String, start: Date, end: Date) async -> String? {
+        guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else { return nil }
+        let event = EKEvent(eventStore: store)
+        event.title = title
+        event.startDate = start
+        event.endDate = end
+        event.calendar = calendar
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            return event.calendarItemIdentifier
+        } catch {
+            NSLog("CalendarService: couldn't create event: \(error)")
+            return nil
         }
     }
 

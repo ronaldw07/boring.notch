@@ -180,6 +180,7 @@ struct CalendarTabView: View {
     /// The size the expand button goes back to: the last one dragged to.
     @AppStorage("calendarVerticalExtraHeight") private var rememberedVerticalExtra: Double = 0
     @State private var selectedEvent: EventModel?
+    @State private var isQuickAdding = false
     @State private var activeDrag: ActiveDrag?
     @State private var preview: Preview?
 
@@ -259,6 +260,8 @@ struct CalendarTabView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2), value: calendarManager.undoMessage)
         .overlay { detailsOverlay }
+        .overlay { quickAddOverlay }
+        .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isQuickAdding)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: selectedEvent?.id)
         .onChange(of: calendarManager.events) {
             // Gone from the calendar (deleted here or elsewhere): close its box.
@@ -278,6 +281,7 @@ struct CalendarTabView: View {
         }
         .onDisappear {
             selectedEvent = nil
+            isQuickAdding = false
             // Leaving the tab ends the undo window: waiting deletes happen now.
             calendarManager.closeUndoWindow()
             calendarManager.endLiveRefresh()
@@ -454,6 +458,7 @@ struct CalendarTabView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.gray)
             }
+            quickAddButton
             orientationButton
             expandButton
         }
@@ -543,6 +548,45 @@ struct CalendarTabView: View {
 
     /// Shows the layout it switches to: stacked rows for the day running
     /// down, side-by-side columns for the strip running across.
+    /// Opens a box for typing an event in plain words.
+    private var quickAddButton: some View {
+        Button {
+            selectedEvent = nil
+            isQuickAdding = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+        }
+        .buttonStyle(.plain)
+        .help("Add an event")
+    }
+
+    @ViewBuilder
+    private var quickAddOverlay: some View {
+        if isQuickAdding {
+            ZStack {
+                Color.black.opacity(0.55)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isQuickAdding = false }
+                QuickAddCard(
+                    day: day,
+                    calendarTitle: calendarManager.newEventCalendarTitle,
+                    onAdd: { result in
+                        let added = await calendarManager.createEvent(title: result.title, start: result.start, end: result.end)
+                        if added { show(Calendar.current.startOfDay(for: result.start)) }
+                        return added
+                    },
+                    onClose: { isQuickAdding = false }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .transition(.opacity)
+        }
+    }
+
     private var orientationButton: some View {
         Button(action: toggleOrientation) {
             Image(systemName: isVertical ? "rectangle.split.3x1" : "rectangle.split.1x2")
