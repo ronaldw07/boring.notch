@@ -252,7 +252,8 @@ class BoringViewModel: NSObject, ObservableObject {
         coordinator.currentView = .home
     }
 
-    func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {
+    /// `margin` widens the area on the sides and bottom.
+    func isMouseHovering(position: NSPoint = NSEvent.mouseLocation, margin: CGFloat = 0) -> Bool {
         let screenFrame = getScreenFrame(screenUUID)
         if let frame = screenFrame {
             // While open, a tab can grow the panel past the base notch size
@@ -271,24 +272,24 @@ class BoringViewModel: NSObject, ObservableObject {
             // partway through.
             let extra = max(extraContentHeight, windowExtraHeight)
             let effectiveHeight = notchState == .open ? notchSize.height + extra : notchSize.height
-            let baseY = frame.maxY - effectiveHeight
-            let baseX = frame.midX - notchSize.width / 2
+            let baseY = frame.maxY - effectiveHeight - margin
+            let baseX = frame.midX - notchSize.width / 2 - margin
 
-            return position.y >= baseY && position.x >= baseX && position.x <= baseX + notchSize.width
+            return position.y >= baseY && position.x >= baseX && position.x <= baseX + notchSize.width + margin * 2
         }
 
         return false
     }
 
-    func open() {
     /// Reopening within this long returns to the tab you left; after it,
     /// the notch is back on Home (or Shelf).
     private static let rememberTabFor: TimeInterval = 60
     private var tabResetWork: DispatchWorkItem?
 
-        withAnimation(animationLibrary.panelAnimation) {
+    func open() {
         tabResetWork?.cancel()
         tabResetWork = nil
+        withAnimation(animationLibrary.panelAnimation) {
             self.notchSize = openNotchSize
             self.notchState = .open
         }
@@ -390,10 +391,10 @@ class BoringViewModel: NSObject, ObservableObject {
                 self.coordinator.currentView = .home
             }
         }
-    }
         tabResetWork?.cancel()
         tabResetWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.rememberTabFor, execute: work)
+    }
 
     func closeHello() {
         Task { @MainActor in

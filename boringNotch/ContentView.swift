@@ -800,13 +800,35 @@ struct ContentView: View {
                     // shrink, not a real hover-out. Re-checking against the
                     // actual cursor position (which accounts for that extra
                     // height) catches the false exit before acting on it.
-                    if self.vm.notchState == .open
-                        && !self.vm.isBatteryPopoverActive
-                        && !self.vm.isResizingNotch
-                        && !SharingStateManager.shared.preventNotchClose
-                        && !self.vm.isMouseHovering() {
-                        self.vm.close()
-                    }
+                    self.closeWhenCursorLeaves()
+                }
+            }
+        }
+    }
+
+    /// How long the cursor can stay just outside the open notch before it closes.
+    private static let closeDelay: TimeInterval = 2
+    /// Farther out than this, it closes right away.
+    private static let closeFarDistance: CGFloat = 70
+
+    /// Closes once the cursor has been outside the notch for `closeDelay`,
+    /// or as soon as it is past `closeFarDistance`. Coming back cancels the
+    /// task (hover), so the wait starts over on the next exit. While a
+    /// popover or share picker is up it keeps waiting.
+    private func closeWhenCursorLeaves(startedAt start: Date = .now) {
+        hoverTask = Task {
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard vm.notchState == .open else { return }
+                let isBlocked = vm.isBatteryPopoverActive || vm.isResizingNotch
+                    || SharingStateManager.shared.preventNotchClose
+                let isOutsideLongEnough = Date.now.timeIntervalSince(start) >= Self.closeDelay
+                    || !vm.isMouseHovering(margin: Self.closeFarDistance)
+                if !isBlocked && !vm.isMouseHovering() && isOutsideLongEnough {
+                    vm.close()
+                } else {
+                    closeWhenCursorLeaves(startedAt: start)
                 }
             }
         }
