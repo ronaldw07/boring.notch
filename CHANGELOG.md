@@ -13,6 +13,11 @@ Newest first. Times are local (PDT).
 
 ## 0.8.4 — 2026-11-16
 
+### Added
+
+- **Add an event by typing it.** Click + in the Calendar tab and type something like "Lunch with Sam 1pm" or "Gym tomorrow 6-7pm". A line underneath shows exactly what will be added before you press Return, and Undo takes it back.
+- **More in event details.** A Join button for Google Meet, Zoom, Teams and Webex calls, who's coming and whether they've said yes, links in the notes you can click, and how long until it starts.
+
 ### Changed
 
 - **The notch is more forgiving when your cursor slips out.** It now waits 2 seconds before closing, and stays open if you come back. Move well away from it and it closes right away.
