@@ -9,6 +9,10 @@ Newest first. Times are local (PDT).
 
 ## Unreleased
 
+---
+
+## 0.8.4 — 2026-11-16
+
 ### Added
 
 - **Add an event by typing it.** Click + in the Calendar tab and type something like "Lunch with Sam 1pm" or "Gym tomorrow 6-7pm". A line underneath shows exactly what will be added before you press Return, and Undo takes it back.
