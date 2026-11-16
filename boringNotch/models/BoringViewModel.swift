@@ -281,7 +281,14 @@ class BoringViewModel: NSObject, ObservableObject {
     }
 
     func open() {
+    /// Reopening within this long returns to the tab you left; after it,
+    /// the notch is back on Home (or Shelf).
+    private static let rememberTabFor: TimeInterval = 60
+    private var tabResetWork: DispatchWorkItem?
+
         withAnimation(animationLibrary.panelAnimation) {
+        tabResetWork?.cancel()
+        tabResetWork = nil
             self.notchSize = openNotchSize
             self.notchState = .open
         }
@@ -365,22 +372,28 @@ class BoringViewModel: NSObject, ObservableObject {
         self.coordinator.sneakPeek.show = false
         self.edgeAutoOpenActive = false
 
-        // "Remember last tab" has to be checked before anything else here.
-        // currentView is already sitting on whatever tab the user had open —
-        // remembering it means doing nothing — but the shelf-default branch
-        // below used to run unconditionally first, so having any file on the
-        // shelf (which is most of the time, once you've used it once) forced
-        // a jump to Shelf on every close regardless of this setting.
+        // "Remember last tab" keeps whatever tab was open, so nothing to do.
         if coordinator.openLastTabByDefault {
             return
         }
 
-        if !ShelfStateViewModel.shared.isEmpty && Defaults[.openShelfByDefault] {
-            coordinator.currentView = .shelf
-        } else {
-            coordinator.currentView = .home
+        // Otherwise a quick reopen (the cursor slipping out mid-edit) comes
+        // back to the same tab, and only a longer close goes back to Home.
+        // Skipped if something else picked a tab in the meantime, such as a
+        // finished timer parking the notch on Timer.
+        let closedOn = coordinator.currentView
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.notchState == .closed, self.coordinator.currentView == closedOn else { return }
+            if !ShelfStateViewModel.shared.isEmpty && Defaults[.openShelfByDefault] {
+                self.coordinator.currentView = .shelf
+            } else {
+                self.coordinator.currentView = .home
+            }
         }
     }
+        tabResetWork?.cancel()
+        tabResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.rememberTabFor, execute: work)
 
     func closeHello() {
         Task { @MainActor in
