@@ -11,6 +11,17 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.4 — 2026-11-16
+
+### Changed
+
+- **The notch is more forgiving when your cursor slips out.** It now waits 2 seconds before closing, and stays open if you come back. Move well away from it and it closes right away.
+- **Reopens where you left off.** Open the notch again within a minute and it's still on the tab you were using. After that it goes back to Home.
+- **Smoother corners.** The notch's bottom corners curve more gently.
+- **Easier to resize the calendar.** The grabber at the bottom of the top-to-bottom day is bigger and sits right at the edge.
+
+---
+
 ## 0.8.3 — 2026-11-12
 
 ### Added
