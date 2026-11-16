@@ -64,10 +64,18 @@ struct EventDetailsCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                Text(timeText)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(timeText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
+                    if let relative = relativeText {
+                        Text(relative)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(relative == "Now" ? .green : color)
+                            .lineLimit(1)
+                    }
+                }
             }
             Spacer(minLength: 0)
             Button(action: onClose) {
@@ -89,10 +97,20 @@ struct EventDetailsCard: View {
                 line("mappin.and.ellipse", location)
             }
             if !event.participants.isEmpty {
-                line("person.2", "\(event.participants.count) \(event.participants.count == 1 ? "guest" : "guests")")
+                guests
             }
-            if let notes = event.notes, !notes.isEmpty {
-                line("text.alignleft", notes, lines: 2)
+            if let notes = event.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(width: 12)
+                    Text(Self.linkified(notes))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .tint(color)
+                        .lineLimit(3)
+                }
             }
         }
     }
@@ -108,6 +126,78 @@ struct EventDetailsCard: View {
                 .foregroundStyle(.white.opacity(0.8))
                 .lineLimit(lines)
         }
+    }
+
+    /// Names with a dot for each answer: green yes, yellow maybe, red no,
+    /// grey not yet. The first few, then a count.
+    private var guests: some View {
+        let shown = event.participants.prefix(Self.guestsShown)
+        let more = event.participants.count - shown.count
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "person.2")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 12)
+            HStack(spacing: 8) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, guest in
+                    HStack(spacing: 3) {
+                        Circle().fill(Self.color(for: guest.status)).frame(width: 5, height: 5)
+                        Text(guest.isCurrentUser ? "You" : Self.shortName(guest.name))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .lineLimit(1)
+                    }
+                }
+                if more > 0 {
+                    Text("+\(more)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+        }
+    }
+
+    private static let guestsShown = 4
+
+    private static func color(for status: AttendanceStatus) -> Color {
+        switch status {
+        case .accepted: .green
+        case .maybe: .yellow
+        case .declined: .red
+        case .pending, .unknown: .white.opacity(0.35)
+        }
+    }
+
+    /// "Sam Lee" → "Sam"; an email address → the part before the @.
+    private static func shortName(_ name: String) -> String {
+        let base = name.split(separator: "@").first.map(String.init) ?? name
+        return base.split(separator: " ").first.map(String.init) ?? base
+    }
+
+    /// Notes with any web addresses made clickable.
+    private static func linkified(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return result }
+        for match in detector.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let url = match.url,
+                  let range = Range(match.range, in: text),
+                  let lower = AttributedString.Index(range.lowerBound, within: result),
+                  let upper = AttributedString.Index(range.upperBound, within: result) else { continue }
+            result[lower..<upper].link = url
+            result[lower..<upper].underlineStyle = .single
+        }
+        return result
+    }
+
+    /// "In 12 min", "Now", or nil when it's further off or already over.
+    private var relativeText: String? {
+        let now = Date.now
+        if event.start <= now && now < event.end { return "Now" }
+        let minutes = Int(event.start.timeIntervalSince(now) / 60)
+        guard event.start > now, minutes < 60 * 3 else { return nil }
+        if minutes < 1 { return "In 1 min" }
+        if minutes < 60 { return "In \(minutes) min" }
+        return "In \(minutes / 60) hr" + (minutes % 60 == 0 ? "" : " \(minutes % 60) min")
     }
 
     private var timeText: String {
@@ -126,6 +216,11 @@ struct EventDetailsCard: View {
 
     private var actions: some View {
         VStack(alignment: .trailing, spacing: 6) {
+            if let join = event.meetingURL {
+                pill("Join", symbol: "video.fill", tint: .green.opacity(0.85), text: .white) {
+                    NSWorkspace.shared.open(join)
+                }
+            }
             pill("Open in Calendar", symbol: "arrow.up.forward.app", tint: .white.opacity(0.12), text: .white, action: onOpen)
             if event.type.isEvent {
                 pill(isConfirmingDelete ? "Tap again to delete" : "Delete",
@@ -204,7 +299,7 @@ struct EventDetailsCard: View {
 }
 
 /// Liquid Glass on macOS 26 and later; a dark frosted panel before.
-private struct CardBackground: ViewModifier {
+struct CardBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content.glassEffect(.regular, in: .rect(cornerRadius: 14))
@@ -214,5 +309,26 @@ private struct CardBackground: ViewModifier {
                 .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.1), lineWidth: 1))
         }
+    }
+}
+
+
+extension EventModel {
+    /// Hosts whose links join a video call.
+    private static let meetingHosts = ["meet.google.com", "zoom.us", "teams.microsoft.com", "teams.live.com", "webex.com", "facetime.apple.com"]
+
+    /// The first video-call link in the event's link, location or notes.
+    var meetingURL: URL? {
+        let candidates = [url?.absoluteString, location, notes].compactMap { $0 }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        for text in candidates {
+            for match in detector.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                guard let found = match.url, let host = found.host?.lowercased() else { continue }
+                if Self.meetingHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) }) {
+                    return found
+                }
+            }
+        }
+        return nil
     }
 }
