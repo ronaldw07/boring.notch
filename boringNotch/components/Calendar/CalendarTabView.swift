@@ -223,6 +223,8 @@ struct CalendarTabView: View {
     /// How much taller the expand button makes the vertical view before
     /// any size has been dragged to.
     private static let verticalExtraHeight: CGFloat = 140
+    /// Moves the resize handle down toward the notch's bottom edge.
+    private static let handleDrop: CGFloat = 18
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -247,6 +249,7 @@ struct CalendarTabView: View {
                     if isVertical && selectedEvent == nil {
                         resizeHandle
                             .alignmentGuide(.bottom) { $0[.bottom] - 10 }
+                            .offset(y: Self.handleDrop)
                     }
                 }
         }
@@ -562,17 +565,17 @@ struct CalendarTabView: View {
     /// or shorter.
     private var resizeHandle: some View {
         Capsule()
-            .fill(.white.opacity(resizeStartExtra == nil ? 0.22 : 0.5))
-            .frame(width: 36, height: 3)
+            .fill(.white.opacity(resizeStartExtra == nil ? 0.3 : 0.55))
+            .frame(width: 56, height: 6)
             .frame(maxWidth: .infinity)
-            .frame(height: 14)
+            .frame(height: 20)
             .overlay {
                 NotchResizeCapture(
                     onBegin: beginResize,
                     onDrag: resize(by:),
                     onEnd: endResize
                 )
-                .frame(width: 160)
+                .frame(width: 240)
             }
     }
 
