@@ -20,6 +20,12 @@ struct NotchShape: Shape {
         self.bottomCornerRadius = bottomCornerRadius ?? 14
     }
 
+    /// How far before the radius each bottom corner starts to curve.
+    private static let bottomCornerSpan: CGFloat = 1.3
+    /// How far the curve's handles reach toward the corner, as a share of
+    /// that span. Lower than a plain quarter curve (0.67), so it's softer.
+    private static let bottomCornerPull: CGFloat = 0.6
+
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get {
             .init(
@@ -54,40 +60,26 @@ struct NotchShape: Shape {
             )
         )
 
-        path.addLine(
-            to: CGPoint(
-                x: rect.minX + topCornerRadius,
-                y: rect.maxY - bottomCornerRadius
-            )
+        // Bottom corners start curving a little earlier than the radius and
+        // ease in gently, so they read as one smooth curve rather than a
+        // pinched quarter turn.
+        let span = min(bottomCornerRadius * Self.bottomCornerSpan, rect.height - topCornerRadius)
+        let pull = span * Self.bottomCornerPull
+        let left = rect.minX + topCornerRadius
+        let right = rect.maxX - topCornerRadius
+
+        path.addLine(to: CGPoint(x: left, y: rect.maxY - span))
+        path.addCurve(
+            to: CGPoint(x: left + span, y: rect.maxY),
+            control1: CGPoint(x: left, y: rect.maxY - span + pull),
+            control2: CGPoint(x: left + span - pull, y: rect.maxY)
         )
 
-        path.addQuadCurve(
-            to: CGPoint(
-                x: rect.minX + topCornerRadius + bottomCornerRadius,
-                y: rect.maxY
-            ),
-            control: CGPoint(
-                x: rect.minX + topCornerRadius,
-                y: rect.maxY
-            )
-        )
-
-        path.addLine(
-            to: CGPoint(
-                x: rect.maxX - topCornerRadius - bottomCornerRadius,
-                y: rect.maxY
-            )
-        )
-
-        path.addQuadCurve(
-            to: CGPoint(
-                x: rect.maxX - topCornerRadius,
-                y: rect.maxY - bottomCornerRadius
-            ),
-            control: CGPoint(
-                x: rect.maxX - topCornerRadius,
-                y: rect.maxY
-            )
+        path.addLine(to: CGPoint(x: right - span, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: right, y: rect.maxY - span),
+            control1: CGPoint(x: right - span + pull, y: rect.maxY),
+            control2: CGPoint(x: right, y: rect.maxY - span + pull)
         )
 
         path.addLine(
