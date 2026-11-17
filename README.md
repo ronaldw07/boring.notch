@@ -74,15 +74,11 @@ Requires an Apple silicon Mac on macOS 14 Sonoma or later.
 
 1. [Download Chora.dmg](https://github.com/ronaldw07/boring.notch/releases/latest/download/Chora.dmg),
    open it and drag **Chora** to Applications.
-2. Chora isn't notarized by Apple yet, so the first launch needs one
-   Terminal command:
-
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/Chora.app
-   ```
-
-3. Open Chora and hover over the notch. Later updates install from inside
-   the app.
+2. Open Chora. Chora isn't notarized by Apple yet, so macOS stops it the
+   first time: click **Done**.
+3. Open **System Settings → Privacy & Security**, scroll down and click
+   **Open Anyway**. Then hover over the notch. Later updates install on
+   their own.
 
 ## Build from source
 
