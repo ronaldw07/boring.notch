@@ -166,6 +166,26 @@ struct CalendarTabView: View {
     @ObservedObject private var googleTasks = GoogleTasksManager.shared
 
     @State private var day: Date = Calendar.current.startOfDay(for: .now)
+    /// The day an arrow or Today asked for, while its events load. The
+    /// timeline keeps showing the old day until then, so it never draws one
+    /// day's events on another.
+    @State private var requestedDay: Date?
+    /// 1 stepping forward, -1 back: the new day drifts in from that side.
+    @State private var dayDirection: CGFloat = 1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// A quick crossfade between days, the new one drifting in a few points
+    /// from the side you stepped toward. Fade only with reduced motion.
+    private static let daySwitch = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
+    private static let dayDrift: CGFloat = 10
+
+    private var dayTransition: AnyTransition {
+        let drift = reduceMotion ? 0 : Self.dayDrift * dayDirection
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(x: drift)),
+            removal: .opacity
+        )
+    }
     @AppStorage("calendarVerticalView") private var isVertical = false
     /// How far the timeline is scrolled along its time axis.
     @State private var offset: CGFloat = 0
@@ -742,8 +762,12 @@ struct CalendarTabView: View {
     private var timeline: some View {
         GeometryReader { geometry in
             TimelineView(.everyMinute) { context in
-                track(now: context.date)
-                    .offset(x: -offset)
+                ZStack(alignment: .topLeading) {
+                    track(now: context.date)
+                        .offset(x: -offset)
+                        .id(day)
+                        .transition(dayTransition)
+                }
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
                     .clipped()
                     .mask(edgeFade)
@@ -860,12 +884,16 @@ struct CalendarTabView: View {
     private var verticalTimeline: some View {
         GeometryReader { geometry in
             TimelineView(.everyMinute) { context in
-                verticalTrack(now: context.date, width: geometry.size.width)
-                    // Clipping hides the hours scrolled above the view but
-                    // doesn't stop them taking clicks, and they sit over the
-                    // header's buttons. Clicks here go to the capture view.
-                    .allowsHitTesting(false)
-                    .offset(y: -offset)
+                ZStack(alignment: .topLeading) {
+                    verticalTrack(now: context.date, width: geometry.size.width)
+                        // Clipping hides the hours scrolled above the view but
+                        // doesn't stop them taking clicks, and they sit over the
+                        // header's buttons. Clicks here go to the capture view.
+                        .allowsHitTesting(false)
+                        .offset(y: -offset)
+                        .id(day)
+                        .transition(dayTransition)
+                }
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
                     .clipped()
                     .mask(verticalEdgeFade)
@@ -1006,16 +1034,22 @@ struct CalendarTabView: View {
 
     // MARK: - Actions
 
+    /// From the day already asked for, so quick clicks each count.
     private func step(by days: Int) {
-        guard let target = Calendar.current.date(byAdding: .day, value: days, to: day) else { return }
+        guard let target = Calendar.current.date(byAdding: .day, value: days, to: requestedDay ?? day) else { return }
         show(target)
     }
 
+    /// Loads the day's events first, then swaps day and events in together.
     private func show(_ newDay: Date) {
-        day = newDay
-        scrollToDefault()
+        dayDirection = newDay < (requestedDay ?? day) ? -1 : 1
+        requestedDay = newDay
         Task {
             await calendarManager.updateCurrentDate(newDay)
+            // A later click has taken over; its own load will finish.
+            guard requestedDay == newDay else { return }
+            requestedDay = nil
+            withAnimation(Self.daySwitch) { day = newDay }
             scrollToDefault()
         }
     }
