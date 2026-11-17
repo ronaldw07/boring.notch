@@ -43,7 +43,9 @@ enum DayTimelineLayout {
         var id: String { event.id }
     }
 
-    enum DragMode { case move, resizeStart, resizeEnd }
+    /// Only the end can be dragged, like Google Calendar: the start
+    /// changes by moving the event or typing it in Edit.
+    enum DragMode { case move, resizeEnd }
 
     /// Dragging snaps to this.
     static let snap: TimeInterval = 15 * 60
@@ -60,9 +62,6 @@ enum DayTimelineLayout {
             let steps = (delta / snap).rounded() * snap
             let newStart = min(max(start + steps, 0), max(0, dayLength - length))
             return (newStart, newStart + length)
-        case .resizeStart:
-            let newStart = min(max(onGrid(start + delta), 0), end - snap)
-            return (newStart, end)
         case .resizeEnd:
             let newEnd = min(max(onGrid(end + delta), start + snap), dayLength)
             return (start, newEnd)
@@ -1055,7 +1054,7 @@ struct CalendarTabView: View {
         isVertical ? verticalHit(at: point) : horizontalHit(at: point)
     }
 
-    /// Top and bottom edges resize, the rest moves.
+    /// The bottom edge resizes, the rest moves.
     private func verticalHit(at point: CGPoint) -> (item: DayTimelineLayout.Placed, mode: DayTimelineLayout.DragMode)? {
         let trackPoint = CGPoint(x: point.x, y: point.y + offset)
         // Last drawn is on top.
@@ -1065,11 +1064,11 @@ struct CalendarTabView: View {
 
         let frame = verticalFrame(of: item, start: item.start, end: item.end, width: viewportSize.width)
         let grab = min(Self.edgeGrab, frame.height / 3)
-        if trackPoint.y - frame.minY <= grab { return (item, .resizeStart) }
         if frame.maxY - trackPoint.y <= grab { return (item, .resizeEnd) }
         return (item, .move)
     }
 
+    /// The right edge resizes, the rest moves.
     private func horizontalHit(at point: CGPoint) -> (item: DayTimelineLayout.Placed, mode: DayTimelineLayout.DragMode)? {
         let trackX = point.x + offset
         let laneStride = laneHeight + Self.laneSpacing
@@ -1083,7 +1082,6 @@ struct CalendarTabView: View {
         }) else { return nil }
 
         let grab = min(Self.edgeGrab, (x(for: item.end) - x(for: item.start)) / 3)
-        if trackX - x(for: item.start) <= grab { return (item, .resizeStart) }
         if x(for: item.end) - trackX <= grab { return (item, .resizeEnd) }
         return (item, .move)
     }
@@ -1281,7 +1279,7 @@ struct CalendarTabView: View {
         guard let found = hit(at: point), found.item.event.type.isEvent else { return .arrow }
         switch found.mode {
         case .move: return .openHand
-        case .resizeStart, .resizeEnd: return isVertical ? .resizeUpDown : .resizeLeftRight
+        case .resizeEnd: return isVertical ? .resizeUpDown : .resizeLeftRight
         }
     }
 
@@ -1439,7 +1437,7 @@ private struct TimelineEventBlock: View {
     var previewRange: (Date, Date)?
     /// Hidden on blocks too narrow to fit them beside the title.
     var showsGrips = true
-    /// In the vertical day: text from the top, grips on the top and bottom.
+    /// In the vertical day: text from the top, the grip on the bottom.
     var isVertical = false
 
     var body: some View {
@@ -1453,8 +1451,7 @@ private struct TimelineEventBlock: View {
                 .padding(.top, isVertical ? 1 : 0)
             Spacer(minLength: 0)
         }
-        // Grips on both ends: drag these to change the start or end time.
-        .overlay(alignment: isVertical ? .top : .leading) { if showsGrips { grip.padding(isVertical ? .top : .leading, isVertical ? 2 : 5) } }
+        // A grip on the end only: drag it to change the end time.
         .overlay(alignment: isVertical ? .bottom : .trailing) { if showsGrips { grip.padding(isVertical ? .bottom : .trailing, 2) } }
         // Solid, so the hour lines behind don't show through the block.
         .background {
