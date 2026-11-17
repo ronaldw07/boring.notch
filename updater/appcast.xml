@@ -3,29 +3,23 @@
     <channel>
         <title>Chora</title>
         <item>
-            <title>0.8.5</title>
-            <pubDate>Mon, 16 Nov 2026 16:17:48 -0800</pubDate>
+            <title>0.8.6</title>
+            <pubDate>Mon, 16 Nov 2026 16:32:01 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1423</sparkle:version>
-            <sparkle:shortVersionString>0.8.5</sparkle:shortVersionString>
+            <sparkle:version>1428</sparkle:version>
+            <sparkle:shortVersionString>0.8.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>Drag to create an event.</strong> Press on an empty part of the calendar and drag to draw a new event, like Google Calendar. A box opens for the title, calendar, location and description. A single click makes a one-hour event.</li>
-<li><strong>Backspace to delete.</strong> With an event&#x27;s details open, press Backspace, then Return to confirm.</li>
+<li><strong>Edit an event.</strong> Click an event, then Edit, to change its title, location or description. Return saves, Escape cancels, and Undo puts it back.</li>
 </ul>
 <h3>Changed</h3>
 <ul>
-<li><strong>The calendar remembers its size.</strong> Expanded or normal, it stays that way when you switch tabs or close and reopen the notch.</li>
-<li><strong>A better grabber.</strong> The pill for resizing the top-to-bottom day sits at the bottom edge, shows the up-down arrows only when you&#x27;re on it, and works at any height.</li>
-</ul>
-<h3>Fixed</h3>
-<ul>
-<li><strong>Event notes from Google Calendar show as text</strong>, not HTML code.</li>
+<li><strong>Updates install right away.</strong> Chora checks every hour and now installs a new version as soon as it has downloaded, relaunching in a few seconds, instead of waiting for you to quit.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.5/Chora.dmg" length="9454601" type="application/octet-stream" sparkle:edSignature="8Isl8mORNSXdemXxKjPJMT0qFeDAb11k+xRV0g+yK1oapk9edodXjWmaKrzTz99f72SzLiZvaj7sh9DCLRKvBg=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.6/Chora.dmg" length="9479354" type="application/octet-stream" sparkle:edSignature="fXunNGKBkSHjGT+2XV8Da2pPm1fvBxqIjg5XULXnvWVl3ekFsIfVgL7ssdd4Y1ydK5Ya5P8wX2TxHR5mXzFZAg=="/>
         </item>
     </channel>
 </rss>
