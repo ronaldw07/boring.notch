@@ -14,15 +14,21 @@ struct EventDetailsCard: View {
     let onClose: () -> Void
     let onOpen: () -> Void
     /// True if the calendar took the deletion.
-    let onDelete: (EventDeletionScope) async -> Bool
-    /// New title, location and notes; true if the calendar took them.
-    let onEdit: (String, String, String) async -> Bool
+    let onDelete: (EventScope) async -> Bool
+    /// The edited event and which occurrences it applies to; true if the
+    /// calendar took it.
+    let onEdit: (EventEdit, EventScope) async -> Bool
 
     @State private var isEditing = false
     @State private var editTitle = ""
     @State private var editLocation = ""
     @State private var editNotes = ""
+    @State private var editStart = Date()
+    @State private var editEnd = Date()
+    @State private var editAllDay = false
     @State private var editFailed = false
+    /// A repeating event asks which occurrences a save is for.
+    @State private var isChoosingSaveScope = false
     @FocusState private var isTitleFocused: Bool
 
     @State private var isChoosingScope = false
@@ -96,7 +102,11 @@ struct EventDetailsCard: View {
     private func handleKey(_ key: NSEvent) -> NSEvent? {
         if isEditing {
             guard key.keyCode == Key.escape else { return key }
-            endEditing()
+            if isChoosingSaveScope {
+                isChoosingSaveScope = false
+            } else {
+                endEditing()
+            }
             return nil
         }
         switch key.keyCode {
@@ -128,8 +138,8 @@ struct EventDetailsCard: View {
 
     // MARK: - Editing
 
-    /// Title, location and notes as fields, with Cancel and Save. Notes from
-    /// Google Calendar are edited as plain text.
+    /// Title, time, location and notes as fields, with Cancel and Save.
+    /// Notes from Google Calendar are edited as plain text.
     private var editor: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
@@ -143,6 +153,7 @@ struct EventDetailsCard: View {
                     .focused($isTitleFocused)
                     .onSubmit(saveEdits)
             }
+            timeRow
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     editField("mappin.and.ellipse", "Add location", text: $editLocation)
@@ -154,11 +165,88 @@ struct EventDetailsCard: View {
                     }
                 }
                 Spacer(minLength: 0)
-                HStack(spacing: 6) {
-                    pill("Cancel", tint: .white.opacity(0.12), text: .white, action: endEditing)
-                    pill("Save", symbol: "return", tint: .accentColor, text: .white, action: saveEdits)
+                if !isChoosingSaveScope {
+                    HStack(spacing: 6) {
+                        pill("Cancel", tint: .white.opacity(0.12), text: .white, action: endEditing)
+                        pill("Save", symbol: "return", tint: .accentColor, text: .white, action: saveEdits)
+                    }
                 }
             }
+            if isChoosingSaveScope {
+                saveScopeChooser
+            }
+        }
+    }
+
+    /// The day, then start and end times (hidden for an all-day event), then
+    /// the All day switch. Each field takes typing or the arrow keys.
+    private var timeRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 12)
+            DatePicker("Day", selection: timeBinding(\.start) { $0.movingDay(to: $1) }, displayedComponents: .date)
+            if !editAllDay {
+                DatePicker("Start", selection: timeBinding(\.start) { $0.movingStart(to: $1) }, displayedComponents: .hourAndMinute)
+                Text("–")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+                DatePicker("End", selection: timeBinding(\.end) { $0.movingEnd(to: $1) }, displayedComponents: .hourAndMinute)
+            }
+            Spacer(minLength: 0)
+            pill("All day", symbol: editAllDay ? "checkmark.square.fill" : "square",
+                 tint: .white.opacity(editAllDay ? 0.22 : 0.12), text: .white) {
+                applyTimes(editTimes.settingAllDay(!editAllDay))
+            }
+        }
+        .datePickerStyle(.field)
+        .labelsHidden()
+        .controlSize(.small)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var editTimes: EventEdit {
+        EventEdit(title: editTitle, location: nil, notes: nil, start: editStart, end: editEnd, isAllDay: editAllDay)
+    }
+
+    private func applyTimes(_ times: EventEdit) {
+        editStart = times.start
+        editEnd = times.end
+        editAllDay = times.isAllDay
+    }
+
+    /// Shows one of the times, and on a change runs it through the rule for
+    /// that field (keep the length, keep the end after the start...).
+    private func timeBinding(_ field: KeyPath<EventEdit, Date>, _ rule: @escaping (EventEdit, Date) -> EventEdit) -> Binding<Date> {
+        Binding(
+            get: { editTimes[keyPath: field] },
+            set: { applyTimes(rule(editTimes, $0)) }
+        )
+    }
+
+    /// Which occurrences of a repeating event the save is for. "This event"
+    /// is highlighted: it's what Enter picks.
+    private var saveScopeChooser: some View {
+        HStack(spacing: 6) {
+            Text("Save for")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+            saveScopeButton("This event", .thisEvent)
+            saveScopeButton("This & following", .thisAndFollowing)
+            saveScopeButton("All events", .allEvents)
+            Spacer(minLength: 0)
+            pill("Cancel", tint: .white.opacity(0.12), text: .white) {
+                isChoosingSaveScope = false
+            }
+        }
+    }
+
+    private func saveScopeButton(_ title: String, _ scope: EventScope) -> some View {
+        let isEnterChoice = scope == .thisEvent
+        return pill(title, symbol: isEnterChoice ? "return" : nil,
+                    tint: isEnterChoice ? .accentColor : .white.opacity(0.12), text: .white) {
+            save(scope)
         }
     }
 
@@ -180,7 +268,11 @@ struct EventDetailsCard: View {
         editTitle = event.title
         editLocation = event.location ?? ""
         editNotes = event.notes.map(NotesText.plain) ?? ""
+        editStart = event.start
+        editEnd = event.end
+        editAllDay = event.isAllDay
         editFailed = false
+        isChoosingSaveScope = false
         isConfirmingDelete = false
         isEditing = true
         // Typing keeps the notch open, like the other text boxes in it.
@@ -190,22 +282,47 @@ struct EventDetailsCard: View {
 
     private func endEditing() {
         isEditing = false
+        isChoosingSaveScope = false
         NotchKeyboardFocus.holdsNotchOpen = false
     }
 
-    private func saveEdits() {
+    /// The fields as an edit. Text left as it was keeps the calendar's own
+    /// copy, so saving only a new time doesn't flatten formatted notes.
+    private var draft: EventEdit {
         let title = editTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let unchanged = title == event.title
-            && editLocation == (event.location ?? "")
-            && editNotes == (event.notes.map(NotesText.plain) ?? "")
-        guard !unchanged else {
+        let location = editLocation == (event.location ?? "")
+            ? event.location : editLocation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = editNotes == (event.notes.map(NotesText.plain) ?? "")
+            ? event.notes : editNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return EventEdit(
+            title: title.isEmpty ? event.title : title,
+            location: location?.isEmpty == true ? nil : location,
+            notes: notes?.isEmpty == true ? nil : notes,
+            start: editStart, end: editEnd, isAllDay: editAllDay
+        )
+    }
+
+    /// Return or Save. A repeating event first asks which occurrences; a
+    /// second Return then picks "This event".
+    private func saveEdits() {
+        guard draft != EventEdit(event) else {
             endEditing()
             return
         }
+        if event.hasRecurrenceRules && !isChoosingSaveScope {
+            isChoosingSaveScope = true
+            return
+        }
+        save(.thisEvent)
+    }
+
+    private func save(_ scope: EventScope) {
+        let edit = draft
         Task {
-            if await onEdit(title.isEmpty ? event.title : title, editLocation, editNotes) {
+            if await onEdit(edit, scope) {
                 endEditing()
             } else {
+                isChoosingSaveScope = false
                 editFailed = true
             }
         }
@@ -425,7 +542,7 @@ struct EventDetailsCard: View {
     }
 
     /// "This event" is highlighted: it's what Enter deletes.
-    private func scopeButton(_ title: String, _ scope: EventDeletionScope) -> some View {
+    private func scopeButton(_ title: String, _ scope: EventScope) -> some View {
         let isEnterChoice = scope == .thisEvent
         return pill(title, symbol: isEnterChoice ? "return" : nil,
                     tint: .red.opacity(isEnterChoice ? 0.85 : 0.22), text: isEnterChoice ? .white : .red) {
@@ -469,7 +586,7 @@ struct EventDetailsCard: View {
         Task { await delete(.thisEvent) }
     }
 
-    private func delete(_ scope: EventDeletionScope) async {
+    private func delete(_ scope: EventScope) async {
         if await onDelete(scope) { return }
         isChoosingScope = false
         isConfirmingDelete = false

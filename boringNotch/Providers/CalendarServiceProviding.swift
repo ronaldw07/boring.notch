@@ -15,19 +15,27 @@ protocol CalendarServiceProviding {
     func calendars() async -> [CalendarModel]
     func events(from start: Date, to end: Date, calendars: [String]) async -> [EventModel]
     func pullRemoteChanges()
-    func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool
-    func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool
-    func updateEvent(id: String, originalStart: Date, title: String, location: String?, notes: String?) async -> Bool
+    func deleteEvent(id: String, originalStart: Date, scope: EventScope) async -> Bool
+    func updateEvent(id: String, originalStart: Date, edit: EventEdit, scope: EventScope) async -> ChangedOccurrence?
     func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?) async -> String?
     var newEventCalendarTitle: String? { get }
     var newEventCalendarID: String? { get }
     var editableEventCalendarIDs: Set<String> { get }
 }
 
-enum EventDeletionScope {
+/// Which occurrences of a repeating event a delete or change applies to.
+enum EventScope {
     case thisEvent
     case thisAndFollowing
     case allEvents
+}
+
+/// The occurrence a change was made from, as the calendar knows it now. A
+/// "this and following" change splits the series, which gives it a new
+/// identifier.
+struct ChangedOccurrence: Equatable {
+    let id: String
+    let start: Date
 }
 
 /// A delete that's been asked for but not carried out yet, so it can still
@@ -36,7 +44,7 @@ struct PendingDeletion: Equatable {
     let token: UUID
     let id: String
     let originalStart: Date
-    let scope: EventDeletionScope
+    let scope: EventScope
 
     /// Whether the occurrence with this identifier and start is one this
     /// delete takes. Occurrences of a repeating event share an identifier.
@@ -116,13 +124,13 @@ class CalendarService: CalendarServiceProviding {
         editableOccurrence(id: id, originalStart: originalStart) != nil
     }
 
-    func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool {
+    func deleteEvent(id: String, originalStart: Date, scope: EventScope) async -> Bool {
         deleteEventNow(id: id, originalStart: originalStart, scope: scope)
     }
 
     /// The delete itself. Synchronous so it can still run while the app is
     /// quitting, when there's no time left to await anything.
-    func deleteEventNow(id: String, originalStart: Date, scope: EventDeletionScope) -> Bool {
+    func deleteEventNow(id: String, originalStart: Date, scope: EventScope) -> Bool {
         guard let occurrence = editableOccurrence(id: id, originalStart: originalStart) else { return false }
         do {
             switch scope {
@@ -179,34 +187,48 @@ class CalendarService: CalendarServiceProviding {
         }
     }
 
-    /// Changes one occurrence's title, location and notes.
-    func updateEvent(id: String, originalStart: Date, title: String, location: String?, notes: String?) async -> Bool {
-        guard let event = editableOccurrence(id: id, originalStart: originalStart) else { return false }
-        event.title = title
-        event.location = location
-        event.notes = notes
+    /// Saves an edit to one occurrence, or with a wider scope to the rest
+    /// of its series. For the whole series the first occurrence moves by as
+    /// much as this one did, so every occurrence keeps its own day.
+    func updateEvent(id: String, originalStart: Date, edit: EventEdit, scope: EventScope) async -> ChangedOccurrence? {
+        guard let occurrence = editableOccurrence(id: id, originalStart: originalStart) else { return nil }
+        let target: EKEvent
+        let span: EKSpan
+        switch scope {
+        case .thisEvent:
+            target = occurrence
+            span = .thisEvent
+        case .thisAndFollowing:
+            target = occurrence
+            span = .futureEvents
+        case .allEvents:
+            target = store.calendarItem(withIdentifier: id) as? EKEvent ?? occurrence
+            span = .futureEvents
+        }
+        let newStart = target.startDate.addingTimeInterval(edit.start.timeIntervalSince(originalStart))
+        // Only what differs from this occurrence is carried over, so moving
+        // a whole series doesn't copy one occurrence's own title onto it.
+        if edit.title != occurrence.title { target.title = edit.title }
+        if edit.location != occurrence.location { target.location = edit.location }
+        if edit.notes != occurrence.notes { target.notes = edit.notes }
+        target.isAllDay = edit.isAllDay
+        target.startDate = newStart
+        target.endDate = Self.storedEnd(start: newStart, length: edit.end.timeIntervalSince(edit.start), isAllDay: edit.isAllDay)
         do {
-            try store.save(event, span: .thisEvent, commit: true)
-            return true
+            try store.save(target, span: span, commit: true)
+            return ChangedOccurrence(id: target.calendarItemIdentifier, start: edit.start)
         } catch {
             NSLog("CalendarService: couldn't edit event: \(error)")
-            return false
+            return nil
         }
     }
 
-    /// Reschedules one occurrence.
-    func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool {
-        guard let event = editableOccurrence(id: id, originalStart: originalStart) else { return false }
-
-        event.startDate = start
-        event.endDate = end
-        do {
-            try store.save(event, span: .thisEvent, commit: true)
-            return true
-        } catch {
-            NSLog("CalendarService: couldn't move event: \(error)")
-            return false
-        }
+    /// An all-day event's end is the last moment of its last day: a
+    /// midnight end would make Calendar count the next day too.
+    private static func storedEnd(start: Date, length: TimeInterval, isAllDay: Bool) -> Date {
+        let end = start.addingTimeInterval(length)
+        guard isAllDay, Calendar.current.startOfDay(for: end) == end, end > start else { return end }
+        return end.addingTimeInterval(-1)
     }
 
     func events(from start: Date, to end: Date, calendars ids: [String]) async -> [EventModel] {

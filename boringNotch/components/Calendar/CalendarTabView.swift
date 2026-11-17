@@ -189,6 +189,9 @@ struct CalendarTabView: View {
     @State private var isHoveringHandle = false
     @State private var activeDrag: ActiveDrag?
     @State private var preview: Preview?
+    /// A repeating event that's been dragged, waiting on which occurrences
+    /// to move; its block stays where it was dropped meanwhile.
+    @State private var pendingMove: PendingMove?
 
     /// A press on a block, from mouse-down until release.
     private struct ActiveDrag {
@@ -219,6 +222,12 @@ struct CalendarTabView: View {
         let id: String
         var start: TimeInterval
         var end: TimeInterval
+    }
+
+    private struct PendingMove: Equatable {
+        let event: EventModel
+        let start: Date
+        let end: Date
     }
 
     private static let edgeGrab: CGFloat = 12
@@ -275,7 +284,7 @@ struct CalendarTabView: View {
         // near the notch's edge and its mouse area is always inside the
         // panel, at any height.
         .overlay(alignment: .bottom) {
-            if isVertical && selectedEvent == nil && !isQuickAdding && newRange == nil {
+            if isVertical && selectedEvent == nil && !isQuickAdding && newRange == nil && pendingMove == nil {
                 resizeHandle
             }
         }
@@ -283,6 +292,8 @@ struct CalendarTabView: View {
         .overlay { detailsOverlay }
         .overlay { quickAddOverlay }
         .overlay { newEventOverlay }
+        .overlay { moveScopeOverlay }
+        .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: pendingMove)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: newRange)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isQuickAdding)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: selectedEvent?.id)
@@ -290,7 +301,10 @@ struct CalendarTabView: View {
             // Gone from the calendar (deleted here or elsewhere): close its
             // box. Changed (edited here or elsewhere): show the new version.
             guard let selected = selectedEvent else { return }
+            // A new time from the box itself moves the start, so fall back
+            // to the identifier alone.
             let fresh = calendarManager.events.first { $0.id == selected.id && $0.start == selected.start }
+                ?? calendarManager.events.first { $0.id == selected.id }
             if fresh != selected { selectedEvent = fresh }
         }
         .onAppear {
@@ -743,7 +757,7 @@ struct CalendarTabView: View {
         .overlay {
             // Off while a details box is up, so clicks reach it and its
             // backdrop instead of the timeline underneath.
-            if selectedEvent == nil {
+            if selectedEvent == nil && pendingMove == nil {
                 TimelineScrollCapture(
                     isVertical: false,
                     onScroll: scroll(by:),
@@ -861,7 +875,7 @@ struct CalendarTabView: View {
         }
         .frame(height: verticalTimelineHeight)
         .overlay {
-            if selectedEvent == nil {
+            if selectedEvent == nil && pendingMove == nil {
                 TimelineScrollCapture(
                     isVertical: true,
                     onScroll: scroll(by:),
@@ -1126,14 +1140,46 @@ struct CalendarTabView: View {
             return
         }
 
-        let event = finished.item.event
-        let newStart = day.addingTimeInterval(moved.start)
-        let newEnd = day.addingTimeInterval(moved.end)
+        let move = PendingMove(event: finished.item.event,
+                               start: day.addingTimeInterval(moved.start),
+                               end: day.addingTimeInterval(moved.end))
+        if move.event.hasRecurrenceRules {
+            pendingMove = move
+        } else {
+            commit(move, scope: .thisEvent)
+        }
+    }
+
+    private func commit(_ move: PendingMove, scope: EventScope) {
+        pendingMove = nil
         Task {
             // Held until the calendar has reloaded, so the block doesn't
             // jump back to its old spot for a moment first.
-            _ = await calendarManager.moveEvent(event, to: newStart, end: newEnd)
+            _ = await calendarManager.moveEvent(move.event, to: move.start, end: move.end, scope: scope)
             preview = nil
+        }
+    }
+
+    private func cancelPendingMove() {
+        pendingMove = nil
+        preview = nil
+    }
+
+    @ViewBuilder
+    private var moveScopeOverlay: some View {
+        if let move = pendingMove {
+            ZStack {
+                Color.black.opacity(0.35)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: cancelPendingMove)
+                MoveScopeCard(
+                    title: move.event.title,
+                    onChoose: { commit(move, scope: $0) },
+                    onCancel: cancelPendingMove
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .transition(.opacity)
         }
     }
 
@@ -1251,8 +1297,8 @@ struct CalendarTabView: View {
                     onClose: { selectedEvent = nil },
                     onOpen: { open(event) },
                     onDelete: { scope in await calendarManager.deleteEvent(event, scope: scope) },
-                    onEdit: { title, location, notes in
-                        await calendarManager.updateEvent(event, title: title, location: location, notes: notes)
+                    onEdit: { edit, scope in
+                        await calendarManager.updateEvent(event, edit: edit, scope: scope)
                     }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))

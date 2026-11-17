@@ -41,6 +41,7 @@
 		115C12EC2ED3D003009754CA /* OpenNotchHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115C12EB2ED3D003009754CA /* OpenNotchHUD.swift */; };
 		1160F8D82DD98230006FBB94 /* NotchShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160F8D72DD98230006FBB94 /* NotchShape.swift */; };
 		1163988D2DF5CAB40052E6AF /* EventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163988C2DF5CAB40052E6AF /* EventModel.swift */; };
+		AA11EventEditBLD000000 /* EventEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EventEditFILE00000 /* EventEdit.swift */; };
 		1163988F2DF5CC870052E6AF /* CalendarModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163988E2DF5CC870052E6AF /* CalendarModel.swift */; };
 		116398962DF5D6C00052E6AF /* CalendarServiceProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116398952DF5D6C00052E6AF /* CalendarServiceProviding.swift */; };
 		117AB5172E30E09C00558921 /* MediaRemoteAdapter.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 112B0EBA2E30DD5000562D6C /* MediaRemoteAdapter.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -99,6 +100,7 @@
 		14C08BB92C8DE4B1000F8AA0 /* BoringCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C08BB82C8DE4B1000F8AA0 /* BoringCalendar.swift */; };
 		AA07CalendarTabBLD0000 /* CalendarTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA07CalendarTabFILE000 /* CalendarTabView.swift */; };
 		AA11EventCardBLD000000 /* EventDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EventCardFILE00000 /* EventDetailsCard.swift */; };
+		AA11MoveScopeBLD000000 /* MoveScopeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11MoveScopeFILE00000 /* MoveScopeCard.swift */; };
 		AA11NewEventCBLD00000 /* NewEventCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11NewEventCFILE0000 /* NewEventCard.swift */; };
 		AA11QuickAddCBLD00000 /* QuickAddCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11QuickAddCFILE0000 /* QuickAddCard.swift */; };
 		AA11QuickAddPBLD00000 /* QuickAddParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11QuickAddPFILE0000 /* QuickAddParser.swift */; };
@@ -226,6 +228,7 @@
 		115C12EB2ED3D003009754CA /* OpenNotchHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenNotchHUD.swift; sourceTree = "<group>"; };
 		1160F8D72DD98230006FBB94 /* NotchShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchShape.swift; sourceTree = "<group>"; };
 		1163988C2DF5CAB40052E6AF /* EventModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventModel.swift; sourceTree = "<group>"; };
+		AA11EventEditFILE00000 /* EventEdit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventEdit.swift; sourceTree = "<group>"; };
 		1163988E2DF5CC870052E6AF /* CalendarModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModel.swift; sourceTree = "<group>"; };
 		116398952DF5D6C00052E6AF /* CalendarServiceProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarServiceProviding.swift; sourceTree = "<group>"; };
 		118D1FD02E98FF5F00A2FF63 /* SharingStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingStateManager.swift; sourceTree = "<group>"; };
@@ -282,6 +285,7 @@
 		14C08BB82C8DE4B1000F8AA0 /* BoringCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoringCalendar.swift; sourceTree = "<group>"; };
 		AA07CalendarTabFILE000 /* CalendarTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarTabView.swift; sourceTree = "<group>"; };
 		AA11EventCardFILE00000 /* EventDetailsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailsCard.swift; sourceTree = "<group>"; };
+		AA11MoveScopeFILE00000 /* MoveScopeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveScopeCard.swift; sourceTree = "<group>"; };
 		AA11NewEventCFILE0000 /* NewEventCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewEventCard.swift; sourceTree = "<group>"; };
 		AA11QuickAddCFILE0000 /* QuickAddCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCard.swift; sourceTree = "<group>"; };
 		AA11QuickAddPFILE0000 /* QuickAddParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddParser.swift; sourceTree = "<group>"; };
@@ -600,6 +604,7 @@
 				14C08BB82C8DE4B1000F8AA0 /* BoringCalendar.swift */,
 				AA07CalendarTabFILE000 /* CalendarTabView.swift */,
 				AA11EventCardFILE00000 /* EventDetailsCard.swift */,
+				AA11MoveScopeFILE00000 /* MoveScopeCard.swift */,
 				AA11NewEventCFILE0000 /* NewEventCard.swift */,
 				AA11QuickAddCFILE0000 /* QuickAddCard.swift */,
 				AA11QuickAddPFILE0000 /* QuickAddParser.swift */,
@@ -699,6 +704,7 @@
 				118D1FD02E98FF5F00A2FF63 /* SharingStateManager.swift */,
 				1163988E2DF5CC870052E6AF /* CalendarModel.swift */,
 				1163988C2DF5CAB40052E6AF /* EventModel.swift */,
+				AA11EventEditFILE00000 /* EventEdit.swift */,
 				B19016232CC15B4D00E3F12E /* Constants.swift */,
 				14D570C82C5F38890011E668 /* BoringViewModel.swift */,
 				14D570CA2C5F4B2C0011E668 /* BatteryStatusViewModel.swift */,
@@ -978,6 +984,7 @@
 				14C08BB92C8DE4B1000F8AA0 /* BoringCalendar.swift in Sources */,
 				AA07CalendarTabBLD0000 /* CalendarTabView.swift in Sources */,
 				AA11EventCardBLD000000 /* EventDetailsCard.swift in Sources */,
+				AA11MoveScopeBLD000000 /* MoveScopeCard.swift in Sources */,
 				AA11NewEventCBLD00000 /* NewEventCard.swift in Sources */,
 				AA11QuickAddCBLD00000 /* QuickAddCard.swift in Sources */,
 				AA11QuickAddPBLD00000 /* QuickAddParser.swift in Sources */,
@@ -1003,6 +1010,7 @@
 				116398962DF5D6C00052E6AF /* CalendarServiceProviding.swift in Sources */,
 				59D8C23C2E589FAA00147B33 /* VolumeManager.swift in Sources */,
 				1163988D2DF5CAB40052E6AF /* EventModel.swift in Sources */,
+				AA11EventEditBLD000000 /* EventEdit.swift in Sources */,
 				14D570B92C5E98A20011E668 /* drop.swift in Sources */,
 				11EFCD702E8E92D600D0B974 /* ShelfItemViewModel.swift in Sources */,
 				1153BDA72D99B22200979FB0 /* YouTubeMusicController.swift in Sources */,

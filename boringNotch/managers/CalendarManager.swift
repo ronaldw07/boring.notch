@@ -40,14 +40,13 @@ class CalendarManager: ObservableObject {
 
     /// A change made in the Calendar tab that can still be taken back.
     private enum Change {
-        /// Moved or resized; `nowStart` is where the occurrence sits now.
-        case moved(id: String, nowStart: Date, oldStart: Date, oldEnd: Date)
+        /// Moved, resized or edited; holds what it was before, and which
+        /// occurrences the change covered so undo covers the same ones.
+        case changed(ChangedOccurrence, previous: EventEdit, scope: EventScope)
         /// Hidden from view, deleted from the calendar when the window closes.
         case deleted(PendingDeletion)
         /// Added by typing; undo deletes it again.
         case created(id: String, start: Date)
-        /// Title, location or notes changed; holds what they were.
-        case edited(id: String, start: Date, title: String, location: String?, notes: String?)
     }
 
     /// What the newest change did, e.g. "Moved to 4:00 PM", shown with an
@@ -277,14 +276,11 @@ class CalendarManager: ObservableObject {
 
     /// Moves or resizes an event, then reloads so the screen shows what the
     /// calendar actually holds.
-    func moveEvent(_ event: EventModel, to start: Date, end: Date) async -> Bool {
-        let moved = await calendarService.moveEvent(id: event.id, originalStart: event.start, to: start, end: end)
-        if moved {
-            remember(.moved(id: event.id, nowStart: start, oldStart: event.start, oldEnd: event.end),
-                     message: Self.describeMove(from: (event.start, event.end), to: (start, end)))
-        }
-        await updateEvents()
-        return moved
+    func moveEvent(_ event: EventModel, to start: Date, end: Date, scope: EventScope = .thisEvent) async -> Bool {
+        var edit = EventEdit(event)
+        edit.start = start
+        edit.end = end
+        return await updateEvent(event, edit: edit, scope: scope)
     }
 
     /// The calendar a typed event goes into, for the preview line.
@@ -315,29 +311,25 @@ class CalendarManager: ObservableObject {
         return true
     }
 
-    /// Changes an event's title, location and notes from its details box,
-    /// with undo. Empty location or notes are cleared.
-    func updateEvent(_ event: EventModel, title: String, location: String, notes: String) async -> Bool {
-        let location = location.trimmingCharacters(in: .whitespacesAndNewlines)
-        let notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let updated = await calendarService.updateEvent(
-            id: event.id, originalStart: event.start, title: title,
-            location: location.isEmpty ? nil : location,
-            notes: notes.isEmpty ? nil : notes
-        )
-        if updated {
-            remember(.edited(id: event.id, start: event.start, title: event.title, location: event.location, notes: event.notes),
-                     message: "Edited \(title)")
+    /// Saves an edit from the details box or a drag, with undo.
+    func updateEvent(_ event: EventModel, edit: EventEdit, scope: EventScope) async -> Bool {
+        let previous = EventEdit(event)
+        let changed = await calendarService.updateEvent(id: event.id, originalStart: event.start, edit: edit, scope: scope)
+        if let changed {
+            let message = edit.differsOnlyInTime(from: previous)
+                ? Self.describeMove(from: (previous.start, previous.end), to: (edit.start, edit.end))
+                : "Edited \(edit.title)"
+            remember(.changed(changed, previous: previous, scope: scope), message: message)
         }
         await updateEvents()
-        return updated
+        return changed != nil
     }
 
     /// Takes the event off the timeline at once, but only deletes it from
     /// the calendar when the tab closes, so undo just cancels it.
     /// Re-creating a deleted event instead would lose its guests, its link
     /// to an invite, and its place in a repeating series.
-    func deleteEvent(_ event: EventModel, scope: EventDeletionScope) async -> Bool {
+    func deleteEvent(_ event: EventModel, scope: EventScope) async -> Bool {
         // Checked now, so a read-only calendar still says so on the spot
         // rather than the event quietly coming back eight seconds later.
         guard calendarService.canEdit(id: event.id, originalStart: event.start) else { return false }
@@ -353,17 +345,14 @@ class CalendarManager: ObservableObject {
         guard let change = undoStack.popLast()?.change else { return }
         undoMessage = undoStack.last?.message
         switch change {
-        case .moved(let id, let nowStart, let oldStart, let oldEnd):
-            let restored = await calendarService.moveEvent(id: id, originalStart: nowStart, to: oldStart, end: oldEnd)
-            if !restored { showUndoFailed() }
+        case .changed(let occurrence, let previous, let scope):
+            let restored = await calendarService.updateEvent(id: occurrence.id, originalStart: occurrence.start, edit: previous, scope: scope)
+            if restored == nil { showUndoFailed() }
         case .deleted(let pending):
             hiddenDeletions.removeAll { $0.token == pending.token }
         case .created(let id, let start):
             let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisEvent)
             if !removed { showUndoFailed() }
-        case .edited(let id, let start, let title, let location, let notes):
-            let restored = await calendarService.updateEvent(id: id, originalStart: start, title: title, location: location, notes: notes)
-            if !restored { showUndoFailed() }
         }
         await updateEvents()
     }
