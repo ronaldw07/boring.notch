@@ -44,7 +44,8 @@ action, without opening anything.
   bottom like a phone calendar. Drag events to move them, pull an edge to
   change the time, drag the notch taller to see more, and undo any change.
   Drag on an empty spot to create an event, or type one ("Lunch with Sam
-  1pm"), and join a call from its details. Google Tasks sit alongside.
+  1pm"), edit it or join its call from its details. Google Tasks sit
+  alongside.
 - **A timer that forgives mistakes.** Lengths down to the second, recent
   lengths one tap away, and undo after an accidental reset.
 - **Music that shares the space.** Album art, a live visualizer and synced
@@ -54,11 +55,12 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 21 versions since September 2026, each with a
+- **Small releases, often.** 22 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app
-  updater, so a fix reaches everyone without a reinstall.
+  updater that checks hourly and installs as soon as a new version
+  downloads, so a fix reaches everyone within the hour, no reinstall.
 - **A public roadmap shaped by users.** The website's "Coming soon" list and
   a feedback form feed what gets built next, and the Discord is where early
   versions get tried first.
