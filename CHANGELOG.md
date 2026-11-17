@@ -11,6 +11,18 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.6 — 2026-11-16
+
+### Added
+
+- **Edit an event.** Click an event, then Edit, to change its title, location or description. Return saves, Escape cancels, and Undo puts it back.
+
+### Changed
+
+- **Updates install right away.** Chora checks every hour and now installs a new version as soon as it has downloaded, relaunching in a few seconds, instead of waiting for you to quit.
+
+---
+
 ## 0.8.5 — 2026-11-16
 
 ### Added
