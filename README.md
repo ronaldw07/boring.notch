@@ -43,8 +43,8 @@ action, without opening anything.
 - **A calendar you can edit.** See the day as a wide timeline or top to
   bottom like a phone calendar. Drag events to move them, pull an edge to
   change the time, drag the notch taller to see more, and undo any change.
-  Add an event by typing it ("Lunch with Sam 1pm"), and join a call from
-  its details. Google Tasks sit alongside.
+  Drag on an empty spot to create an event, or type one ("Lunch with Sam
+  1pm"), and join a call from its details. Google Tasks sit alongside.
 - **A timer that forgives mistakes.** Lengths down to the second, recent
   lengths one tap away, and undo after an accidental reset.
 - **Music that shares the space.** Album art, a live visualizer and synced
@@ -54,7 +54,7 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 20 versions since September 2026, each with a
+- **Small releases, often.** 21 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app
