@@ -11,6 +11,24 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.8.5 — 2026-11-16
+
+### Added
+
+- **Drag to create an event.** Press on an empty part of the calendar and drag to draw a new event, like Google Calendar. A box opens for the title, calendar, location and description. A single click makes a one-hour event.
+- **Backspace to delete.** With an event's details open, press Backspace, then Return to confirm.
+
+### Changed
+
+- **The calendar remembers its size.** Expanded or normal, it stays that way when you switch tabs or close and reopen the notch.
+- **A better grabber.** The pill for resizing the top-to-bottom day sits at the bottom edge, shows the up-down arrows only when you're on it, and works at any height.
+
+### Fixed
+
+- **Event notes from Google Calendar show as text**, not HTML code.
+
+---
+
 ## 0.8.4 — 2026-11-16
 
 ### Added
