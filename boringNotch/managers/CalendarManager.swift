@@ -46,6 +46,8 @@ class CalendarManager: ObservableObject {
         case deleted(PendingDeletion)
         /// Added by typing; undo deletes it again.
         case created(id: String, start: Date)
+        /// Title, location or notes changed; holds what they were.
+        case edited(id: String, start: Date, title: String, location: String?, notes: String?)
     }
 
     /// What the newest change did, e.g. "Moved to 4:00 PM", shown with an
@@ -313,6 +315,24 @@ class CalendarManager: ObservableObject {
         return true
     }
 
+    /// Changes an event's title, location and notes from its details box,
+    /// with undo. Empty location or notes are cleared.
+    func updateEvent(_ event: EventModel, title: String, location: String, notes: String) async -> Bool {
+        let location = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let updated = await calendarService.updateEvent(
+            id: event.id, originalStart: event.start, title: title,
+            location: location.isEmpty ? nil : location,
+            notes: notes.isEmpty ? nil : notes
+        )
+        if updated {
+            remember(.edited(id: event.id, start: event.start, title: event.title, location: event.location, notes: event.notes),
+                     message: "Edited \(title)")
+        }
+        await updateEvents()
+        return updated
+    }
+
     /// Takes the event off the timeline at once, but only deletes it from
     /// the calendar when the tab closes, so undo just cancels it.
     /// Re-creating a deleted event instead would lose its guests, its link
@@ -341,6 +361,9 @@ class CalendarManager: ObservableObject {
         case .created(let id, let start):
             let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisEvent)
             if !removed { showUndoFailed() }
+        case .edited(let id, let start, let title, let location, let notes):
+            let restored = await calendarService.updateEvent(id: id, originalStart: start, title: title, location: location, notes: notes)
+            if !restored { showUndoFailed() }
         }
         await updateEvents()
     }

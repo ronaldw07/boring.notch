@@ -287,11 +287,11 @@ struct CalendarTabView: View {
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isQuickAdding)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: selectedEvent?.id)
         .onChange(of: calendarManager.events) {
-            // Gone from the calendar (deleted here or elsewhere): close its box.
-            if let selected = selectedEvent,
-               !calendarManager.events.contains(where: { $0.id == selected.id && $0.start == selected.start }) {
-                selectedEvent = nil
-            }
+            // Gone from the calendar (deleted here or elsewhere): close its
+            // box. Changed (edited here or elsewhere): show the new version.
+            guard let selected = selectedEvent else { return }
+            let fresh = calendarManager.events.first { $0.id == selected.id && $0.start == selected.start }
+            if fresh != selected { selectedEvent = fresh }
         }
         .onAppear {
             restoreSize()
@@ -1250,7 +1250,10 @@ struct CalendarTabView: View {
                     event: event,
                     onClose: { selectedEvent = nil },
                     onOpen: { open(event) },
-                    onDelete: { scope in await calendarManager.deleteEvent(event, scope: scope) }
+                    onDelete: { scope in await calendarManager.deleteEvent(event, scope: scope) },
+                    onEdit: { title, location, notes in
+                        await calendarManager.updateEvent(event, title: title, location: location, notes: notes)
+                    }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }

@@ -15,6 +15,15 @@ struct EventDetailsCard: View {
     let onOpen: () -> Void
     /// True if the calendar took the deletion.
     let onDelete: (EventDeletionScope) async -> Bool
+    /// New title, location and notes; true if the calendar took them.
+    let onEdit: (String, String, String) async -> Bool
+
+    @State private var isEditing = false
+    @State private var editTitle = ""
+    @State private var editLocation = ""
+    @State private var editNotes = ""
+    @State private var editFailed = false
+    @FocusState private var isTitleFocused: Bool
 
     @State private var isChoosingScope = false
     @State private var isConfirmingDelete = false
@@ -36,8 +45,14 @@ struct EventDetailsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            header
-            if isChoosingScope {
+            if isEditing {
+                editor
+            } else {
+                header
+            }
+            if isEditing {
+                EmptyView()
+            } else if isChoosingScope {
                 scopeChooser
             } else if isAskingToDelete {
                 deleteQuestion
@@ -79,6 +94,11 @@ struct EventDetailsCard: View {
     /// Backspace asks to delete, Enter confirms (on a repeating event, just
     /// this one), Escape backs out of the question or closes the box.
     private func handleKey(_ key: NSEvent) -> NSEvent? {
+        if isEditing {
+            guard key.keyCode == Key.escape else { return key }
+            endEditing()
+            return nil
+        }
         switch key.keyCode {
         case Key.backspace, Key.forwardDelete:
             guard !isAskingToDelete, !isChoosingScope else { return nil }
@@ -103,6 +123,91 @@ struct EventDetailsCard: View {
             return nil
         default:
             return key
+        }
+    }
+
+    // MARK: - Editing
+
+    /// Title, location and notes as fields, with Cancel and Save. Notes from
+    /// Google Calendar are edited as plain text.
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color)
+                    .frame(width: 4, height: 20)
+                TextField("", text: $editTitle, prompt: Text("Title").foregroundStyle(.white.opacity(0.35)))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .focused($isTitleFocused)
+                    .onSubmit(saveEdits)
+            }
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    editField("mappin.and.ellipse", "Add location", text: $editLocation)
+                    editField("text.alignleft", "Add description", text: $editNotes)
+                    if editFailed {
+                        Text("Couldn't save it. This calendar may be read-only.")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    pill("Cancel", tint: .white.opacity(0.12), text: .white, action: endEditing)
+                    pill("Save", symbol: "return", tint: .accentColor, text: .white, action: saveEdits)
+                }
+            }
+        }
+    }
+
+    private func editField(_ symbol: String, _ placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 12)
+            TextField("", text: text, prompt: Text(placeholder).foregroundStyle(.white.opacity(0.35)))
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+                .onSubmit(saveEdits)
+        }
+    }
+
+    private func beginEditing() {
+        editTitle = event.title
+        editLocation = event.location ?? ""
+        editNotes = event.notes.map(NotesText.plain) ?? ""
+        editFailed = false
+        isConfirmingDelete = false
+        isEditing = true
+        // Typing keeps the notch open, like the other text boxes in it.
+        NotchKeyboardFocus.holdsNotchOpen = true
+        DispatchQueue.main.async { isTitleFocused = true }
+    }
+
+    private func endEditing() {
+        isEditing = false
+        NotchKeyboardFocus.holdsNotchOpen = false
+    }
+
+    private func saveEdits() {
+        let title = editTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unchanged = title == event.title
+            && editLocation == (event.location ?? "")
+            && editNotes == (event.notes.map(NotesText.plain) ?? "")
+        guard !unchanged else {
+            endEditing()
+            return
+        }
+        Task {
+            if await onEdit(title.isEmpty ? event.title : title, editLocation, editNotes) {
+                endEditing()
+            } else {
+                editFailed = true
+            }
         }
     }
 
@@ -293,6 +398,7 @@ struct EventDetailsCard: View {
             }
             pill("Open in Calendar", symbol: "arrow.up.forward.app", tint: .white.opacity(0.12), text: .white, action: onOpen)
             if event.type.isEvent {
+                pill("Edit", symbol: "pencil", tint: .white.opacity(0.12), text: .white, action: beginEditing)
                 pill(isConfirmingDelete ? "Tap again to delete" : "Delete",
                      symbol: "trash",
                      tint: .red.opacity(isConfirmingDelete ? 0.85 : 0.22),

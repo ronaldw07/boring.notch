@@ -17,6 +17,7 @@ protocol CalendarServiceProviding {
     func pullRemoteChanges()
     func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool
     func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool
+    func updateEvent(id: String, originalStart: Date, title: String, location: String?, notes: String?) async -> Bool
     func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?) async -> String?
     var newEventCalendarTitle: String? { get }
     var newEventCalendarID: String? { get }
@@ -175,6 +176,21 @@ class CalendarService: CalendarServiceProviding {
         } catch {
             NSLog("CalendarService: couldn't create event: \(error)")
             return nil
+        }
+    }
+
+    /// Changes one occurrence's title, location and notes.
+    func updateEvent(id: String, originalStart: Date, title: String, location: String?, notes: String?) async -> Bool {
+        guard let event = editableOccurrence(id: id, originalStart: originalStart) else { return false }
+        event.title = title
+        event.location = location
+        event.notes = notes
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            return true
+        } catch {
+            NSLog("CalendarService: couldn't edit event: \(error)")
+            return false
         }
     }
 
