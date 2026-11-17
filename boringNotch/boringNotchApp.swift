@@ -13,6 +13,17 @@ import KeyboardShortcuts
 import Sparkle
 import SwiftUI
 
+/// Chora runs for days without quitting, so an update downloaded in the
+/// background would otherwise wait for a quit that rarely comes. Installing
+/// it straight away relaunches into the new version within a few seconds.
+final class InstallUpdatesRightAway: NSObject, SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+                 immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        DispatchQueue.main.async(execute: immediateInstallHandler)
+        return true
+    }
+}
+
 @main
 struct DynamicNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -20,10 +31,12 @@ struct DynamicNotchApp: App {
     @Environment(\.openWindow) var openWindow
 
     let updaterController: SPUStandardUpdaterController
+    /// Kept alive here: the updater holds its delegate weakly.
+    private static let updateInstaller = InstallUpdatesRightAway()
 
     init() {
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            startingUpdater: true, updaterDelegate: Self.updateInstaller, userDriverDelegate: nil)
 
         // Initialize the settings window controller with the updater controller
         SettingsWindowController.shared.setUpdaterController(updaterController)
