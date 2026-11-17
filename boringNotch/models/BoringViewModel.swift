@@ -271,7 +271,10 @@ class BoringViewModel: NSObject, ObservableObject {
             // area it hasn't finished vacating and slams the whole notch shut
             // partway through.
             let extra = max(extraContentHeight, windowExtraHeight)
-            let effectiveHeight = notchState == .open ? notchSize.height + extra : notchSize.height
+            // Open, the panel's bottom padding and the calendar's grabber sit
+            // below notchSize, inside the window's shadow strip; count that
+            // as the notch too, or resting on the grabber reads as leaving.
+            let effectiveHeight = notchState == .open ? notchSize.height + extra + shadowPadding : notchSize.height
             let baseY = frame.maxY - effectiveHeight - margin
             let baseX = frame.midX - notchSize.width / 2 - margin
 

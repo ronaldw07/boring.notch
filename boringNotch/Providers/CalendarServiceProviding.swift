@@ -17,8 +17,10 @@ protocol CalendarServiceProviding {
     func pullRemoteChanges()
     func moveEvent(id: String, originalStart: Date, to start: Date, end: Date) async -> Bool
     func deleteEvent(id: String, originalStart: Date, scope: EventDeletionScope) async -> Bool
-    func createEvent(title: String, start: Date, end: Date) async -> String?
+    func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?) async -> String?
     var newEventCalendarTitle: String? { get }
+    var newEventCalendarID: String? { get }
+    var editableEventCalendarIDs: Set<String> { get }
 }
 
 enum EventDeletionScope {
@@ -145,15 +147,28 @@ class CalendarService: CalendarServiceProviding {
         store.defaultCalendarForNewEvents?.title
     }
 
-    /// Adds an event to the default calendar. Returns its identifier, or
-    /// nil if there's no default calendar or it won't take changes.
-    func createEvent(title: String, start: Date, end: Date) async -> String? {
-        guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else { return nil }
+    var newEventCalendarID: String? {
+        store.defaultCalendarForNewEvents?.calendarIdentifier
+    }
+
+    /// Calendars that can take a new event (not subscribed or read-only).
+    var editableEventCalendarIDs: Set<String> {
+        guard hasAccess(to: .event) else { return [] }
+        return Set(store.calendars(for: .event).filter(\.allowsContentModifications).map(\.calendarIdentifier))
+    }
+
+    /// Adds an event to the given calendar, or the default one. Returns its
+    /// identifier, or nil if that calendar is missing or won't take changes.
+    func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?) async -> String? {
+        let chosen = calendarID.flatMap { store.calendar(withIdentifier: $0) } ?? store.defaultCalendarForNewEvents
+        guard let calendar = chosen, calendar.allowsContentModifications else { return nil }
         let event = EKEvent(eventStore: store)
         event.title = title
         event.startDate = start
         event.endDate = end
         event.calendar = calendar
+        event.location = location
+        event.notes = notes
         do {
             try store.save(event, span: .thisEvent, commit: true)
             return event.calendarItemIdentifier

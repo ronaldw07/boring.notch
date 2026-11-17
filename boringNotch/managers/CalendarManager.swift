@@ -288,9 +288,26 @@ class CalendarManager: ObservableObject {
     /// The calendar a typed event goes into, for the preview line.
     var newEventCalendarTitle: String? { calendarService.newEventCalendarTitle }
 
-    /// Adds an event typed into the Calendar tab, with undo.
-    func createEvent(title: String, start: Date, end: Date) async -> Bool {
-        guard let id = await calendarService.createEvent(title: title, start: start, end: end) else { return false }
+    /// Where a new event goes unless another calendar is picked.
+    var newEventCalendarID: String? { calendarService.newEventCalendarID }
+
+    /// The event calendars a new event can go into.
+    var editableEventCalendars: [CalendarModel] {
+        let editable = calendarService.editableEventCalendarIDs
+        return eventCalendars.filter { editable.contains($0.id) }
+    }
+
+    /// Adds an event made in the Calendar tab, with undo. Empty location or
+    /// notes are left off.
+    func createEvent(title: String, start: Date, end: Date,
+                     calendarID: String? = nil, location: String? = nil, notes: String? = nil) async -> Bool {
+        let location = location?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let id = await calendarService.createEvent(
+            title: title, start: start, end: end, calendarID: calendarID,
+            location: location?.isEmpty == false ? location : nil,
+            notes: notes?.isEmpty == false ? notes : nil
+        ) else { return false }
         remember(.created(id: id, start: start), message: "Added \(title)")
         await updateEvents()
         return true

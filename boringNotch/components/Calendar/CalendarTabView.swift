@@ -184,6 +184,9 @@ struct CalendarTabView: View {
     @AppStorage("calendarWasExpanded") private var wasExpanded = false
     @State private var selectedEvent: EventModel?
     @State private var isQuickAdding = false
+    @State private var creating: Creating?
+    @State private var newRange: NewRange?
+    @State private var isHoveringHandle = false
     @State private var activeDrag: ActiveDrag?
     @State private var preview: Preview?
 
@@ -193,6 +196,22 @@ struct CalendarTabView: View {
         let mode: DayTimelineLayout.DragMode
         let startPoint: CGPoint
         var moved = false
+    }
+
+    /// A new event being dragged out on an empty part of the day, in
+    /// seconds from the day's start. `anchor` is where the press landed.
+    private struct Creating {
+        let anchor: TimeInterval
+        let startPoint: CGPoint
+        var start: TimeInterval
+        var end: TimeInterval
+        var moved = false
+    }
+
+    /// The span a new event will cover, held while its box is open.
+    private struct NewRange: Equatable {
+        let start: TimeInterval
+        let end: TimeInterval
     }
 
     /// Where the dragged block is shown, until the calendar confirms it.
@@ -227,8 +246,6 @@ struct CalendarTabView: View {
     /// How much taller the expand button makes the vertical view before
     /// any size has been dragged to.
     private static let verticalExtraHeight: CGFloat = 140
-    /// Moves the resize handle down toward the notch's bottom edge.
-    private static let handleDrop: CGFloat = 18
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -249,21 +266,24 @@ struct CalendarTabView: View {
                         .alignmentGuide(.bottom) { isVertical ? $0[.bottom] + 12 : $0[.top] - 4 }
                         .padding(.trailing, 10)
                 }
-                .overlay(alignment: .bottom) {
-                    if isVertical && selectedEvent == nil {
-                        resizeHandle
-                            .alignmentGuide(.bottom) { $0[.bottom] - 10 }
-                            .offset(y: Self.handleDrop)
-                    }
-                }
         }
         .padding(.horizontal, 14)
         .padding(.top, 4)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // On the whole tab's bottom edge, not the timeline's, so it sits
+        // near the notch's edge and its mouse area is always inside the
+        // panel, at any height.
+        .overlay(alignment: .bottom) {
+            if isVertical && selectedEvent == nil && !isQuickAdding && newRange == nil {
+                resizeHandle
+            }
+        }
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2), value: calendarManager.undoMessage)
         .overlay { detailsOverlay }
         .overlay { quickAddOverlay }
+        .overlay { newEventOverlay }
+        .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: newRange)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isQuickAdding)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: selectedEvent?.id)
         .onChange(of: calendarManager.events) {
@@ -282,6 +302,8 @@ struct CalendarTabView: View {
         .onDisappear {
             selectedEvent = nil
             isQuickAdding = false
+            creating = nil
+            newRange = nil
             // Leaving the tab ends the undo window: waiting deletes happen now.
             calendarManager.closeUndoWindow()
             calendarManager.endLiveRefresh()
@@ -302,7 +324,7 @@ struct CalendarTabView: View {
                 resetSize()
                 return
             }
-            applyExtraHeight()
+            restoreSize()
         }
         // Switching to another tab and straight back can keep this view
         // without an onAppear or onDisappear, while the other tab has
@@ -318,7 +340,9 @@ struct CalendarTabView: View {
         .onChange(of: visibleLaneCount) { applyExtraHeight() }
         .onChange(of: isVertical) {
             verticalExtra = 0
-            restoreSize()
+            isExpanded = false
+            wasExpanded = false
+            applyExtraHeight()
         }
         .onChange(of: hasTasks) { applyExtraHeight() }
         // Google tasks for the shown day, refreshed while the tab is open.
@@ -340,8 +364,6 @@ struct CalendarTabView: View {
     private var isToday: Bool {
         Calendar.current.isDateInToday(day)
     }
-            isExpanded = false
-            wasExpanded = false
 
     private var events: [EventModel] {
         EventListView.filteredEvents(events: calendarManager.events)
@@ -613,17 +635,45 @@ struct CalendarTabView: View {
         Capsule()
             .fill(.white.opacity(resizeStartExtra == nil ? 0.3 : 0.55))
             .frame(width: 56, height: 6)
-            .frame(maxWidth: .infinity)
-            .frame(height: 20)
+            // The grab area: just the pill and a little around it, so the
+            // arrows only show over the pill itself.
+            .frame(width: Self.handleGrabSize.width, height: Self.handleGrabSize.height)
+            .contentShape(Rectangle())
             .overlay {
                 NotchResizeCapture(
                     onBegin: beginResize,
                     onDrag: resize(by:),
                     onEnd: endResize
                 )
-                .frame(width: 240)
             }
+            // The AppKit view never hears the pointer move over it here, so
+            // the arrows come from SwiftUI's hover. Re-claimed on every move,
+            // or the timeline above takes the cursor back and it flickers.
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    isHoveringHandle = true
+                    CursorLock.claim(Self.handleCursorOwner) { _ in .resizeUpDown }
+                    NSCursor.resizeUpDown.set()
+                case .ended:
+                    isHoveringHandle = false
+                    if resizeStartExtra == nil { releaseHandleCursor() }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            // Into the black strip under the timeline, clear of its events.
+            .padding(.bottom, -4)
     }
+
+    private static let handleGrabSize = CGSize(width: 80, height: 16)
+
+    private func releaseHandleCursor() {
+        CursorLock.release(Self.handleCursorOwner)
+        NSCursor.arrow.set()
+    }
+
+    /// Stands in for the grabber when it holds the cursor.
+    private static let handleCursorOwner = NSObject()
 
     /// Same pair of symbols as the clipboard's expand button.
     private var expandButton: some View {
@@ -740,6 +790,13 @@ struct CalendarTabView: View {
                 .frame(width: max(4, x(for: end) - x(for: start) - 2), height: laneHeight)
                 .offset(x: x(for: start) + 1, y: laneY(item.lane))
                 .zIndex(shown == nil ? 0 : 1)
+            }
+
+            if let ghost = ghostRange {
+                ghostBlock(ghost)
+                    .frame(width: max(4, x(for: ghost.end) - x(for: ghost.start) - 2), height: lanesHeight)
+                    .offset(x: x(for: ghost.start) + 1, y: Self.hourRowHeight)
+                    .zIndex(2)
             }
 
             if showsNow {
@@ -866,6 +923,13 @@ struct CalendarTabView: View {
                 .frame(width: max(4, frame.width - 2), height: max(4, frame.height - 1))
                 .offset(x: frame.minX + 1, y: frame.minY + 0.5)
                 .zIndex(shown == nil ? 0 : 1)
+            }
+
+            if let ghost = ghostRange {
+                ghostBlock(ghost)
+                    .frame(width: max(4, contentWidth - 2), height: max(Self.minBlockHeight, position(for: ghost.end) - position(for: ghost.start) - 1))
+                    .offset(x: Self.gutterWidth + 1, y: position(for: ghost.start) + 0.5)
+                    .zIndex(2)
             }
 
             if showsNow {
@@ -1011,11 +1075,18 @@ struct CalendarTabView: View {
     }
 
     private func press(at point: CGPoint) {
-        guard let found = hit(at: point) else { return }
+        guard let found = hit(at: point) else {
+            beginCreating(at: point)
+            return
+        }
         activeDrag = ActiveDrag(item: found.item, mode: found.mode, startPoint: point)
     }
 
     private func drag(to point: CGPoint) {
+        if creating != nil {
+            extendCreating(to: point)
+            return
+        }
         guard var current = activeDrag else { return }
         let dx = point.x - current.startPoint.x
         let dy = point.y - current.startPoint.y
@@ -1038,6 +1109,10 @@ struct CalendarTabView: View {
     }
 
     private func release(at point: CGPoint, in _: NSView) {
+        if creating != nil {
+            finishCreating()
+            return
+        }
         guard let finished = activeDrag else { return }
         activeDrag = nil
 
@@ -1059,6 +1134,100 @@ struct CalendarTabView: View {
             // jump back to its old spot for a moment first.
             _ = await calendarManager.moveEvent(event, to: newStart, end: newEnd)
             preview = nil
+        }
+    }
+
+    // MARK: - New event by dragging
+
+    /// The time under a point in the timeline, within the day.
+    private func time(at point: CGPoint) -> TimeInterval {
+        let along = (isVertical ? point.y : point.x) + offset
+        return min(max(TimeInterval(along / hourSize) * 3600, 0), dayLength)
+    }
+
+    /// A press on empty space starts a new event at the slot under it.
+    private func beginCreating(at point: CGPoint) {
+        guard selectedEvent == nil, !isQuickAdding, newRange == nil else { return }
+        let snap = DayTimelineLayout.snap
+        let anchor = min((time(at: point) / snap).rounded(.down) * snap, dayLength - snap)
+        creating = Creating(anchor: anchor, startPoint: point, start: anchor, end: anchor + snap)
+    }
+
+    /// Dragging either way from the press stretches the new event, in
+    /// 15-minute steps.
+    private func extendCreating(to point: CGPoint) {
+        guard var current = creating else { return }
+        if !current.moved {
+            guard hypot(point.x - current.startPoint.x, point.y - current.startPoint.y) >= Self.dragThreshold else { return }
+            current.moved = true
+        }
+        let snap = DayTimelineLayout.snap
+        let at = (time(at: point) / snap).rounded() * snap
+        current.start = min(current.anchor, at)
+        current.end = min(max(current.anchor + snap, at), dayLength)
+        creating = current
+    }
+
+    /// Lifting opens the box for the new event. A click without a drag
+    /// makes it an hour long, like Google Calendar.
+    private func finishCreating() {
+        guard let finished = creating else { return }
+        creating = nil
+        let end = finished.moved ? finished.end : min(finished.anchor + Self.clickEventLength, dayLength)
+        newRange = NewRange(start: finished.start, end: end)
+    }
+
+    private static let clickEventLength: TimeInterval = 60 * 60
+
+    /// The outline of the event being made: while dragging, then while its
+    /// box is open.
+    private var ghostRange: NewRange? {
+        creating.map { NewRange(start: $0.start, end: $0.end) } ?? newRange
+    }
+
+    private func ghostBlock(_ range: NewRange) -> some View {
+        let color = Color.accentColor
+        return RoundedRectangle(cornerRadius: 5)
+            .fill(color.opacity(0.35))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(color, lineWidth: 1))
+            .overlay(alignment: .topLeading) {
+                Text("\(day.addingTimeInterval(range.start).formatted(date: .omitted, time: .shortened)) – \(day.addingTimeInterval(range.end).formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+            }
+            .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var newEventOverlay: some View {
+        if let range = newRange {
+            ZStack {
+                Color.black.opacity(0.35)
+                    .contentShape(Rectangle())
+                    .onTapGesture { newRange = nil }
+                NewEventCard(
+                    start: day.addingTimeInterval(range.start),
+                    end: day.addingTimeInterval(range.end),
+                    calendars: calendarManager.editableEventCalendars,
+                    defaultCalendarID: calendarManager.newEventCalendarID,
+                    onSave: { details in
+                        await calendarManager.createEvent(
+                            title: details.title,
+                            start: day.addingTimeInterval(range.start),
+                            end: day.addingTimeInterval(range.end),
+                            calendarID: details.calendarID,
+                            location: details.location,
+                            notes: details.notes
+                        )
+                    },
+                    onClose: { newRange = nil }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .transition(.opacity)
         }
     }
 
@@ -1133,9 +1302,11 @@ struct CalendarTabView: View {
     private func endResize() {
         resizeStartExtra = nil
         vm.isResizingNotch = false
+        if !isHoveringHandle { releaseHandleCursor() }
         if verticalExtra > 0 {
             rememberedVerticalExtra = Double(verticalExtra)
         }
+        wasExpanded = verticalExtra > 0
     }
 
     @MainActor
@@ -1147,6 +1318,7 @@ struct CalendarTabView: View {
         withAnimation(vm.animationLibrary.collapseCurve) {
             isExpanded.toggle()
         }
+        wasExpanded = isExpanded
         applyExtraHeight()
     }
 
@@ -1165,6 +1337,7 @@ struct CalendarTabView: View {
         withAnimation(vm.animationLibrary.collapseCurve) {
             verticalExtra = target
         }
+        wasExpanded = target > 0
         applyExtraHeight()
     }
 
@@ -1176,6 +1349,20 @@ struct CalendarTabView: View {
         verticalExtra = 0
         resizeStartExtra = nil
         vm.isResizingNotch = false
+    }
+
+    /// Back to the size the calendar was left at: expanded or normal, and
+    /// in the top-to-bottom view, the height it was last dragged to.
+    @MainActor
+    private func restoreSize() {
+        isExpanded = !isVertical && wasExpanded
+        if isVertical && wasExpanded {
+            let remembered = CGFloat(rememberedVerticalExtra)
+            verticalExtra = min(remembered > 0 ? remembered : Self.verticalExtraHeight, maxVerticalExtra)
+        } else {
+            verticalExtra = 0
+        }
+        applyExtraHeight()
     }
 
     /// The notch grows for the task strip and, expanded, for extra rows —
@@ -1306,7 +1493,6 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     }
 
     private func update(_ view: CaptureView) {
-        wasExpanded = verticalExtra > 0
         view.isVertical = isVertical
         view.onScroll = onScroll
         view.onPress = onPress
@@ -1318,7 +1504,6 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     final class CaptureView: NSView {
         var isVertical = false
         var onScroll: ((CGFloat) -> Void)?
-        wasExpanded = isExpanded
         var onPress: ((CGPoint) -> Void)?
         var onDrag: ((CGPoint) -> Void)?
         var onRelease: ((CGPoint, NSView) -> Void)?
@@ -1337,7 +1522,6 @@ private struct TimelineScrollCapture: NSViewRepresentable {
                 options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
                 owner: self
             ))
-        wasExpanded = target > 0
         }
 
         private func point(of event: NSEvent) -> CGPoint {
@@ -1351,20 +1535,6 @@ private struct TimelineScrollCapture: NSViewRepresentable {
             // the header's buttons get the plain arrow.
             guard bounds.contains(point) else { return .arrow }
             return cursorAt?(point) ?? .arrow
-    /// Back to the size the calendar was left at: expanded or normal, and
-    /// in the top-to-bottom view, the height it was last dragged to.
-    @MainActor
-    private func restoreSize() {
-        isExpanded = !isVertical && wasExpanded
-        if isVertical && wasExpanded {
-            let remembered = CGFloat(rememberedVerticalExtra)
-            verticalExtra = min(remembered > 0 ? remembered : Self.verticalExtraHeight, maxVerticalExtra)
-        } else {
-            verticalExtra = 0
-        }
-        applyExtraHeight()
-    }
-
         }
 
         override func mouseEntered(with event: NSEvent) {

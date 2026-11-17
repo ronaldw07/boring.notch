@@ -99,6 +99,7 @@
 		14C08BB92C8DE4B1000F8AA0 /* BoringCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C08BB82C8DE4B1000F8AA0 /* BoringCalendar.swift */; };
 		AA07CalendarTabBLD0000 /* CalendarTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA07CalendarTabFILE000 /* CalendarTabView.swift */; };
 		AA11EventCardBLD000000 /* EventDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EventCardFILE00000 /* EventDetailsCard.swift */; };
+		AA11NewEventCBLD00000 /* NewEventCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11NewEventCFILE0000 /* NewEventCard.swift */; };
 		AA11QuickAddCBLD00000 /* QuickAddCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11QuickAddCFILE0000 /* QuickAddCard.swift */; };
 		AA11QuickAddPBLD00000 /* QuickAddParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11QuickAddPFILE0000 /* QuickAddParser.swift */; };
 		14C08BC12C8E03AD000F8AA0 /* NSImage+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C08BC02C8E03AD000F8AA0 /* NSImage+Extensions.swift */; };
@@ -281,6 +282,7 @@
 		14C08BB82C8DE4B1000F8AA0 /* BoringCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoringCalendar.swift; sourceTree = "<group>"; };
 		AA07CalendarTabFILE000 /* CalendarTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarTabView.swift; sourceTree = "<group>"; };
 		AA11EventCardFILE00000 /* EventDetailsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailsCard.swift; sourceTree = "<group>"; };
+		AA11NewEventCFILE0000 /* NewEventCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewEventCard.swift; sourceTree = "<group>"; };
 		AA11QuickAddCFILE0000 /* QuickAddCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCard.swift; sourceTree = "<group>"; };
 		AA11QuickAddPFILE0000 /* QuickAddParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddParser.swift; sourceTree = "<group>"; };
 		14C08BC02C8E03AD000F8AA0 /* NSImage+Extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "NSImage+Extensions.swift"; sourceTree = "<group>"; };
@@ -598,6 +600,7 @@
 				14C08BB82C8DE4B1000F8AA0 /* BoringCalendar.swift */,
 				AA07CalendarTabFILE000 /* CalendarTabView.swift */,
 				AA11EventCardFILE00000 /* EventDetailsCard.swift */,
+				AA11NewEventCFILE0000 /* NewEventCard.swift */,
 				AA11QuickAddCFILE0000 /* QuickAddCard.swift */,
 				AA11QuickAddPFILE0000 /* QuickAddParser.swift */,
 			);
@@ -975,6 +978,7 @@
 				14C08BB92C8DE4B1000F8AA0 /* BoringCalendar.swift in Sources */,
 				AA07CalendarTabBLD0000 /* CalendarTabView.swift in Sources */,
 				AA11EventCardBLD000000 /* EventDetailsCard.swift in Sources */,
+				AA11NewEventCBLD00000 /* NewEventCard.swift in Sources */,
 				AA11QuickAddCBLD00000 /* QuickAddCard.swift in Sources */,
 				AA11QuickAddPBLD00000 /* QuickAddParser.swift in Sources */,
 				5955950D2E900ED800C66711 /* ApplicationRelauncher.swift in Sources */,

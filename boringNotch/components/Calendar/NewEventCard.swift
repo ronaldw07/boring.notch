@@ -1,0 +1,213 @@
+//
+//  NewEventCard.swift
+//  boringNotch
+//
+//  Created by Ronald Wen on 2026-11-16.
+//
+//  What shows after dragging out a new event on an empty part of the
+//  calendar: a title, the time it covers, which calendar, a location and a
+//  description, then Save.
+//
+
+import SwiftUI
+
+struct NewEventCard: View {
+    struct Details {
+        let title: String
+        let calendarID: String?
+        let location: String
+        let notes: String
+    }
+
+    let start: Date
+    let end: Date
+    let calendars: [CalendarModel]
+    let defaultCalendarID: String?
+    /// True if the calendar took the new event.
+    let onSave: (Details) async -> Bool
+    let onClose: () -> Void
+
+    @State private var title = ""
+    @State private var location = ""
+    @State private var notes = ""
+    @State private var calendarID: String?
+    @State private var saveFailed = false
+    @State private var escapeMonitor: Any?
+    @FocusState private var isTitleFocused: Bool
+
+    private static let escapeKeyCode: UInt16 = 53
+
+    private var calendar: CalendarModel? {
+        calendars.first { $0.id == (calendarID ?? defaultCalendarID) } ?? calendars.first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(nsColor: calendar?.color ?? .systemBlue))
+                    .frame(width: 4, height: 20)
+                TextField("", text: $title, prompt: Text("Add title").foregroundStyle(.white.opacity(0.35)))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .focused($isTitleFocused)
+                    .onSubmit(save)
+                closeButton
+            }
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    row("clock", timeText)
+                    field("mappin.and.ellipse", "Add location", text: $location)
+                    field("text.alignleft", "Add description", text: $notes)
+                    if saveFailed {
+                        Text("Couldn't save it. This calendar may be read-only.")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 6) {
+                    calendarMenu
+                    Button(action: save) {
+                        Text("Save")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .frame(height: 22)
+                            .background(Capsule().fill(Color.accentColor))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 440, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .modifier(CardBackground())
+        .onAppear {
+            NotchKeyboardFocus.begin()
+            DispatchQueue.main.async { isTitleFocused = true }
+            // The text fields don't pass Escape on, so catch it here.
+            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                guard event.keyCode == Self.escapeKeyCode else { return event }
+                onClose()
+                return nil
+            }
+        }
+        .onDisappear {
+            if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
+            NotchKeyboardFocus.end()
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var calendarMenu: some View {
+        Menu {
+            ForEach(calendars, id: \.id) { option in
+                Button {
+                    calendarID = option.id
+                } label: {
+                    Label {
+                        Text(option.title)
+                    } icon: {
+                        Image(nsImage: Self.dot(option.color))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Color(nsColor: calendar?.color ?? .systemBlue))
+                    .frame(width: 7, height: 7)
+                Text(calendar?.title ?? "Calendar")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(Capsule().fill(.white.opacity(0.12)))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private func row(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 12)
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+        }
+    }
+
+    private func field(_ symbol: String, _ placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 12)
+            TextField("", text: text, prompt: Text(placeholder).foregroundStyle(.white.opacity(0.35)))
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+                .onSubmit(save)
+        }
+    }
+
+    /// "Tue, Nov 17 · 1:00 – 2:30 PM"
+    private var timeText: String {
+        let day = start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        return "\(day) · \(start.formatted(date: .omitted, time: .shortened)) – \(end.formatted(date: .omitted, time: .shortened))"
+    }
+
+    /// A colour swatch for the menu, which only shows images, not views.
+    private static func dot(_ color: NSColor) -> NSImage {
+        let size = NSSize(width: 10, height: 10)
+        let image = NSImage(size: size, flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
+        return image
+    }
+
+    private func save() {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let details = Details(
+            title: trimmed.isEmpty ? QuickAddParser.untitled : trimmed,
+            calendarID: calendar?.id,
+            location: location,
+            notes: notes
+        )
+        Task {
+            if await onSave(details) {
+                onClose()
+            } else {
+                saveFailed = true
+            }
+        }
+    }
+}
