@@ -470,12 +470,14 @@ struct CalendarTabView: View {
                 Button {
                     show(Calendar.current.startOfDay(for: .now))
                 } label: {
+                    // Outlined, like Google Calendar's Today button.
                     Text("Today")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .frame(height: 18)
-                        .background(Capsule().fill(Color(nsColor: .secondarySystemFill)))
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.45), lineWidth: 1))
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
