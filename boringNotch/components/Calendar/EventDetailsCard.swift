@@ -99,7 +99,7 @@ struct EventDetailsCard: View {
             if !event.participants.isEmpty {
                 guests
             }
-            if let notes = event.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+            if let notes = event.notes.map(NotesText.plain)?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "text.alignleft")
                         .font(.system(size: 9, weight: .semibold))
@@ -330,5 +330,29 @@ extension EventModel {
             }
         }
         return nil
+    }
+}
+
+/// Calendar notes as readable text. Google Calendar stores descriptions as
+/// HTML, so tags become line breaks and bullets, and entities are decoded.
+enum NotesText {
+    private static let entities = ["&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&apos;": "'"]
+
+    static func plain(_ notes: String) -> String {
+        guard notes.range(of: "<[a-zA-Z/][^>]*>", options: .regularExpression) != nil else { return notes }
+        var text = notes
+        // A link keeps its address so it can still be clicked.
+        text = text.replacingOccurrences(of: "<a[^>]*href=\"([^\"]*)\"[^>]*>(.*?)</a>", with: "$2 $1", options: [.regularExpression, .caseInsensitive])
+        text = text.replacingOccurrences(of: "<li[^>]*>", with: "\n• ", options: [.regularExpression, .caseInsensitive])
+        text = text.replacingOccurrences(of: "<br\\s*/?>|</p>|</div>|</li>|</ul>|</ol>", with: "\n", options: [.regularExpression, .caseInsensitive])
+        text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        for (entity, character) in entities { text = text.replacingOccurrences(of: entity, with: character) }
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        // "https://x https://x" when a link's text was its own address.
+        return lines.map { line in
+            line.replacingOccurrences(of: "(\\S+) \\1(?=\\s|$)", with: "$1", options: .regularExpression)
+        }.joined(separator: "\n")
     }
 }
