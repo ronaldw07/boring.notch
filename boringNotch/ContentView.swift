@@ -824,7 +824,7 @@ struct ContentView: View {
                 // Typing in the notch (an event, a timer length) keeps it open.
                 let isBlocked = vm.isBatteryPopoverActive || vm.isResizingNotch
                     || SharingStateManager.shared.preventNotchClose
-                    || BoringNotchSkyLightWindow.acceptsKeyboardInput
+                    || NotchKeyboardFocus.holdsNotchOpen
                 let isOutsideLongEnough = Date.now.timeIntervalSince(start) >= Self.closeDelay
                     || !vm.isMouseHovering(margin: Self.closeFarDistance)
                 if !isBlocked && !vm.isMouseHovering() && isOutsideLongEnough {

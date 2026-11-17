@@ -123,8 +123,12 @@ class BoringNotchSkyLightWindow: NSPanel {
 @MainActor
 enum NotchKeyboardFocus {
     private static var previousApp: NSRunningApplication?
+    /// True while typing into a field, which keeps the notch from closing
+    /// under it. An event's details box takes keys too, but shouldn't.
+    private(set) static var holdsNotchOpen = false
 
-    static func begin() {
+    static func begin(holdsNotchOpen: Bool = true) {
+        self.holdsNotchOpen = holdsNotchOpen
         previousApp = NSWorkspace.shared.frontmostApplication
         BoringNotchSkyLightWindow.acceptsKeyboardInput = true
         let mouse = NSEvent.mouseLocation
@@ -135,6 +139,7 @@ enum NotchKeyboardFocus {
     }
 
     static func end() {
+        holdsNotchOpen = false
         BoringNotchSkyLightWindow.acceptsKeyboardInput = false
         if NSApp.keyWindow is BoringNotchSkyLightWindow {
             NSApp.keyWindow?.resignKey()

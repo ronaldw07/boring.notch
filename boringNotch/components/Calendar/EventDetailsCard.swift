@@ -20,6 +20,17 @@ struct EventDetailsCard: View {
     @State private var isConfirmingDelete = false
     @State private var deleteFailed = false
     @State private var confirmResetTask: Task<Void, Never>?
+    /// Backspace asked "Delete this event?"; Enter confirms, Escape backs out.
+    @State private var isAskingToDelete = false
+    @State private var keyMonitor: Any?
+
+    private enum Key {
+        static let backspace: UInt16 = 51
+        static let forwardDelete: UInt16 = 117
+        static let returnKey: UInt16 = 36
+        static let enter: UInt16 = 76
+        static let escape: UInt16 = 53
+    }
 
     private var color: Color { Color(nsColor: event.calendar.color) }
 
@@ -28,6 +39,8 @@ struct EventDetailsCard: View {
             header
             if isChoosingScope {
                 scopeChooser
+            } else if isAskingToDelete {
+                deleteQuestion
             } else {
                 // Details beside the buttons rather than above them: the
                 // notch's content area is wide and short.
@@ -49,7 +62,64 @@ struct EventDetailsCard: View {
         .frame(width: 440, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .modifier(CardBackground())
-        .onDisappear { confirmResetTask?.cancel() }
+        .onAppear {
+            // Keys reach the notch only while it's the key window; it hands
+            // focus back when the box closes.
+            guard event.type.isEvent else { return }
+            NotchKeyboardFocus.begin(holdsNotchOpen: false)
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { handleKey($0) }
+        }
+        .onDisappear {
+            confirmResetTask?.cancel()
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            if event.type.isEvent { NotchKeyboardFocus.end() }
+        }
+    }
+
+    /// Backspace asks to delete, Enter confirms (on a repeating event, just
+    /// this one), Escape backs out of the question or closes the box.
+    private func handleKey(_ key: NSEvent) -> NSEvent? {
+        switch key.keyCode {
+        case Key.backspace, Key.forwardDelete:
+            guard !isAskingToDelete, !isChoosingScope else { return nil }
+            deleteFailed = false
+            if event.hasRecurrenceRules {
+                isChoosingScope = true
+            } else {
+                isAskingToDelete = true
+            }
+            return nil
+        case Key.returnKey, Key.enter:
+            guard isAskingToDelete || isChoosingScope else { return key }
+            Task { await delete(.thisEvent) }
+            return nil
+        case Key.escape:
+            if isAskingToDelete || isChoosingScope {
+                isAskingToDelete = false
+                isChoosingScope = false
+            } else {
+                onClose()
+            }
+            return nil
+        default:
+            return key
+        }
+    }
+
+    /// Cancel first, Delete highlighted: Enter deletes.
+    private var deleteQuestion: some View {
+        HStack(spacing: 6) {
+            Text("Delete this event?")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+            Spacer(minLength: 0)
+            pill("Cancel", tint: .white.opacity(0.12), text: .white) {
+                isAskingToDelete = false
+            }
+            pill("Delete", symbol: "return", tint: .red.opacity(0.85), text: .white) {
+                Task { await delete(.thisEvent) }
+            }
+        }
     }
 
     // MARK: - Content
@@ -248,8 +318,11 @@ struct EventDetailsCard: View {
         }
     }
 
+    /// "This event" is highlighted: it's what Enter deletes.
     private func scopeButton(_ title: String, _ scope: EventDeletionScope) -> some View {
-        pill(title, tint: .red.opacity(0.22), text: .red) {
+        let isEnterChoice = scope == .thisEvent
+        return pill(title, symbol: isEnterChoice ? "return" : nil,
+                    tint: .red.opacity(isEnterChoice ? 0.85 : 0.22), text: isEnterChoice ? .white : .red) {
             Task { await delete(scope) }
         }
     }
@@ -294,6 +367,7 @@ struct EventDetailsCard: View {
         if await onDelete(scope) { return }
         isChoosingScope = false
         isConfirmingDelete = false
+        isAskingToDelete = false
         deleteFailed = true
     }
 }
