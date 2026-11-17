@@ -179,6 +179,9 @@ struct CalendarTabView: View {
     @State private var resizeStartExtra: CGFloat?
     /// The size the expand button goes back to: the last one dragged to.
     @AppStorage("calendarVerticalExtraHeight") private var rememberedVerticalExtra: Double = 0
+    /// Whether the calendar was left expanded, so switching tabs or closing
+    /// the notch brings it back at the same size.
+    @AppStorage("calendarWasExpanded") private var wasExpanded = false
     @State private var selectedEvent: EventModel?
     @State private var isQuickAdding = false
     @State private var activeDrag: ActiveDrag?
@@ -271,10 +274,7 @@ struct CalendarTabView: View {
             }
         }
         .onAppear {
-            // Same as the clipboard: always opens at the normal size.
-            isExpanded = false
-            verticalExtra = 0
-            vm.setExtraContentHeight(0)
+            restoreSize()
             calendarManager.beginLiveRefresh()
             show(Calendar.current.startOfDay(for: .now))
             Task { await calendarManager.requestAccessForTab() }
@@ -312,13 +312,13 @@ struct CalendarTabView: View {
             guard vm.extraContentHeight != desiredExtraHeight, resizeStartExtra == nil else { return }
             resetSize()
             if vm.notchState == .open && vm.coordinator.currentView == .calendar {
-                applyExtraHeight()
+                restoreSize()
             }
         }
         .onChange(of: visibleLaneCount) { applyExtraHeight() }
         .onChange(of: isVertical) {
             verticalExtra = 0
-            applyExtraHeight()
+            restoreSize()
         }
         .onChange(of: hasTasks) { applyExtraHeight() }
         // Google tasks for the shown day, refreshed while the tab is open.
@@ -340,6 +340,8 @@ struct CalendarTabView: View {
     private var isToday: Bool {
         Calendar.current.isDateInToday(day)
     }
+            isExpanded = false
+            wasExpanded = false
 
     private var events: [EventModel] {
         EventListView.filteredEvents(events: calendarManager.events)
@@ -1304,6 +1306,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     }
 
     private func update(_ view: CaptureView) {
+        wasExpanded = verticalExtra > 0
         view.isVertical = isVertical
         view.onScroll = onScroll
         view.onPress = onPress
@@ -1315,6 +1318,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     final class CaptureView: NSView {
         var isVertical = false
         var onScroll: ((CGFloat) -> Void)?
+        wasExpanded = isExpanded
         var onPress: ((CGPoint) -> Void)?
         var onDrag: ((CGPoint) -> Void)?
         var onRelease: ((CGPoint, NSView) -> Void)?
@@ -1333,6 +1337,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
                 options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
                 owner: self
             ))
+        wasExpanded = target > 0
         }
 
         private func point(of event: NSEvent) -> CGPoint {
@@ -1346,6 +1351,20 @@ private struct TimelineScrollCapture: NSViewRepresentable {
             // the header's buttons get the plain arrow.
             guard bounds.contains(point) else { return .arrow }
             return cursorAt?(point) ?? .arrow
+    /// Back to the size the calendar was left at: expanded or normal, and
+    /// in the top-to-bottom view, the height it was last dragged to.
+    @MainActor
+    private func restoreSize() {
+        isExpanded = !isVertical && wasExpanded
+        if isVertical && wasExpanded {
+            let remembered = CGFloat(rememberedVerticalExtra)
+            verticalExtra = min(remembered > 0 ? remembered : Self.verticalExtraHeight, maxVerticalExtra)
+        } else {
+            verticalExtra = 0
+        }
+        applyExtraHeight()
+    }
+
         }
 
         override func mouseEntered(with event: NSEvent) {
