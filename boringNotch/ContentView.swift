@@ -36,6 +36,10 @@ struct ContentView: View {
 
     @State private var haptics: Bool = false
 
+    /// 1–5 switch tabs while the pointer is over the open notch.
+    @State private var tabKeyMonitor: Any?
+    @State private var tabKeysHaveFocus = false
+
     @Namespace var albumArtNamespace
 
     @Default(.useMusicVisualizer) var useMusicVisualizer
@@ -244,6 +248,22 @@ struct ContentView: View {
                         }
                     }
                     .sensoryFeedback(.alignment, trigger: haptics)
+                    .onChange(of: isHovering) { updateTabKeys() }
+                    .onChange(of: vm.notchState) { updateTabKeys() }
+                    .onChange(of: coordinator.currentView) { old, new in
+                        updateTabKeys()
+                        // The calendar shrinks itself when it disappears, which
+                        // is only once the switch has finished animating; start
+                        // shrinking now, alongside the switch.
+                        if old == .calendar, new != .calendar {
+                            vm.setExtraContentHeight(0)
+                        }
+                    }
+                    // A card or tab that gave the keyboard back while the
+                    // pointer is still here: take it again.
+                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
+                        if note.object is BoringNotchSkyLightWindow { updateTabKeys() }
+                    }
                     .contextMenu {
                         Button("Settings") {
                             DispatchQueue.main.async {
@@ -746,6 +766,67 @@ struct ContentView: View {
             coordinator.currentView = .home
         }
         doOpen()
+    }
+
+    // MARK: - Tab keys
+
+    /// Listens for 1–9 while the pointer is over the open notch, which
+    /// keeps the keyboard the whole time, on every tab. The app you were in
+    /// gets it back when the pointer leaves.
+    private func updateTabKeys() {
+        let wantsKeys = isHovering && vm.notchState == .open
+        if wantsKeys, tabKeyMonitor == nil {
+            tabKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { key in
+                handleTabKey(key) ? nil : key
+            }
+        } else if !wantsKeys, let monitor = tabKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            tabKeyMonitor = nil
+        }
+
+        if wantsKeys {
+            tabKeysHaveFocus = true
+            // After a tab or card that held the keyboard has given it back;
+            // not from another of our windows, like Settings.
+            DispatchQueue.main.async {
+                guard tabKeysHaveFocus, isHovering, vm.notchState == .open,
+                      NSApp.keyWindow == nil else { return }
+                NotchKeyboardFocus.begin(holdsNotchOpen: false)
+            }
+        } else if tabKeysHaveFocus {
+            tabKeysHaveFocus = false
+            // A field being typed into keeps it until it's done.
+            if !NotchKeyboardFocus.holdsNotchOpen { NotchKeyboardFocus.end() }
+        }
+    }
+
+    /// 1–5 the tabs, 6 and up the header buttons on the right, in the
+    /// order shown. Not while a field is being typed into, like the timer's
+    /// own time.
+    private func handleTabKey(_ key: NSEvent) -> Bool {
+        guard key.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+              !NotchKeyboardFocus.holdsNotchOpen,
+              !(NSApp.keyWindow?.firstResponder is NSText),
+              let digit = key.charactersIgnoringModifiers.flatMap({ Int($0) }),
+              digit >= 1 else { return false }
+        if digit <= tabs.count {
+            withAnimation(.smooth) { coordinator.currentView = tabs[digit - 1].view }
+            return true
+        }
+        let buttons = headerButtonActions
+        guard digit - tabs.count <= buttons.count else { return false }
+        buttons[digit - tabs.count - 1]()
+        return true
+    }
+
+    /// What the header's right-hand buttons do, left to right, matching
+    /// which of them BoringHeader shows.
+    private var headerButtonActions: [() -> Void] {
+        var actions: [() -> Void] = [{ vm.toggleVolumeView() }]
+        if Defaults[.showLyricsButton] && Defaults[.enableLyrics] { actions.append { vm.toggleLyricsView() } }
+        if Defaults[.showMirror] { actions.append { vm.toggleCameraPreview() } }
+        if Defaults[.settingsIconInNotch] { actions.append { SettingsWindowController.shared.showWindow() } }
+        return actions
     }
 
     // MARK: - Hover Management

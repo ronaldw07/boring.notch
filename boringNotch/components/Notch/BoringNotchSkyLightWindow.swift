@@ -134,7 +134,9 @@ enum NotchKeyboardFocus {
         let mouse = NSEvent.mouseLocation
         NSApp.windows
             .compactMap { $0 as? BoringNotchSkyLightWindow }
-            .first { $0.isVisible && $0.frame.contains(mouse) }?
+            // A pointer pushed up against the top of the screen sits on the
+            // window's top edge, which `contains` leaves out.
+            .first { $0.isVisible && $0.frame.insetBy(dx: -1, dy: -1).contains(mouse) }?
             .makeKey()
     }
 
