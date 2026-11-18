@@ -3,23 +3,41 @@
     <channel>
         <title>Chora</title>
         <item>
-            <title>0.8.6</title>
-            <pubDate>Mon, 16 Nov 2026 16:32:01 -0800</pubDate>
+            <title>0.9.0</title>
+            <pubDate>Tue, 17 Nov 2026 18:56:09 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1428</sparkle:version>
-            <sparkle:shortVersionString>0.8.6</sparkle:shortVersionString>
+            <sparkle:version>1443</sparkle:version>
+            <sparkle:shortVersionString>0.9.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<h3>Added</h3>
 <ul>
-<li><strong>Edit an event.</strong> Click an event, then Edit, to change its title, location or description. Return saves, Escape cancels, and Undo puts it back.</li>
+<li><strong>4 Days, Week and Month.</strong> Switch views from the calendar&#x27;s header. Drag events between days in 4 Days and Week, and click a day&#x27;s name to open it on its own.</li>
+<li><strong>Weather.</strong> The temperature and any rain sit beside the date; click it for the next 12 hours and the week ahead. Week and Month show each day&#x27;s too. It uses your location and the free Open-Meteo forecast, with no account.</li>
+<li><strong>Search.</strong> Click the magnifying glass or press / to find events from a year back to a year ahead, by title, place or notes. Results are split into Upcoming and Past with a count for each; click one to open it in the notch.</li>
+<li><strong>Repeat and reminders.</strong> New events can repeat daily, on weekdays, weekly, monthly or yearly, with a reminder from right at the start to a day before.</li>
+<li><strong>Duplicate.</strong> Copy an event from its details.</li>
+<li><strong>Change an event&#x27;s day and times</strong>, or make it all-day, from Edit. For a repeating event, choose this event, this and following, or all.</li>
+<li><strong>Calendar shortcuts.</strong> With the pointer over the calendar: the arrow keys or J and K move between days, T goes to today, C adds an event, D, X, W and M switch to Day, 4 Days, Week and Month, and / searches.</li>
+<li><strong>Number keys switch tabs.</strong> With the pointer over the open notch, 1 to 5 open Home, Shelf, Clipboard, Timer and Calendar, and 6 to 9 press the buttons on the right.</li>
+<li><strong>More from Google Calendar.</strong> Signed in with Google, answer invites with Yes, Maybe or No, add guests and a Google Meet link to new events, and give an event its own color. Already signed in? Use Sign in again in Settings → Google to allow calendar access.</li>
 </ul>
 <h3>Changed</h3>
 <ul>
-<li><strong>Updates install right away.</strong> Chora checks every hour and now installs a new version as soon as it has downloaded, relaunching in a few seconds, instead of waiting for you to quit.</li>
+<li><strong>All-day events get their own row</strong> under the date, so the header isn&#x27;t squeezed, and they open in the notch instead of the Calendar app.</li>
+<li><strong>Resize events from the bottom edge</strong>, like Google Calendar.</li>
+<li><strong>Switching days and views is smooth.</strong> The new day loads first, then fades in.</li>
+<li><strong>The Today button is outlined</strong>, like Google Calendar&#x27;s.</li>
+<li><strong>The big calendar shrinks right away</strong> when you switch to another tab.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>Deleting an event now closes its details.</li>
+<li>Keys reach the notch even when the pointer is pushed against the top of the screen.</li>
+<li>The bottom of the week view no longer gets cut off.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.8.6/Chora.dmg" length="9479354" type="application/octet-stream" sparkle:edSignature="fXunNGKBkSHjGT+2XV8Da2pPm1fvBxqIjg5XULXnvWVl3ekFsIfVgL7ssdd4Y1ydK5Ya5P8wX2TxHR5mXzFZAg=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.9.0/Chora.dmg" length="9887667" type="application/octet-stream" sparkle:edSignature="rUYXZn/NW4LXLTDzZBQs/3Xhnrr6ScizbwsygI7MOtmf6WUt3wC1CHyNwLc0pbPKRUoh5oKhkJtj/zB0GcJsAw=="/>
         </item>
     </channel>
 </rss>
