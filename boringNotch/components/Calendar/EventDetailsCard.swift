@@ -18,6 +18,13 @@ struct EventDetailsCard: View {
     /// The edited event and which occurrences it applies to; true if the
     /// calendar took it.
     let onEdit: (EventEdit, EventScope) async -> Bool
+    /// Makes a copy of the event; false if the calendar wouldn't take it.
+    let onDuplicate: () async -> Bool
+    /// Answers the invite on Google; nil when not signed in to Google Calendar.
+    var onRespond: ((AttendanceStatus) async -> Bool)? = nil
+    /// Colors the event on Google, nil for the calendar's own color; nil
+    /// when not signed in to Google Calendar.
+    var onSetColor: ((GoogleEventColor?) async -> Bool)? = nil
 
     @State private var isEditing = false
     @State private var editTitle = ""
@@ -33,6 +40,10 @@ struct EventDetailsCard: View {
 
     @State private var isChoosingScope = false
     @State private var isConfirmingDelete = false
+    @State private var duplicateFailed = false
+    /// Your answer, shown at once while Google takes it.
+    @State private var answer: AttendanceStatus?
+    @State private var googleFailed = false
     @State private var deleteFailed = false
     @State private var confirmResetTask: Task<Void, Never>?
     /// Backspace asked "Delete this event?"; Enter confirms, Escape backs out.
@@ -348,9 +359,7 @@ struct EventDetailsCard: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 8) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 4, height: 30)
+            colorBar
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title)
                     .font(.system(size: 13, weight: .semibold))
@@ -391,6 +400,14 @@ struct EventDetailsCard: View {
             if !event.participants.isEmpty {
                 guests
             }
+            if let onRespond, let me = event.participants.first(where: { $0.isCurrentUser && !$0.isOrganizer }) {
+                rsvpRow(current: answer ?? me.status, onRespond: onRespond)
+            }
+            if googleFailed {
+                Text("Couldn't reach Google Calendar")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.orange)
+            }
             if let notes = event.notes.map(NotesText.plain)?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "text.alignleft")
@@ -405,6 +422,88 @@ struct EventDetailsCard: View {
                 }
             }
         }
+    }
+
+    /// The bar beside the title; with Google Calendar, a menu of its colors.
+    @ViewBuilder
+    private var colorBar: some View {
+        let bar = RoundedRectangle(cornerRadius: 2)
+            .fill(color)
+            .frame(width: 4, height: 30)
+        if let onSetColor {
+            Menu {
+                Button("Calendar color") { setColor(nil, onSetColor) }
+                ForEach(GoogleEventColor.allCases, id: \.self) { option in
+                    Button {
+                        setColor(option, onSetColor)
+                    } label: {
+                        Label { Text(option.name) } icon: { Image(nsImage: Self.dot(option.color)) }
+                    }
+                }
+            } label: {
+                bar.padding(.horizontal, 3).contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .padding(.horizontal, -3)
+            .help("Event color")
+        } else {
+            bar
+        }
+    }
+
+    private func setColor(_ option: GoogleEventColor?, _ onSetColor: @escaping (GoogleEventColor?) async -> Bool) {
+        googleFailed = false
+        Task { googleFailed = !(await onSetColor(option)) }
+    }
+
+    /// A colour swatch for the menu, which only shows images, not views.
+    private static func dot(_ color: NSColor) -> NSImage {
+        NSImage(size: NSSize(width: 10, height: 10), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
+    }
+
+    /// "Going?  Yes  Maybe  No", your answer filled in.
+    private func rsvpRow(current: AttendanceStatus, onRespond: @escaping (AttendanceStatus) async -> Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "person.crop.circle.badge.questionmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 12)
+            Text("Going?")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.8))
+            ForEach([(AttendanceStatus.accepted, "Yes", Color.green),
+                     (.maybe, "Maybe", Color.yellow),
+                     (.declined, "No", Color.red)], id: \.1) { status, label, tint in
+                Button {
+                    let previous = answer
+                    answer = status
+                    googleFailed = false
+                    Task {
+                        if !(await onRespond(status)) {
+                            answer = previous
+                            googleFailed = true
+                        }
+                    }
+                } label: {
+                    Text(label)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(current == status ? .white : .white.opacity(0.7))
+                        .padding(.horizontal, 7)
+                        .frame(height: 18)
+                        .background(Capsule().fill(current == status ? tint.opacity(0.55) : .white.opacity(0.08)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 2)
     }
 
     private func line(_ symbol: String, _ text: String, lines: Int = 1) -> some View {
@@ -495,6 +594,11 @@ struct EventDetailsCard: View {
     private var timeText: String {
         let start = event.start, end = event.end
         let day = start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        if event.isAllDay {
+            guard !Calendar.current.isDate(start, inSameDayAs: end), end > start else { return "\(day) · All day" }
+            let endDay = end.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+            return "\(day) – \(endDay) · All day"
+        }
         let startTime = start.formatted(date: .omitted, time: .shortened)
         let endTime = end.formatted(date: .omitted, time: .shortened)
         if Calendar.current.isDate(start, inSameDayAs: end) || end <= start {
@@ -515,7 +619,17 @@ struct EventDetailsCard: View {
             }
             pill("Open in Calendar", symbol: "arrow.up.forward.app", tint: .white.opacity(0.12), text: .white, action: onOpen)
             if event.type.isEvent {
-                pill("Edit", symbol: "pencil", tint: .white.opacity(0.12), text: .white, action: beginEditing)
+                HStack(spacing: 6) {
+                    pill("Duplicate", symbol: "plus.square.on.square", tint: .white.opacity(0.12), text: .white) {
+                        Task { duplicateFailed = !(await onDuplicate()) }
+                    }
+                    pill("Edit", symbol: "pencil", tint: .white.opacity(0.12), text: .white, action: beginEditing)
+                }
+                if duplicateFailed {
+                    Text("Couldn't duplicate it")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.orange)
+                }
                 pill(isConfirmingDelete ? "Tap again to delete" : "Delete",
                      symbol: "trash",
                      tint: .red.opacity(isConfirmingDelete ? 0.85 : 0.22),
@@ -587,7 +701,10 @@ struct EventDetailsCard: View {
     }
 
     private func delete(_ scope: EventScope) async {
-        if await onDelete(scope) { return }
+        if await onDelete(scope) {
+            onClose()
+            return
+        }
         isChoosingScope = false
         isConfirmingDelete = false
         isAskingToDelete = false

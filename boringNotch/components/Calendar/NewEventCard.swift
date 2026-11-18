@@ -5,8 +5,8 @@
 //  Created by Ronald Wen on 2026-11-16.
 //
 //  What shows after dragging out a new event on an empty part of the
-//  calendar: a title, the time it covers, which calendar, a location and a
-//  description, then Save.
+//  calendar: a title, the time it covers, which calendar, whether it
+//  repeats, a reminder, a location and a description, then Save.
 //
 
 import SwiftUI
@@ -17,12 +17,18 @@ struct NewEventCard: View {
         let calendarID: String?
         let location: String
         let notes: String
+        let repeats: EventRepeat
+        let reminderMinutes: Int?
+        let guests: [String]
+        let addsMeet: Bool
     }
 
     let start: Date
     let end: Date
     let calendars: [CalendarModel]
     let defaultCalendarID: String?
+    /// Signed in to Google Calendar, so guests and Meet links can be added.
+    var canInvite = false
     /// True if the calendar took the new event.
     let onSave: (Details) async -> Bool
     let onClose: () -> Void
@@ -31,6 +37,10 @@ struct NewEventCard: View {
     @State private var location = ""
     @State private var notes = ""
     @State private var calendarID: String?
+    @State private var repeats: EventRepeat = .never
+    @State private var reminderMinutes: Int?
+    @State private var guestsText = ""
+    @State private var addsMeet = false
     @State private var saveFailed = false
     @State private var escapeMonitor: Any?
     @FocusState private var isTitleFocused: Bool
@@ -59,10 +69,20 @@ struct NewEventCard: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     row("clock", timeText)
+                    HStack(spacing: 6) {
+                        repeatMenu
+                        reminderMenu
+                    }
+                    if canInvite {
+                        HStack(spacing: 6) {
+                            field("person.2", "Add guests (emails)", text: $guestsText)
+                            meetToggle
+                        }
+                    }
                     field("mappin.and.ellipse", "Add location", text: $location)
                     field("text.alignleft", "Add description", text: $notes)
                     if saveFailed {
-                        Text("Couldn't save it. This calendar may be read-only.")
+                        Text(invites ? "Couldn't save it. Guests and Meet need a Google calendar." : "Couldn't save it. This calendar may be read-only.")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.orange)
                     }
@@ -150,6 +170,76 @@ struct NewEventCard: View {
         .fixedSize()
     }
 
+    /// Guests or a Meet link were asked for.
+    private var invites: Bool {
+        canInvite && (addsMeet || !GoogleCalendarFormat.guestEmails(from: guestsText).isEmpty)
+    }
+
+    private var meetToggle: some View {
+        Button { addsMeet.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: addsMeet ? "checkmark.square.fill" : "video")
+                    .font(.system(size: 9, weight: .semibold))
+                Text("Google Meet")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(addsMeet ? .white : .white.opacity(0.75))
+            .padding(.horizontal, 7)
+            .frame(height: 18)
+            .background(Capsule().fill(addsMeet ? Color.green.opacity(0.5) : .white.opacity(0.08)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+    }
+
+    private var repeatMenu: some View {
+        Menu {
+            ForEach(EventRepeat.allCases, id: \.self) { option in
+                Button(option.label(for: start)) { repeats = option }
+            }
+        } label: {
+            pill("arrow.clockwise", repeats.label(for: start))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var reminderMenu: some View {
+        Menu {
+            ForEach(EventReminder.choices, id: \.self) { minutes in
+                Button(EventReminder.label(minutes)) { reminderMinutes = minutes }
+            }
+        } label: {
+            pill("bell", EventReminder.label(reminderMinutes))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    /// A small menu button: icon, current choice, up-down chevron.
+    private func pill(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol)
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.6))
+            Text(text)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 6, weight: .bold))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 18)
+        .background(Capsule().fill(.white.opacity(0.08)))
+    }
+
     private func row(_ symbol: String, _ text: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: symbol)
@@ -200,7 +290,11 @@ struct NewEventCard: View {
             title: trimmed.isEmpty ? QuickAddParser.untitled : trimmed,
             calendarID: calendar?.id,
             location: location,
-            notes: notes
+            notes: notes,
+            repeats: repeats,
+            reminderMinutes: reminderMinutes,
+            guests: canInvite ? GoogleCalendarFormat.guestEmails(from: guestsText) : [],
+            addsMeet: canInvite && addsMeet
         )
         Task {
             if await onSave(details) {

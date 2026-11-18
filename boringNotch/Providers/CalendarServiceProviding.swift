@@ -17,7 +17,8 @@ protocol CalendarServiceProviding {
     func pullRemoteChanges()
     func deleteEvent(id: String, originalStart: Date, scope: EventScope) async -> Bool
     func updateEvent(id: String, originalStart: Date, edit: EventEdit, scope: EventScope) async -> ChangedOccurrence?
-    func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?) async -> String?
+    func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?,
+                     repeats: EventRepeat, reminderMinutes: Int?, isAllDay: Bool) async -> String?
     var newEventCalendarTitle: String? { get }
     var newEventCalendarID: String? { get }
     var editableEventCalendarIDs: Set<String> { get }
@@ -168,16 +169,20 @@ class CalendarService: CalendarServiceProviding {
 
     /// Adds an event to the given calendar, or the default one. Returns its
     /// identifier, or nil if that calendar is missing or won't take changes.
-    func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?) async -> String? {
+    func createEvent(title: String, start: Date, end: Date, calendarID: String?, location: String?, notes: String?,
+                     repeats: EventRepeat, reminderMinutes: Int?, isAllDay: Bool) async -> String? {
         let chosen = calendarID.flatMap { store.calendar(withIdentifier: $0) } ?? store.defaultCalendarForNewEvents
         guard let calendar = chosen, calendar.allowsContentModifications else { return nil }
         let event = EKEvent(eventStore: store)
         event.title = title
+        event.isAllDay = isAllDay
         event.startDate = start
         event.endDate = end
         event.calendar = calendar
         event.location = location
         event.notes = notes
+        if let rule = repeats.rule { event.addRecurrenceRule(rule) }
+        if let alarm = EventReminder.alarm(reminderMinutes) { event.addAlarm(alarm) }
         do {
             try store.save(event, span: .thisEvent, commit: true)
             return event.calendarItemIdentifier
@@ -328,7 +333,8 @@ extension EventModel {
             participants: .init(from: event),
             timeZone: calendar.isSubscribed || calendar.isDelegate ? nil : event.timeZone,
             hasRecurrenceRules: event.hasRecurrenceRules || event.isDetached,
-            priority: nil
+            priority: nil,
+            externalID: event.calendarItemExternalIdentifier
         )
     }
     

@@ -28,6 +28,8 @@ class CalendarManager: ObservableObject {
     @Published var calendarAuthorizationStatus: EKAuthorizationStatus = .notDetermined
     @Published var reminderAuthorizationStatus: EKAuthorizationStatus = .notDetermined
     private var selectedCalendars: [CalendarModel] = []
+    /// The calendars whose events are shown.
+    var shownCalendars: [CalendarModel] { selectedCalendars }
     private let calendarService = CalendarService()
 
     private var eventStoreChangedObserver: NSObjectProtocol?
@@ -301,17 +303,34 @@ class CalendarManager: ObservableObject {
     /// Adds an event made in the Calendar tab, with undo. Empty location or
     /// notes are left off.
     func createEvent(title: String, start: Date, end: Date,
-                     calendarID: String? = nil, location: String? = nil, notes: String? = nil) async -> Bool {
+                     calendarID: String? = nil, location: String? = nil, notes: String? = nil,
+                     repeats: EventRepeat = .never, reminderMinutes: Int? = nil) async -> Bool {
         let location = location?.trimmingCharacters(in: .whitespacesAndNewlines)
         let notes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id = await calendarService.createEvent(
             title: title, start: start, end: end, calendarID: calendarID,
             location: location?.isEmpty == false ? location : nil,
-            notes: notes?.isEmpty == false ? notes : nil
+            notes: notes?.isEmpty == false ? notes : nil,
+            repeats: repeats,
+            reminderMinutes: reminderMinutes,
+            isAllDay: false
         ) else { return false }
         remember(.created(id: id, start: start), message: "Added \(title)")
         await updateEvents()
         return true
+    }
+
+    /// A one-off copy at the same time in the same calendar, with undo.
+    /// Returns the copy, so its details can open in place of the original's.
+    func duplicateEvent(_ event: EventModel) async -> EventModel? {
+        guard let id = await calendarService.createEvent(
+            title: event.title, start: event.start, end: event.end, calendarID: event.calendar.id,
+            location: event.location, notes: event.notes,
+            repeats: .never, reminderMinutes: nil, isAllDay: event.isAllDay
+        ) else { return nil }
+        remember(.created(id: id, start: event.start), message: "Duplicated \(event.title)")
+        await updateEvents()
+        return events.first { $0.id == id }
     }
 
     /// Saves an edit from the details box or a drag, with undo.
@@ -354,7 +373,8 @@ class CalendarManager: ObservableObject {
         case .deleted(let pending):
             hiddenDeletions.removeAll { $0.token == pending.token }
         case .created(let id, let start):
-            let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisEvent)
+            // From the first occurrence on: the whole series, if it repeats.
+            let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisAndFollowing)
             if !removed { showUndoFailed() }
         }
         await updateEvents()
@@ -423,6 +443,16 @@ class CalendarManager: ObservableObject {
         currentWeekStartDate = Calendar.current.startOfDay(for: start)
         loadedDayCount = max(1, days)
         await updateEvents()
+    }
+
+    /// Events from a year back to a year ahead in the shown calendars, for
+    /// search. Fetched once per search, then filtered as you type.
+    func searchableEvents() async -> [EventModel] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        guard let from = calendar.date(byAdding: .year, value: -1, to: today),
+              let to = calendar.date(byAdding: .year, value: 1, to: today) else { return [] }
+        return visible(await calendarService.events(from: from, to: to, calendars: selectedCalendars.map(\.id)))
     }
 
     private var loadedEnd: Date {
