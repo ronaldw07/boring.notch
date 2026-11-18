@@ -11,6 +11,36 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.9.0 — 2026-11-17
+
+### Added
+
+- **4 Days, Week and Month.** Switch views from the calendar's header. Drag events between days in 4 Days and Week, and click a day's name to open it on its own.
+- **Weather.** The temperature and any rain sit beside the date; click it for the next 12 hours and the week ahead. Week and Month show each day's too. It uses your location and the free Open-Meteo forecast, with no account.
+- **Search.** Click the magnifying glass or press / to find events from a year back to a year ahead, by title, place or notes. Results are split into Upcoming and Past with a count for each; click one to open it in the notch.
+- **Repeat and reminders.** New events can repeat daily, on weekdays, weekly, monthly or yearly, with a reminder from right at the start to a day before.
+- **Duplicate.** Copy an event from its details.
+- **Change an event's day and times**, or make it all-day, from Edit. For a repeating event, choose this event, this and following, or all.
+- **Calendar shortcuts.** With the pointer over the calendar: the arrow keys or J and K move between days, T goes to today, C adds an event, D, X, W and M switch to Day, 4 Days, Week and Month, and / searches.
+- **Number keys switch tabs.** With the pointer over the open notch, 1 to 5 open Home, Shelf, Clipboard, Timer and Calendar, and 6 to 9 press the buttons on the right.
+- **More from Google Calendar.** Signed in with Google, answer invites with Yes, Maybe or No, add guests and a Google Meet link to new events, and give an event its own color. Already signed in? Use Sign in again in Settings → Google to allow calendar access.
+
+### Changed
+
+- **All-day events get their own row** under the date, so the header isn't squeezed, and they open in the notch instead of the Calendar app.
+- **Resize events from the bottom edge**, like Google Calendar.
+- **Switching days and views is smooth.** The new day loads first, then fades in.
+- **The Today button is outlined**, like Google Calendar's.
+- **The big calendar shrinks right away** when you switch to another tab.
+
+### Fixed
+
+- Deleting an event now closes its details.
+- Keys reach the notch even when the pointer is pushed against the top of the screen.
+- The bottom of the week view no longer gets cut off.
+
+---
+
 ## 0.8.6 — 2026-11-16
 
 ### Added
