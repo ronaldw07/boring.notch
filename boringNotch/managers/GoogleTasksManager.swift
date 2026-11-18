@@ -42,8 +42,16 @@ final class GoogleTasksManager: ObservableObject {
     @Published private(set) var isSignedIn: Bool = !Defaults[.googleRefreshToken].isEmpty
     @Published private(set) var statusMessage: String?
     @Published private(set) var isSigningIn = false
+    /// Whether the sign-in also covers Google Calendar (RSVP, guests, Meet,
+    /// colors). Known once a token has come back; signing in before this
+    /// was added covered Tasks only.
+    @Published private(set) var hasCalendarAccess = false
 
-    private static let scope = "https://www.googleapis.com/auth/tasks"
+    private static let calendarScopes = [
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+    ]
+    private static let scope = (["https://www.googleapis.com/auth/tasks"] + calendarScopes).joined(separator: " ")
     private var accessToken: (value: String, expires: Date)?
 
     private init() {}
@@ -111,6 +119,7 @@ final class GoogleTasksManager: ObservableObject {
         accessToken = nil
         tasks = []
         isSignedIn = false
+        hasCalendarAccess = false
         statusMessage = nil
     }
 
@@ -199,14 +208,20 @@ final class GoogleTasksManager: ObservableObject {
         let accessToken: String
         let refreshToken: String?
         let expiresIn: TimeInterval
+        /// The scopes granted, space-separated.
+        let scope: String?
     }
 
     private func store(_ token: TokenResponse) {
         // A minute early, so a request never starts with a token about to expire.
         accessToken = (token.accessToken, Date().addingTimeInterval(token.expiresIn - 60))
+        if let granted = token.scope?.split(separator: " ").map(String.init) {
+            hasCalendarAccess = Self.calendarScopes.allSatisfy(granted.contains)
+        }
     }
 
-    private func validAccessToken() async throws -> String {
+    /// Shared with Google Calendar requests, which use the same sign-in.
+    func validAccessToken() async throws -> String {
         if let accessToken, accessToken.expires > Date() { return accessToken.value }
         let token = try await tokenRequest([
             "grant_type": "refresh_token",
@@ -242,7 +257,8 @@ final class GoogleTasksManager: ObservableObject {
         return TokenResponse(
             accessToken: access,
             refreshToken: json["refresh_token"] as? String,
-            expiresIn: (json["expires_in"] as? TimeInterval) ?? 3600
+            expiresIn: (json["expires_in"] as? TimeInterval) ?? 3600,
+            scope: json["scope"] as? String
         )
     }
 

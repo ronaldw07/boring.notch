@@ -7,7 +7,7 @@
 //  Modified by Alexander on 2025-05-18.
 //
 
-import Foundation
+import AppKit
 
 struct EventModel: Equatable, Identifiable {
     let id: String
@@ -24,6 +24,23 @@ struct EventModel: Equatable, Identifiable {
     let timeZone: TimeZone?
     let hasRecurrenceRules: Bool
     let priority: Priority?
+    /// The iCalendar UID, shared with the event's copy on Google.
+    var externalID: String? = nil
+}
+
+extension EventModel {
+    /// The same event drawn in another color, for a color set on Google.
+    func recolored(_ color: NSColor) -> EventModel {
+        let recoloredCalendar = CalendarModel(
+            id: calendar.id, account: calendar.account, title: calendar.title, color: color,
+            isSubscribed: calendar.isSubscribed, isReminder: calendar.isReminder
+        )
+        return EventModel(
+            id: id, start: start, end: end, title: title, location: location, notes: notes, url: url,
+            isAllDay: isAllDay, type: type, calendar: recoloredCalendar, participants: participants,
+            timeZone: timeZone, hasRecurrenceRules: hasRecurrenceRules, priority: priority, externalID: externalID
+        )
+    }
 }
 
 enum AttendanceStatus: Comparable {

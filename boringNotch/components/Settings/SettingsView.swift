@@ -742,12 +742,24 @@ struct CalendarSettings: View {
             Defaults.Toggle(key: .showFullEventTitles) {
                 Text("Always show full event titles")
             }
-            Section(header: Text("Google Tasks")) {
+            Section(header: Text("Google")) {
                 if googleTasks.isSignedIn {
                     HStack {
                         Text("Signed in. Tasks due on the day you're viewing show above the timeline.")
                         Spacer()
                         Button("Sign out") { googleTasks.signOut() }
+                    }
+                    if !googleTasks.hasCalendarAccess {
+                        HStack {
+                            Text("Sign in again to RSVP, add guests and Meet links, and color events. Enable the Google Calendar API in your Cloud project first.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button(googleTasks.isSigningIn ? "Waiting for browser…" : "Sign in again") {
+                                Task { await googleTasks.signIn() }
+                            }
+                            .disabled(googleTasks.isSigningIn)
+                        }
                     }
                 } else {
                     TextField("Client ID", text: $googleClientID)
@@ -756,7 +768,7 @@ struct CalendarSettings: View {
                         Task { await googleTasks.signIn() }
                     }
                     .disabled(googleClientID.isEmpty || googleTasks.isSigningIn)
-                    Text("Google Tasks don't sync to the Mac's Calendar, so this signs in to Google directly. In console.cloud.google.com: create a project, enable the Google Tasks API, set up the OAuth consent screen (add yourself as a test user), then Credentials › Create credentials › OAuth client ID › Desktop app. Paste its client ID and secret here.")
+                    Text("Google Tasks, RSVPs, guests, Meet links and event colors don't go through the Mac's Calendar, so this signs in to Google directly. In console.cloud.google.com: create a project, enable the Google Tasks API and the Google Calendar API, set up the OAuth consent screen (add yourself as a test user), then Credentials › Create credentials › OAuth client ID › Desktop app. Paste its client ID and secret here.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
