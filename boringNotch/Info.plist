@@ -7,6 +7,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocationUsageDescription</key>
+	<string>Chora uses your location to show the weather for your day in the calendar.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Chora uses your location to show the weather for your day in the calendar.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Chora reads the audio your music app is playing so the notch visualizer reacts to the real sound.</string>
 	<key>SUEnableAutomaticChecks</key>
