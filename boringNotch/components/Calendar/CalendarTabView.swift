@@ -193,6 +193,7 @@ struct CalendarTabView: View {
     @AppStorage("calendarVerticalView") private var isVertical = false
     @AppStorage("calendarSpan") private var span: CalendarSpan = .day
     @ObservedObject private var weather = WeatherManager.shared
+    @ObservedObject private var googleCalendar = GoogleCalendarManager.shared
     /// How far the timeline is scrolled along its time axis.
     @State private var offset: CGFloat = 0
     @State private var viewportSize: CGSize = .zero
@@ -210,6 +211,12 @@ struct CalendarTabView: View {
     @State private var selectedEvent: EventModel?
     @State private var isQuickAdding = false
     @State private var isShowingWeather = false
+    @State private var isSearching = false
+    @State private var isPointerInside = false
+    /// The key monitor for shortcuts, while the calendar has the keyboard.
+    @State private var shortcutMonitor: Any?
+    /// What search looks through; nil while it loads.
+    @State private var searchable: [EventModel]?
     @State private var creating: Creating?
     @State private var newRange: NewRange?
     @State private var isHoveringHandle = false
@@ -290,6 +297,10 @@ struct CalendarTabView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             header
+            if hasAllDayRow {
+                allDayChips
+                    .frame(height: Self.allDayRowHeight, alignment: .leading)
+            }
             if hasTasks {
                 tasksStrip
             }
@@ -325,11 +336,17 @@ struct CalendarTabView: View {
         .padding(.top, 4)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            isPointerInside = inside
+            updateShortcutFocus()
+        }
+        .onChange(of: isOverlayOpen) { updateShortcutFocus() }
         // On the whole tab's bottom edge, not the timeline's, so it sits
         // near the notch's edge and its mouse area is always inside the
         // panel, at any height.
         .overlay(alignment: .bottom) {
-            if isTall && selectedEvent == nil && !isQuickAdding && newRange == nil && pendingMove == nil && !isShowingWeather {
+            if isTall && selectedEvent == nil && !isQuickAdding && newRange == nil && pendingMove == nil && !isShowingWeather && !isSearching {
                 resizeHandle
             }
         }
@@ -339,21 +356,15 @@ struct CalendarTabView: View {
         .overlay { newEventOverlay }
         .overlay { moveScopeOverlay }
         .overlay { weatherOverlay }
+        .overlay { searchOverlay }
+        .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isSearching)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isShowingWeather)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: pendingMove)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: newRange)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isQuickAdding)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: selectedEvent?.id)
-        .onChange(of: calendarManager.events) {
-            // Gone from the calendar (deleted here or elsewhere): close its
-            // box. Changed (edited here or elsewhere): show the new version.
-            guard let selected = selectedEvent else { return }
-            // A new time from the box itself moves the start, so fall back
-            // to the identifier alone.
-            let fresh = calendarManager.events.first { $0.id == selected.id && $0.start == selected.start }
-                ?? calendarManager.events.first { $0.id == selected.id }
-            if fresh != selected { selectedEvent = fresh }
-        }
+        .onChange(of: calendarManager.events) { refreshSelected() }
+        .onChange(of: googleCalendar.colors) { refreshSelected() }
         .onAppear {
             restoreSize()
             calendarManager.beginLiveRefresh()
@@ -365,6 +376,9 @@ struct CalendarTabView: View {
             selectedEvent = nil
             isQuickAdding = false
             isShowingWeather = false
+            isSearching = false
+            isPointerInside = false
+            updateShortcutFocus()
             creating = nil
             newRange = nil
             // Leaving the tab ends the undo window: waiting deletes happen now.
@@ -408,6 +422,7 @@ struct CalendarTabView: View {
             applyExtraHeight()
         }
         .onChange(of: hasTasks) { applyExtraHeight() }
+        .onChange(of: hasAllDayRow) { applyExtraHeight() }
         // Google tasks for the shown day, refreshed while the tab is open.
         .task(id: "\(day.timeIntervalSince1970)-\(googleTasks.isSignedIn)") {
             while !Task.isCancelled {
@@ -461,8 +476,22 @@ struct CalendarTabView: View {
         columnDays.firstIndex { Calendar.current.isDateInToday($0) }
     }
 
+    /// The shown events, in the colors set on Google where there are any.
     private var events: [EventModel] {
-        EventListView.filteredEvents(events: calendarManager.events)
+        let colors = googleCalendar.colors
+        return EventListView.filteredEvents(events: calendarManager.events).map { event in
+            guard let uid = event.externalID,
+                  let color = colors[GoogleCalendarFormat.key(uid: uid, start: event.start)] else { return event }
+            return event.recolored(color.color)
+        }
+    }
+
+    /// Fetches the Google event colors for the days now showing. In the
+    /// background: the switch doesn't wait on the network.
+    private func loadColors(for shown: [Date]) {
+        guard googleCalendar.isAvailable, let first = shown.first, let last = shown.last,
+              let end = Calendar.current.date(byAdding: .day, value: 1, to: last) else { return }
+        Task { await googleCalendar.loadColors(from: first, to: end, calendars: calendarManager.shownCalendars) }
     }
 
     private var allDayEvents: [EventModel] {
@@ -501,6 +530,17 @@ struct CalendarTabView: View {
 
     private var hasTasks: Bool {
         !googleTasks.tasks.isEmpty
+    }
+
+    /// The day's all-day events sit on a row of their own under the header.
+    private static let allDayRowHeight: CGFloat = 18
+    private var hasAllDayRow: Bool {
+        span == .day && !allDayEvents.isEmpty
+    }
+
+    /// Height the notch grows by for the rows under the header, spacing included.
+    private var stripsHeight: CGFloat {
+        (hasTasks ? Self.tasksStripHeight + 6 : 0) + (hasAllDayRow ? Self.allDayRowHeight + 6 : 0)
     }
 
     private var hiddenCount: Int {
@@ -576,8 +616,6 @@ struct CalendarTabView: View {
             if span == .day {
                 weatherLabel
                     .padding(.leading, 2)
-                allDayChips
-                    .padding(.leading, 4)
             }
 
             Spacer(minLength: 0)
@@ -597,6 +635,7 @@ struct CalendarTabView: View {
                 orientationButton
             }
             spanPicker
+            searchButton
             quickAddButton
             expandButton
         }
@@ -664,6 +703,119 @@ struct CalendarTabView: View {
         }
     }
 
+    /// Gone from the calendar (deleted here or elsewhere): close its box.
+    /// Changed (edited here or elsewhere, or recolored): show the new version.
+    private func refreshSelected() {
+        guard let selected = selectedEvent else { return }
+        // A new time from the box itself moves the start, so fall back
+        // to the identifier alone.
+        let shown = events
+        let fresh = shown.first { $0.id == selected.id && $0.start == selected.start }
+            ?? shown.first { $0.id == selected.id }
+        if fresh != selected { selectedEvent = fresh }
+    }
+
+    // MARK: - Keyboard shortcuts
+
+    /// A card or prompt is up; it has the keyboard, not the shortcuts.
+    private var isOverlayOpen: Bool {
+        selectedEvent != nil || isQuickAdding || newRange != nil || pendingMove != nil || isShowingWeather || isSearching
+    }
+
+    /// Google Calendar's keys work while the pointer is over the calendar
+    /// and nothing's open on top of it. Moving away hands the keyboard back
+    /// to the app you were in. A card that opens takes the keyboard over
+    /// itself and gives it back when it closes, so this only takes it back
+    /// once that's done.
+    private func updateShortcutFocus() {
+        let wantsKeys = isPointerInside && !isOverlayOpen
+        if wantsKeys == (shortcutMonitor != nil) { return }
+        if let monitor = shortcutMonitor {
+            NSEvent.removeMonitor(monitor)
+            shortcutMonitor = nil
+            if !isOverlayOpen { NotchKeyboardFocus.end() }
+            return
+        }
+        // After a closing card has given the keyboard back.
+        DispatchQueue.main.async {
+            guard isPointerInside, !isOverlayOpen, shortcutMonitor == nil else { return }
+            NotchKeyboardFocus.begin(holdsNotchOpen: false)
+            shortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { key in
+                handleShortcut(key) ? nil : key
+            }
+        }
+    }
+
+    /// C new event, T today, J/K or arrows forward/back, D/X/W/M the
+    /// views, / search. Anything held with ⌘, ⌃ or ⌥ passes through.
+    @MainActor
+    private func handleShortcut(_ key: NSEvent) -> Bool {
+        guard key.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
+        switch key.keyCode {
+        case Self.leftArrowKey: step(by: -1); return true
+        case Self.rightArrowKey: step(by: 1); return true
+        default: break
+        }
+        switch key.charactersIgnoringModifiers?.lowercased() {
+        case "c": isQuickAdding = true
+        case "t": show(Calendar.current.startOfDay(for: .now))
+        case "j", "n": step(by: 1)
+        case "k", "p": step(by: -1)
+        case "d": setSpan(.day)
+        case "x": setSpan(.fourDays)
+        case "w": setSpan(.week)
+        case "m": setSpan(.month)
+        case "/": openSearch()
+        default: return false
+        }
+        return true
+    }
+
+    private static let leftArrowKey: UInt16 = 123
+    private static let rightArrowKey: UInt16 = 124
+
+    private var searchButton: some View {
+        Button(action: openSearch) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+        }
+        .buttonStyle(.plain)
+        .help("Search events")
+    }
+
+    private func openSearch() {
+        selectedEvent = nil
+        searchable = nil
+        isSearching = true
+        Task { searchable = await calendarManager.searchableEvents() }
+    }
+
+    @ViewBuilder
+    private var searchOverlay: some View {
+        if isSearching {
+            ZStack {
+                Color.black.opacity(0.55)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isSearching = false }
+                SearchCard(
+                    events: searchable,
+                    onPick: { event in
+                        isSearching = false
+                        let eventDay = Calendar.current.startOfDay(for: event.start)
+                        // Its box opens once the day has loaded, so the load can't close it.
+                        if span == .day { show(eventDay, thenOpen: event) } else { setSpan(.day, day: eventDay, thenOpen: event) }
+                    },
+                    onClose: { isSearching = false }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .transition(.opacity)
+        }
+    }
+
     @ViewBuilder
     private var weatherOverlay: some View {
         if isShowingWeather, let forecast = weather.forecast {
@@ -701,7 +853,7 @@ struct CalendarTabView: View {
     /// Like `show`: loads the new span's events first, then crossfades to
     /// it, so it never appears empty and then fills in.
     @MainActor
-    private func setSpan(_ option: CalendarSpan, day newDay: Date? = nil) {
+    private func setSpan(_ option: CalendarSpan, day newDay: Date? = nil, thenOpen event: EventModel? = nil) {
         guard option != span else { return }
         let target = newDay ?? day
         preview = nil
@@ -727,7 +879,14 @@ struct CalendarTabView: View {
                 day = target
             }
             restoreSize()
+            loadColors(for: shown)
+            if let event { selectLoaded(event) }
         }
+    }
+
+    /// The loaded copy of an event, in its box.
+    private func selectLoaded(_ event: EventModel) {
+        selectedEvent = events.first { $0.id == event.id && $0.start == event.start } ?? event
     }
 
     /// From the month or a week's day header: that day on its own.
@@ -829,7 +988,7 @@ struct CalendarTabView: View {
                 .padding(.horizontal, 7)
                 .frame(maxWidth: 130, minHeight: 18, maxHeight: 18)
                 .background(Capsule().fill(color.opacity(0.22)))
-                .onTapGesture { open(event) }
+                .onTapGesture { selectedEvent = event }
             }
             if allDayEvents.count > Self.maxAllDayChips {
                 Text("+\(allDayEvents.count - Self.maxAllDayChips)")
@@ -1060,7 +1219,7 @@ struct CalendarTabView: View {
         .overlay {
             // Off while a details box is up, so clicks reach it and its
             // backdrop instead of the timeline underneath.
-            if selectedEvent == nil && pendingMove == nil && !isShowingWeather {
+            if selectedEvent == nil && pendingMove == nil && !isShowingWeather && !isSearching {
                 TimelineScrollCapture(
                     isVertical: false,
                     onScroll: scroll(by:),
@@ -1192,7 +1351,7 @@ struct CalendarTabView: View {
         }
         .frame(height: columnsHeight)
         .overlay {
-            if selectedEvent == nil && pendingMove == nil && !isShowingWeather {
+            if selectedEvent == nil && pendingMove == nil && !isShowingWeather && !isSearching {
                 TimelineScrollCapture(
                     isVertical: true,
                     onScroll: scroll(by:),
@@ -1354,7 +1513,7 @@ struct CalendarTabView: View {
 
     /// Loads the events first, then swaps day and events in together. The
     /// week and month load every day they show.
-    private func show(_ newDay: Date) {
+    private func show(_ newDay: Date, thenOpen event: EventModel? = nil) {
         dayDirection = newDay < (requestedDay ?? day) ? -1 : 1
         requestedDay = newDay
         let shown = CalendarGrid.days(for: span, around: newDay)
@@ -1365,6 +1524,8 @@ struct CalendarTabView: View {
             requestedDay = nil
             withAnimation(Self.daySwitch) { day = newDay }
             scrollToDefault()
+            loadColors(for: shown)
+            if let event { selectLoaded(event) }
         }
     }
 
@@ -1549,7 +1710,7 @@ struct CalendarTabView: View {
 
     /// A press on empty space starts a new event at the slot under it.
     private func beginCreating(at point: CGPoint) {
-        guard selectedEvent == nil, !isQuickAdding, newRange == nil, !isShowingWeather else { return }
+        guard selectedEvent == nil, !isQuickAdding, newRange == nil, !isShowingWeather, !isSearching else { return }
         let snap = DayTimelineLayout.snap
         let anchor = min((time(at: point) / snap).rounded(.down) * snap, dayLength - snap)
         let column = isColumns ? dayIndex(at: point) : 0
@@ -1617,14 +1778,22 @@ struct CalendarTabView: View {
                     end: columnDay(range.dayIndex).addingTimeInterval(range.end),
                     calendars: calendarManager.editableEventCalendars,
                     defaultCalendarID: calendarManager.newEventCalendarID,
+                    canInvite: googleCalendar.isAvailable,
                     onSave: { details in
-                        await calendarManager.createEvent(
+                        if !details.guests.isEmpty || details.addsMeet {
+                            return await createOnGoogle(details,
+                                                        start: columnDay(range.dayIndex).addingTimeInterval(range.start),
+                                                        end: columnDay(range.dayIndex).addingTimeInterval(range.end))
+                        }
+                        return await calendarManager.createEvent(
                             title: details.title,
                             start: columnDay(range.dayIndex).addingTimeInterval(range.start),
                             end: columnDay(range.dayIndex).addingTimeInterval(range.end),
                             calendarID: details.calendarID,
                             location: details.location,
-                            notes: details.notes
+                            notes: details.notes,
+                            repeats: details.repeats,
+                            reminderMinutes: details.reminderMinutes
                         )
                     },
                     onClose: { newRange = nil }
@@ -1657,12 +1826,42 @@ struct CalendarTabView: View {
                     onDelete: { scope in await calendarManager.deleteEvent(event, scope: scope) },
                     onEdit: { edit, scope in
                         await calendarManager.updateEvent(event, edit: edit, scope: scope)
-                    }
+                    },
+                    onDuplicate: {
+                        guard let copy = await calendarManager.duplicateEvent(event) else { return false }
+                        selectedEvent = copy
+                        return true
+                    },
+                    onRespond: hasGoogle(event) ? { status in
+                        await googleCalendar.respond(to: event, with: status)
+                    } : nil,
+                    onSetColor: hasGoogle(event) ? { color in
+                        await googleCalendar.setColor(color, of: event)
+                    } : nil
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
             .transition(.opacity)
         }
+    }
+
+    /// Whether Google Calendar can find this event: signed in, and it came
+    /// from Google with a UID to look it up by.
+    private func hasGoogle(_ event: EventModel) -> Bool {
+        googleCalendar.isAvailable && event.externalID != nil
+    }
+
+    /// Guests and Meet links go through Google; the Mac's calendar picks
+    /// the event up on its next sync.
+    private func createOnGoogle(_ details: NewEventCard.Details, start: Date, end: Date) async -> Bool {
+        guard let model = calendarManager.editableEventCalendars.first(where: { $0.id == details.calendarID }),
+              let googleID = await googleCalendar.googleCalendarID(for: model) else { return false }
+        let body = GoogleCalendarFormat.newEvent(
+            title: details.title, start: start, end: end, isAllDay: false,
+            location: details.location, notes: details.notes, guests: details.guests, addsMeet: details.addsMeet,
+            repeats: details.repeats, reminderMinutes: details.reminderMinutes
+        )
+        return await googleCalendar.create(in: googleID, body: body, addsMeet: details.addsMeet)
     }
 
     private func open(_ event: EventModel) {
@@ -1682,7 +1881,7 @@ struct CalendarTabView: View {
     /// Room the vertical day can grow into: the screen, less the notch's
     /// own height and the task strip.
     private var maxVerticalExtra: CGFloat {
-        let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
+        let strip = stripsHeight
         guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return Self.verticalExtraHeight }
         return max(0, screenHeight - windowSize.height - strip)
     }
@@ -1701,7 +1900,7 @@ struct CalendarTabView: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { verticalExtra = extra }
-        let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
+        let strip = stripsHeight
         vm.setExtraContentHeightImmediately(extra + strip)
     }
 
@@ -1783,7 +1982,7 @@ struct CalendarTabView: View {
     private var desiredExtraHeight: CGFloat {
         let collapsed = Self.lanesHeight(count: Self.collapsedLaneCount, laneHeight: Self.collapsedLaneHeight)
         let rows = isTall ? verticalExtra : (isExpanded ? max(0, lanesHeight - collapsed) : 0)
-        let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
+        let strip = stripsHeight
         let total = rows + strip
         guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return total }
         return min(total, max(0, screenHeight - windowSize.height))

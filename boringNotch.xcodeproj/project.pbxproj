@@ -43,6 +43,9 @@
 		1163988D2DF5CAB40052E6AF /* EventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163988C2DF5CAB40052E6AF /* EventModel.swift */; };
 		AA11WxForecastBLD0000 /* WeatherForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11WxForecastFILE000 /* WeatherForecast.swift */; };
 		AA11CalGridBLD00000000 /* CalendarGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11CalGridFILE0000000 /* CalendarGrid.swift */; };
+		AA11EvRepeatBLD0000000 /* EventRepeat.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EvRepeatFILE000000 /* EventRepeat.swift */; };
+		AA11GCalFmtBLD00000000 /* GoogleCalendarFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11GCalFmtFILE0000000 /* GoogleCalendarFormat.swift */; };
+		AA11EvSearchBLD0000000 /* EventSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EvSearchFILE000000 /* EventSearch.swift */; };
 		AA11EventEditBLD000000 /* EventEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EventEditFILE00000 /* EventEdit.swift */; };
 		1163988F2DF5CC870052E6AF /* CalendarModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163988E2DF5CC870052E6AF /* CalendarModel.swift */; };
 		116398962DF5D6C00052E6AF /* CalendarServiceProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116398952DF5D6C00052E6AF /* CalendarServiceProviding.swift */; };
@@ -89,6 +92,7 @@
 		14A7E5972C65FD31008C1BE9 /* boring.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 14A7E5962C65FD31008C1BE9 /* boring.m4a */; };
 		14C08BB62C8DE42D000F8AA0 /* CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */; };
 		AA11WxManagerBLD00000 /* WeatherManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11WxManagerFILE0000 /* WeatherManager.swift */; };
+		AA11GCalMgrBLD0000000 /* GoogleCalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11GCalMgrFILE000000 /* GoogleCalendarManager.swift */; };
 		AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */; };
 		AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02ClipboardMgrFILE00 /* ClipboardManager.swift */; };
 		AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */; };
@@ -105,6 +109,7 @@
 		AA11EventCardBLD000000 /* EventDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11EventCardFILE00000 /* EventDetailsCard.swift */; };
 		AA11MonthViewBLD00000 /* CalendarMonthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11MonthViewFILE0000 /* CalendarMonthView.swift */; };
 		AA11WeatherCardBLD000 /* WeatherCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11WeatherCardFILE00 /* WeatherCard.swift */; };
+		AA11SearchCardBLD0000 /* SearchCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11SearchCardFILE000 /* SearchCard.swift */; };
 		AA11MoveScopeBLD000000 /* MoveScopeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11MoveScopeFILE00000 /* MoveScopeCard.swift */; };
 		AA11NewEventCBLD00000 /* NewEventCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11NewEventCFILE0000 /* NewEventCard.swift */; };
 		AA11QuickAddCBLD00000 /* QuickAddCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11QuickAddCFILE0000 /* QuickAddCard.swift */; };
@@ -235,6 +240,9 @@
 		1163988C2DF5CAB40052E6AF /* EventModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventModel.swift; sourceTree = "<group>"; };
 		AA11WxForecastFILE000 /* WeatherForecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherForecast.swift; sourceTree = "<group>"; };
 		AA11CalGridFILE0000000 /* CalendarGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarGrid.swift; sourceTree = "<group>"; };
+		AA11EvRepeatFILE000000 /* EventRepeat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventRepeat.swift; sourceTree = "<group>"; };
+		AA11GCalFmtFILE0000000 /* GoogleCalendarFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarFormat.swift; sourceTree = "<group>"; };
+		AA11EvSearchFILE000000 /* EventSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSearch.swift; sourceTree = "<group>"; };
 		AA11EventEditFILE00000 /* EventEdit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventEdit.swift; sourceTree = "<group>"; };
 		1163988E2DF5CC870052E6AF /* CalendarModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModel.swift; sourceTree = "<group>"; };
 		116398952DF5D6C00052E6AF /* CalendarServiceProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarServiceProviding.swift; sourceTree = "<group>"; };
@@ -279,6 +287,7 @@
 		14A7E5962C65FD31008C1BE9 /* boring.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; path = boring.m4a; sourceTree = "<group>"; };
 		14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarManager.swift; sourceTree = "<group>"; };
 		AA11WxManagerFILE0000 /* WeatherManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherManager.swift; sourceTree = "<group>"; };
+		AA11GCalMgrFILE000000 /* GoogleCalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarManager.swift; sourceTree = "<group>"; };
 		AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSpectrumTap.swift; sourceTree = "<group>"; };
 		AA02ClipboardMgrFILE00 /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchTabHotkeys.swift; sourceTree = "<group>"; };
@@ -295,6 +304,7 @@
 		AA11EventCardFILE00000 /* EventDetailsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailsCard.swift; sourceTree = "<group>"; };
 		AA11MonthViewFILE0000 /* CalendarMonthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarMonthView.swift; sourceTree = "<group>"; };
 		AA11WeatherCardFILE00 /* WeatherCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherCard.swift; sourceTree = "<group>"; };
+		AA11SearchCardFILE000 /* SearchCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchCard.swift; sourceTree = "<group>"; };
 		AA11MoveScopeFILE00000 /* MoveScopeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveScopeCard.swift; sourceTree = "<group>"; };
 		AA11NewEventCFILE0000 /* NewEventCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewEventCard.swift; sourceTree = "<group>"; };
 		AA11QuickAddCFILE0000 /* QuickAddCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCard.swift; sourceTree = "<group>"; };
@@ -564,6 +574,7 @@
 				149E0B962C737D00006418B1 /* WebcamManager.swift */,
 				14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */,
 				AA11WxManagerFILE0000 /* WeatherManager.swift */,
+				AA11GCalMgrFILE000000 /* GoogleCalendarManager.swift */,
 				AA01AudioSpectrumTapFILE /* AudioSpectrumTap.swift */,
 				AA02ClipboardMgrFILE00 /* ClipboardManager.swift */,
 				AA08TabHotkeysFILE0000 /* NotchTabHotkeys.swift */,
@@ -617,6 +628,7 @@
 				AA11EventCardFILE00000 /* EventDetailsCard.swift */,
 				AA11MonthViewFILE0000 /* CalendarMonthView.swift */,
 				AA11WeatherCardFILE00 /* WeatherCard.swift */,
+				AA11SearchCardFILE000 /* SearchCard.swift */,
 				AA11MoveScopeFILE00000 /* MoveScopeCard.swift */,
 				AA11NewEventCFILE0000 /* NewEventCard.swift */,
 				AA11QuickAddCFILE0000 /* QuickAddCard.swift */,
@@ -719,6 +731,9 @@
 				1163988C2DF5CAB40052E6AF /* EventModel.swift */,
 				AA11WxForecastFILE000 /* WeatherForecast.swift */,
 				AA11CalGridFILE0000000 /* CalendarGrid.swift */,
+				AA11EvRepeatFILE000000 /* EventRepeat.swift */,
+				AA11GCalFmtFILE0000000 /* GoogleCalendarFormat.swift */,
+				AA11EvSearchFILE000000 /* EventSearch.swift */,
 				AA11EventEditFILE00000 /* EventEdit.swift */,
 				B19016232CC15B4D00E3F12E /* Constants.swift */,
 				14D570C82C5F38890011E668 /* BoringViewModel.swift */,
@@ -1001,6 +1016,7 @@
 				AA11EventCardBLD000000 /* EventDetailsCard.swift in Sources */,
 				AA11MonthViewBLD00000 /* CalendarMonthView.swift in Sources */,
 				AA11WeatherCardBLD000 /* WeatherCard.swift in Sources */,
+				AA11SearchCardBLD0000 /* SearchCard.swift in Sources */,
 				AA11MoveScopeBLD000000 /* MoveScopeCard.swift in Sources */,
 				AA11NewEventCBLD00000 /* NewEventCard.swift in Sources */,
 				AA11QuickAddCBLD00000 /* QuickAddCard.swift in Sources */,
@@ -1029,6 +1045,9 @@
 				1163988D2DF5CAB40052E6AF /* EventModel.swift in Sources */,
 				AA11WxForecastBLD0000 /* WeatherForecast.swift in Sources */,
 				AA11CalGridBLD00000000 /* CalendarGrid.swift in Sources */,
+				AA11EvRepeatBLD0000000 /* EventRepeat.swift in Sources */,
+				AA11GCalFmtBLD00000000 /* GoogleCalendarFormat.swift in Sources */,
+				AA11EvSearchBLD0000000 /* EventSearch.swift in Sources */,
 				AA11EventEditBLD000000 /* EventEdit.swift in Sources */,
 				14D570B92C5E98A20011E668 /* drop.swift in Sources */,
 				11EFCD702E8E92D600D0B974 /* ShelfItemViewModel.swift in Sources */,
@@ -1076,6 +1095,7 @@
 				B17266E32C65F7FB0031BA0D /* WhatsNewView.swift in Sources */,
 				14C08BB62C8DE42D000F8AA0 /* CalendarManager.swift in Sources */,
 				AA11WxManagerBLD00000 /* WeatherManager.swift in Sources */,
+				AA11GCalMgrBLD0000000 /* GoogleCalendarManager.swift in Sources */,
 				AA01AudioSpectrumTapBLD0 /* AudioSpectrumTap.swift in Sources */,
 				AA02ClipboardMgrBLD000 /* ClipboardManager.swift in Sources */,
 				AA08TabHotkeysBLD00000 /* NotchTabHotkeys.swift in Sources */,
