@@ -40,7 +40,10 @@ enum DayTimelineLayout {
         /// Vertical view only: how many columns its group of overlapping
         /// events is split into; `lane` is its column.
         var columns = 1
-        var id: String { event.id }
+        /// Week view only: which day's column it's in.
+        var dayIndex = 0
+        /// A repeating event shows once per day, so its start is part of it.
+        var id: String { "\(event.id)|\(event.start.timeIntervalSince1970)|\(dayIndex)" }
     }
 
     /// Only the end can be dragged, like Google Calendar: the start
@@ -170,6 +173,7 @@ struct CalendarTabView: View {
     /// timeline keeps showing the old day until then, so it never draws one
     /// day's events on another.
     @State private var requestedDay: Date?
+    @State private var requestedSpan: CalendarSpan?
     /// 1 stepping forward, -1 back: the new day drifts in from that side.
     @State private var dayDirection: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -187,6 +191,8 @@ struct CalendarTabView: View {
         )
     }
     @AppStorage("calendarVerticalView") private var isVertical = false
+    @AppStorage("calendarSpan") private var span: CalendarSpan = .day
+    @ObservedObject private var weather = WeatherManager.shared
     /// How far the timeline is scrolled along its time axis.
     @State private var offset: CGFloat = 0
     @State private var viewportSize: CGSize = .zero
@@ -203,6 +209,7 @@ struct CalendarTabView: View {
     @AppStorage("calendarWasExpanded") private var wasExpanded = false
     @State private var selectedEvent: EventModel?
     @State private var isQuickAdding = false
+    @State private var isShowingWeather = false
     @State private var creating: Creating?
     @State private var newRange: NewRange?
     @State private var isHoveringHandle = false
@@ -225,6 +232,8 @@ struct CalendarTabView: View {
     private struct Creating {
         let anchor: TimeInterval
         let startPoint: CGPoint
+        /// Week view: the day column the press landed in.
+        let dayIndex: Int
         var start: TimeInterval
         var end: TimeInterval
         var moved = false
@@ -234,6 +243,7 @@ struct CalendarTabView: View {
     private struct NewRange: Equatable {
         let start: TimeInterval
         let end: TimeInterval
+        var dayIndex = 0
     }
 
     /// Where the dragged block is shown, until the calendar confirms it.
@@ -241,6 +251,8 @@ struct CalendarTabView: View {
         let id: String
         var start: TimeInterval
         var end: TimeInterval
+        /// Week view: a move can carry it to another day's column.
+        var dayIndex = 0
     }
 
     private struct PendingMove: Equatable {
@@ -281,8 +293,22 @@ struct CalendarTabView: View {
             if hasTasks {
                 tasksStrip
             }
-            Group {
-                if isVertical { verticalTimeline } else { timeline }
+            ZStack(alignment: .top) {
+                // Keyed by the span, so Day, Week and Month switch the way days do.
+                Group {
+                    if span == .month {
+                        monthView
+                    } else if isColumns {
+                        VStack(spacing: Self.weekHeaderSpacing) {
+                            if span.isMultiDay { weekHeaderRow }
+                            verticalTimeline
+                        }
+                    } else {
+                        timeline
+                    }
+                }
+                .id(span)
+                .transition(dayTransition)
             }
                 // Hung just under the strip, where there's room you can
                 // see: the view's own bottom edge runs past the notch's
@@ -291,7 +317,7 @@ struct CalendarTabView: View {
                 // there it sits inside the timeline's corner instead.
                 .overlay(alignment: .bottomTrailing) {
                     undoToast
-                        .alignmentGuide(.bottom) { isVertical ? $0[.bottom] + 12 : $0[.top] - 4 }
+                        .alignmentGuide(.bottom) { isTall ? $0[.bottom] + 12 : $0[.top] - 4 }
                         .padding(.trailing, 10)
                 }
         }
@@ -303,7 +329,7 @@ struct CalendarTabView: View {
         // near the notch's edge and its mouse area is always inside the
         // panel, at any height.
         .overlay(alignment: .bottom) {
-            if isVertical && selectedEvent == nil && !isQuickAdding && newRange == nil && pendingMove == nil {
+            if isTall && selectedEvent == nil && !isQuickAdding && newRange == nil && pendingMove == nil && !isShowingWeather {
                 resizeHandle
             }
         }
@@ -312,6 +338,8 @@ struct CalendarTabView: View {
         .overlay { quickAddOverlay }
         .overlay { newEventOverlay }
         .overlay { moveScopeOverlay }
+        .overlay { weatherOverlay }
+        .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isShowingWeather)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: pendingMove)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: newRange)
         .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: isQuickAdding)
@@ -330,11 +358,13 @@ struct CalendarTabView: View {
             restoreSize()
             calendarManager.beginLiveRefresh()
             show(Calendar.current.startOfDay(for: .now))
+            weather.refreshIfStale()
             Task { await calendarManager.requestAccessForTab() }
         }
         .onDisappear {
             selectedEvent = nil
             isQuickAdding = false
+            isShowingWeather = false
             creating = nil
             newRange = nil
             // Leaving the tab ends the undo window: waiting deletes happen now.
@@ -398,6 +428,39 @@ struct CalendarTabView: View {
         Calendar.current.isDateInToday(day)
     }
 
+    /// Four days or the week run top to bottom in day columns, like the vertical day.
+    private var isColumns: Bool {
+        span.isMultiDay || (span == .day && isVertical)
+    }
+
+    /// Week and month need height, like the vertical day.
+    private var isTall: Bool {
+        span != .day || isVertical
+    }
+
+    /// One column for the day, four or seven for the multi-day views.
+    private var columnDays: [Date] {
+        span.isMultiDay ? CalendarGrid.days(for: span, around: day) : [day]
+    }
+
+    /// Whether today is on screen, so the Today button can hide.
+    private var showsToday: Bool {
+        switch span {
+        case .day: isToday
+        case .fourDays, .week: columnDays.contains { Calendar.current.isDateInToday($0) }
+        case .month: Calendar.current.isDate(day, equalTo: .now, toGranularity: .month)
+        }
+    }
+
+    private func columnDay(_ index: Int) -> Date {
+        columnDays.indices.contains(index) ? columnDays[index] : day
+    }
+
+    /// Which column today is in, if it's showing.
+    private var todayColumn: Int? {
+        columnDays.firstIndex { Calendar.current.isDateInToday($0) }
+    }
+
     private var events: [EventModel] {
         EventListView.filteredEvents(events: calendarManager.events)
     }
@@ -408,11 +471,18 @@ struct CalendarTabView: View {
 
     private var placed: [DayTimelineLayout.Placed] {
         let timed = events.filter { !$0.isAllDay }
-        guard isVertical else {
+        guard isColumns else {
             return DayTimelineLayout.place(timed, dayStart: day, dayLength: dayLength)
         }
         let footprint = TimeInterval(Self.minBlockHeight / Self.hourHeight) * 3600
-        return DayTimelineLayout.columns(timed, dayStart: day, dayLength: dayLength, footprint: footprint)
+        return columnDays.enumerated().flatMap { index, columnDay in
+            DayTimelineLayout.columns(timed, dayStart: columnDay, dayLength: dayLength, footprint: footprint)
+                .map { item in
+                    var item = item
+                    item.dayIndex = index
+                    return item
+                }
+        }
     }
 
     private var laneCount: Int {
@@ -434,7 +504,7 @@ struct CalendarTabView: View {
     }
 
     private var hiddenCount: Int {
-        guard !isVertical else { return 0 }
+        guard !isTall else { return 0 }
         return placed.filter { $0.lane >= visibleLaneCount }.count
     }
 
@@ -444,7 +514,7 @@ struct CalendarTabView: View {
 
     /// Points per hour along the time axis, whichever way it runs.
     private var hourSize: CGFloat {
-        isVertical ? Self.hourHeight : Self.hourWidth
+        isColumns ? Self.hourHeight : Self.hourWidth
     }
 
     private func position(for seconds: TimeInterval) -> CGFloat {
@@ -456,7 +526,7 @@ struct CalendarTabView: View {
     }
 
     private var viewportLength: CGFloat {
-        isVertical ? viewportSize.height : viewportSize.width
+        isColumns ? viewportSize.height : viewportSize.width
     }
 
     private static func lanesHeight(count: Int, laneHeight: CGFloat) -> CGFloat {
@@ -480,13 +550,14 @@ struct CalendarTabView: View {
     private var header: some View {
         HStack(spacing: 6) {
             navButton("chevron.left") { step(by: -1) }
-            Text(day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+            Text(headerTitle)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white)
                 .monospacedDigit()
+                .lineLimit(1)
             navButton("chevron.right") { step(by: 1) }
 
-            if !isToday {
+            if !showsToday {
                 Button {
                     show(Calendar.current.startOfDay(for: .now))
                 } label: {
@@ -502,8 +573,12 @@ struct CalendarTabView: View {
                 .buttonStyle(.plain)
             }
 
-            allDayChips
-                .padding(.leading, 4)
+            if span == .day {
+                weatherLabel
+                    .padding(.leading, 2)
+                allDayChips
+                    .padding(.leading, 4)
+            }
 
             Spacer(minLength: 0)
 
@@ -517,8 +592,12 @@ struct CalendarTabView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.gray)
             }
+            // Before the picker, so the picker stays put when this hides.
+            if span == .day {
+                orientationButton
+            }
+            spanPicker
             quickAddButton
-            orientationButton
             expandButton
         }
         .frame(height: 22)
@@ -536,6 +615,205 @@ struct CalendarTabView: View {
     }
 
     private static let maxAllDayChips = 2
+
+    /// "Tue, Nov 17", "Nov 16 – 22", or "November 2026".
+    private var headerTitle: String {
+        switch span {
+        case .day:
+            return day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        case .fourDays, .week:
+            guard let first = columnDays.first, let last = columnDays.last else { return "" }
+            let sameMonth = Calendar.current.isDate(first, equalTo: last, toGranularity: .month)
+            let end = sameMonth ? last.formatted(.dateTime.day()) : last.formatted(.dateTime.month(.abbreviated).day())
+            return "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(end)"
+        case .month:
+            return day.formatted(.dateTime.month(.wide).year())
+        }
+    }
+
+    /// The shown day's weather: today's has the temperature now and when
+    /// rain starts; another day's has its chance of rain when it's likely.
+    @ViewBuilder
+    private var weatherLabel: some View {
+        if let forecast = weather.forecast, let today = forecast.days[day] {
+            let now = isToday ? forecast.currentTemperature.map { "\($0)° · " } ?? "" : ""
+            let rain = isToday
+                ? forecast.rainNote
+                : (today.rainChance >= WeatherForecast.rainLikely ? "Rain \(today.rainChance)%" : nil)
+            Button { isShowingWeather = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: today.symbol)
+                        .symbolRenderingMode(.multicolor)
+                        .font(.system(size: 10))
+                    Text("\(now)\(today.high)°/\(today.low)°")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .monospacedDigit()
+                    if let rain {
+                        Text(rain)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.cyan)
+                    }
+                }
+                .lineLimit(1)
+                .fixedSize()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Show the forecast")
+        }
+    }
+
+    @ViewBuilder
+    private var weatherOverlay: some View {
+        if isShowingWeather, let forecast = weather.forecast {
+            ZStack {
+                Color.black.opacity(0.55)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isShowingWeather = false }
+                WeatherCard(forecast: forecast, onClose: { isShowingWeather = false })
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// Day, Week, Month, like Google Calendar's view switch.
+    private var spanPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(CalendarSpan.allCases, id: \.self) { option in
+                Button { setSpan(option) } label: {
+                    Text(option.label)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(span == option ? .white : .gray)
+                        .padding(.horizontal, 7)
+                        .frame(height: 18)
+                        .background(Capsule().fill(span == option ? Color(nsColor: .secondarySystemFill) : .clear))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
+    }
+
+    /// Like `show`: loads the new span's events first, then crossfades to
+    /// it, so it never appears empty and then fills in.
+    @MainActor
+    private func setSpan(_ option: CalendarSpan, day newDay: Date? = nil) {
+        guard option != span else { return }
+        let target = newDay ?? day
+        preview = nil
+        activeDrag = nil
+        creating = nil
+        newRange = nil
+        requestedSpan = option
+        requestedDay = target
+        let shown = CalendarGrid.days(for: option, around: target)
+        Task {
+            await calendarManager.load(from: shown.first ?? target, days: shown.count)
+            // A later click has taken over; its own load will finish.
+            guard requestedSpan == option, requestedDay == target else { return }
+            requestedSpan = nil
+            requestedDay = nil
+            // Day → Week → Month drifts in from the right; back, from the left.
+            let order = CalendarSpan.allCases
+            dayDirection = (order.firstIndex(of: option) ?? 0) > (order.firstIndex(of: span) ?? 0) ? 1 : -1
+            // The new layout measures itself as it appears, then scrolls to now.
+            viewportSize = .zero
+            withAnimation(Self.daySwitch) {
+                span = option
+                day = target
+            }
+            restoreSize()
+        }
+    }
+
+    /// From the month or a week's day header: that day on its own.
+    @MainActor
+    private func openDay(_ date: Date) {
+        setSpan(.day, day: Calendar.current.startOfDay(for: date))
+    }
+
+    /// Each day of the week: its name and date (click to open it), its
+    /// weather, and its first all-day event.
+    private var weekHeaderRow: some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: Self.gutterWidth)
+            ForEach(columnDays, id: \.self) { columnDay in
+                weekHeaderCell(columnDay)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(height: Self.weekHeaderHeight, alignment: .top)
+    }
+
+    private func weekHeaderCell(_ columnDay: Date) -> some View {
+        let isToday = Calendar.current.isDateInToday(columnDay)
+        let allDay = CalendarGrid.events(on: columnDay, from: allDayEvents)
+        return VStack(spacing: 2) {
+            Button { openDay(columnDay) } label: {
+                HStack(spacing: 3) {
+                    Text(columnDay.formatted(.dateTime.weekday(.abbreviated)))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.gray)
+                    Text(columnDay.formatted(.dateTime.day()))
+                        .font(.system(size: 10, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Circle().fill(isToday ? Color.accentColor : .clear))
+                }
+                .lineLimit(1)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Open \(columnDay.formatted(date: .complete, time: .omitted))")
+            if let dayWeather = weather.forecast?.days[columnDay] {
+                HStack(spacing: 3) {
+                    Image(systemName: dayWeather.symbol)
+                        .symbolRenderingMode(.multicolor)
+                        .font(.system(size: 10))
+                    Text("\(dayWeather.high)°/\(dayWeather.low)°")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .monospacedDigit()
+                }
+                .lineLimit(1)
+            }
+            if let first = allDay.first {
+                let color = Color(nsColor: first.calendar.color)
+                Text(allDay.count > 1 ? "\(first.title) +\(allDay.count - 1)" : first.title)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
+                    .frame(maxWidth: .infinity, minHeight: 13, maxHeight: 13)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(color.opacity(0.3)))
+                    .padding(.horizontal, 2)
+                    .onTapGesture { selectedEvent = first }
+            }
+        }
+    }
+
+    /// The month grid, as tall as the vertical day; it crossfades between
+    /// months the way the day does between days.
+    private var monthView: some View {
+        ZStack(alignment: .topLeading) {
+            CalendarMonthView(
+                days: CalendarGrid.month(containing: day),
+                month: day,
+                events: events,
+                weather: weather.forecast?.days ?? [:],
+                onOpenDay: openDay
+            )
+            .id(day)
+            .transition(dayTransition)
+        }
+        .frame(height: verticalTimelineHeight)
+        .clipped()
+    }
 
     private var allDayChips: some View {
         HStack(spacing: 4) {
@@ -661,7 +939,7 @@ struct CalendarTabView: View {
     /// Vertical view: anything taller than normal counts as expanded, so a
     /// drag on the bottom edge turns this into the shrink button.
     private var showsExpanded: Bool {
-        isVertical ? verticalExtra > 0 : isExpanded
+        isTall ? verticalExtra > 0 : isExpanded
     }
 
     /// A grabber on the notch's bottom edge: drag it to make the day taller
@@ -782,7 +1060,7 @@ struct CalendarTabView: View {
         .overlay {
             // Off while a details box is up, so clicks reach it and its
             // backdrop instead of the timeline underneath.
-            if selectedEvent == nil && pendingMove == nil {
+            if selectedEvent == nil && pendingMove == nil && !isShowingWeather {
                 TimelineScrollCapture(
                     isVertical: false,
                     onScroll: scroll(by:),
@@ -872,6 +1150,16 @@ struct CalendarTabView: View {
 
     // MARK: - Vertical timeline
 
+    /// The day names, weather and all-day row over the week's columns.
+    private static let weekHeaderHeight: CGFloat = 46
+    private static let weekHeaderSpacing: CGFloat = 4
+
+    /// The week's columns give up the room its header row takes, so the
+    /// week ends where the day does, inside the notch.
+    private var columnsHeight: CGFloat {
+        verticalTimelineHeight - (span.isMultiDay ? Self.weekHeaderHeight + Self.weekHeaderSpacing : 0)
+    }
+
     private var verticalTimelineHeight: CGFloat {
         // Taller than the strip, which has to leave room for its hour row:
         // a vertical day can use the whole space under the header.
@@ -902,9 +1190,9 @@ struct CalendarTabView: View {
             .onAppear { setViewportSize(geometry.size) }
             .onChange(of: geometry.size) { _, size in setViewportSize(size) }
         }
-        .frame(height: verticalTimelineHeight)
+        .frame(height: columnsHeight)
         .overlay {
-            if selectedEvent == nil && pendingMove == nil {
+            if selectedEvent == nil && pendingMove == nil && !isShowingWeather {
                 TimelineScrollCapture(
                     isVertical: true,
                     onScroll: scroll(by:),
@@ -918,13 +1206,25 @@ struct CalendarTabView: View {
         .onHover { vm.isHoveringCalendar = $0 }
     }
 
+    /// One day's column: the whole width for the day, a seventh for the week.
+    private func dayWidth(in width: CGFloat) -> CGFloat {
+        max(0, width - Self.gutterWidth) / CGFloat(columnDays.count)
+    }
+
+    /// The day column under a point.
+    private func dayIndex(at point: CGPoint) -> Int {
+        let index = Int((point.x - Self.gutterWidth) / max(1, dayWidth(in: viewportSize.width)))
+        return min(max(index, 0), columnDays.count - 1)
+    }
+
     /// Where a block sits in the vertical track, gutter included.
     private func verticalFrame(of item: DayTimelineLayout.Placed, start: TimeInterval,
-                               end: TimeInterval, width: CGFloat) -> CGRect {
-        let columnWidth = max(0, width - Self.gutterWidth) / CGFloat(item.columns)
+                               end: TimeInterval, width: CGFloat, dayIndex: Int? = nil) -> CGRect {
+        let dayWidth = self.dayWidth(in: width)
+        let columnWidth = dayWidth / CGFloat(item.columns)
         let height = max(position(for: end) - position(for: start), Self.minBlockHeight)
         return CGRect(
-            x: Self.gutterWidth + CGFloat(item.lane) * columnWidth,
+            x: Self.gutterWidth + CGFloat(dayIndex ?? item.dayIndex) * dayWidth + CGFloat(item.lane) * columnWidth,
             y: position(for: start),
             width: columnWidth,
             height: height
@@ -933,9 +1233,13 @@ struct CalendarTabView: View {
 
     private func verticalTrack(now: Date, width: CGFloat) -> some View {
         let hours = Int(dayLength / 3600)
-        let nowSeconds = now.timeIntervalSince(day)
-        let showsNow = nowSeconds >= 0 && nowSeconds < dayLength
         let contentWidth = max(0, width - Self.gutterWidth)
+        let dayWidth = dayWidth(in: width)
+        // The now line runs across today's column only.
+        let nowColumn = todayColumn
+        let nowSeconds = now.timeIntervalSince(columnDay(nowColumn ?? 0))
+        let showsNow = nowColumn != nil && nowSeconds >= 0 && nowSeconds < dayLength
+        let nowX = Self.gutterWidth + CGFloat(nowColumn ?? 0) * dayWidth
 
         return ZStack(alignment: .topLeading) {
             ForEach(0 ..< hours, id: \.self) { hour in
@@ -950,17 +1254,26 @@ struct CalendarTabView: View {
                     .offset(x: Self.gutterWidth, y: position(for: TimeInterval(hour) * 3600))
             }
 
+            // Lines between the week's days.
+            ForEach(1 ..< max(1, columnDays.count), id: \.self) { index in
+                Rectangle()
+                    .fill(.white.opacity(0.08))
+                    .frame(width: 1, height: trackLength)
+                    .offset(x: Self.gutterWidth + CGFloat(index) * dayWidth)
+            }
+
             ForEach(placed) { item in
                 let shown = preview?.id == item.id ? preview : nil
                 let start = shown?.start ?? item.start
                 let end = shown?.end ?? item.end
-                let frame = verticalFrame(of: item, start: start, end: end, width: width)
+                let frame = verticalFrame(of: item, start: start, end: end, width: width, dayIndex: shown?.dayIndex)
+                let shownDay = columnDay(shown?.dayIndex ?? item.dayIndex)
                 TimelineEventBlock(
                     event: item.event,
                     isCurrent: item.event.start <= now && now < item.event.end,
                     isExpanded: frame.height >= 28,
-                    previewRange: shown.map { (day.addingTimeInterval($0.start), day.addingTimeInterval($0.end)) },
-                    showsGrips: frame.height > 30,
+                    previewRange: shown.map { (shownDay.addingTimeInterval($0.start), shownDay.addingTimeInterval($0.end)) },
+                    showsGrips: frame.height > 30 && frame.width > 30,
                     isVertical: true
                 )
                 .frame(width: max(4, frame.width - 2), height: max(4, frame.height - 1))
@@ -970,8 +1283,8 @@ struct CalendarTabView: View {
 
             if let ghost = ghostRange {
                 ghostBlock(ghost)
-                    .frame(width: max(4, contentWidth - 2), height: max(Self.minBlockHeight, position(for: ghost.end) - position(for: ghost.start) - 1))
-                    .offset(x: Self.gutterWidth + 1, y: position(for: ghost.start) + 0.5)
+                    .frame(width: max(4, dayWidth - 2), height: max(Self.minBlockHeight, position(for: ghost.end) - position(for: ghost.start) - 1))
+                    .offset(x: Self.gutterWidth + CGFloat(ghost.dayIndex) * dayWidth + 1, y: position(for: ghost.start) + 0.5)
                     .zIndex(2)
             }
 
@@ -979,16 +1292,16 @@ struct CalendarTabView: View {
                 // Time already gone, dimmed.
                 Rectangle()
                     .fill(.black.opacity(0.4))
-                    .frame(width: contentWidth, height: position(for: nowSeconds))
-                    .offset(x: Self.gutterWidth)
+                    .frame(width: dayWidth, height: position(for: nowSeconds))
+                    .offset(x: nowX)
                 Rectangle()
                     .fill(.red)
-                    .frame(width: contentWidth + 4, height: 1.5)
-                    .offset(x: Self.gutterWidth - 4, y: position(for: nowSeconds) - 0.75)
+                    .frame(width: dayWidth + 4, height: 1.5)
+                    .offset(x: nowX - 4, y: position(for: nowSeconds) - 0.75)
                 Circle()
                     .fill(.red)
                     .frame(width: 6, height: 6)
-                    .offset(x: Self.gutterWidth - 6, y: position(for: nowSeconds) - 3)
+                    .offset(x: nowX - 6, y: position(for: nowSeconds) - 3)
             }
         }
         .frame(width: width, height: trackLength, alignment: .topLeading)
@@ -1013,7 +1326,7 @@ struct CalendarTabView: View {
         if status == .denied || status == .restricted {
             emptyText("Allow calendar access in System Settings › Privacy & Security")
         } else if events.isEmpty {
-            emptyText(isToday ? "No events today" : "No events")
+            emptyText(span == .week ? "No events this week" : span == .fourDays ? "No events these days" : (isToday ? "No events today" : "No events"))
         }
     }
 
@@ -1035,17 +1348,18 @@ struct CalendarTabView: View {
     // MARK: - Actions
 
     /// From the day already asked for, so quick clicks each count.
-    private func step(by days: Int) {
-        guard let target = Calendar.current.date(byAdding: .day, value: days, to: requestedDay ?? day) else { return }
-        show(target)
+    private func step(by count: Int) {
+        show(CalendarGrid.step(requestedDay ?? day, by: count, span: span))
     }
 
-    /// Loads the day's events first, then swaps day and events in together.
+    /// Loads the events first, then swaps day and events in together. The
+    /// week and month load every day they show.
     private func show(_ newDay: Date) {
         dayDirection = newDay < (requestedDay ?? day) ? -1 : 1
         requestedDay = newDay
+        let shown = CalendarGrid.days(for: span, around: newDay)
         Task {
-            await calendarManager.updateCurrentDate(newDay)
+            await calendarManager.load(from: shown.first ?? newDay, days: shown.count)
             // A later click has taken over; its own load will finish.
             guard requestedDay == newDay else { return }
             requestedDay = nil
@@ -1068,8 +1382,8 @@ struct CalendarTabView: View {
     /// Today opens on "now"; any other day on its first event, or 8am.
     private func scrollToDefault() {
         guard viewportLength > 0 else { return }
-        if isToday {
-            offset = clamped(position(for: Date.now.timeIntervalSince(day)) - viewportLength * Self.nowAnchor)
+        if let today = todayColumn {
+            offset = clamped(position(for: Date.now.timeIntervalSince(columnDay(today))) - viewportLength * Self.nowAnchor)
         } else {
             let first = placed.map(\.start).min() ?? 8 * 3600
             offset = clamped(position(for: first) - hourSize / 2)
@@ -1087,7 +1401,7 @@ struct CalendarTabView: View {
     /// The block under a point, and which part of it: the edges resize,
     /// the middle moves.
     private func hit(at point: CGPoint) -> (item: DayTimelineLayout.Placed, mode: DayTimelineLayout.DragMode)? {
-        isVertical ? verticalHit(at: point) : horizontalHit(at: point)
+        isColumns ? verticalHit(at: point) : horizontalHit(at: point)
     }
 
     /// The bottom edge resizes, the rest moves.
@@ -1150,10 +1464,16 @@ struct CalendarTabView: View {
             start: current.item.start,
             end: current.item.end,
             mode: current.mode,
-            delta: TimeInterval((isVertical ? dy : dx) / hourSize) * 3600,
+            delta: TimeInterval((isColumns ? dy : dx) / hourSize) * 3600,
             dayLength: dayLength
         )
-        preview = Preview(id: current.item.id, start: span.start, end: span.end)
+        // In the week, moving sideways carries it to another day.
+        var dayIndex = current.item.dayIndex
+        if columnDays.count > 1 && current.mode == .move {
+            let shift = Int((dx / max(1, dayWidth(in: viewportSize.width))).rounded())
+            dayIndex = min(max(dayIndex + shift, 0), columnDays.count - 1)
+        }
+        preview = Preview(id: current.item.id, start: span.start, end: span.end, dayIndex: dayIndex)
     }
 
     private func release(at point: CGPoint, in _: NSView) {
@@ -1169,14 +1489,16 @@ struct CalendarTabView: View {
             return
         }
         guard let moved = preview, moved.id == finished.item.id,
-              moved.start != finished.item.start || moved.end != finished.item.end else {
+              moved.start != finished.item.start || moved.end != finished.item.end
+                || moved.dayIndex != finished.item.dayIndex else {
             preview = nil
             return
         }
 
+        let landedDay = columnDay(moved.dayIndex)
         let move = PendingMove(event: finished.item.event,
-                               start: day.addingTimeInterval(moved.start),
-                               end: day.addingTimeInterval(moved.end))
+                               start: landedDay.addingTimeInterval(moved.start),
+                               end: landedDay.addingTimeInterval(moved.end))
         if move.event.hasRecurrenceRules {
             pendingMove = move
         } else {
@@ -1221,16 +1543,17 @@ struct CalendarTabView: View {
 
     /// The time under a point in the timeline, within the day.
     private func time(at point: CGPoint) -> TimeInterval {
-        let along = (isVertical ? point.y : point.x) + offset
+        let along = (isColumns ? point.y : point.x) + offset
         return min(max(TimeInterval(along / hourSize) * 3600, 0), dayLength)
     }
 
     /// A press on empty space starts a new event at the slot under it.
     private func beginCreating(at point: CGPoint) {
-        guard selectedEvent == nil, !isQuickAdding, newRange == nil else { return }
+        guard selectedEvent == nil, !isQuickAdding, newRange == nil, !isShowingWeather else { return }
         let snap = DayTimelineLayout.snap
         let anchor = min((time(at: point) / snap).rounded(.down) * snap, dayLength - snap)
-        creating = Creating(anchor: anchor, startPoint: point, start: anchor, end: anchor + snap)
+        let column = isColumns ? dayIndex(at: point) : 0
+        creating = Creating(anchor: anchor, startPoint: point, dayIndex: column, start: anchor, end: anchor + snap)
     }
 
     /// Dragging either way from the press stretches the new event, in
@@ -1254,7 +1577,7 @@ struct CalendarTabView: View {
         guard let finished = creating else { return }
         creating = nil
         let end = finished.moved ? finished.end : min(finished.anchor + Self.clickEventLength, dayLength)
-        newRange = NewRange(start: finished.start, end: end)
+        newRange = NewRange(start: finished.start, end: end, dayIndex: finished.dayIndex)
     }
 
     private static let clickEventLength: TimeInterval = 60 * 60
@@ -1262,11 +1585,12 @@ struct CalendarTabView: View {
     /// The outline of the event being made: while dragging, then while its
     /// box is open.
     private var ghostRange: NewRange? {
-        creating.map { NewRange(start: $0.start, end: $0.end) } ?? newRange
+        creating.map { NewRange(start: $0.start, end: $0.end, dayIndex: $0.dayIndex) } ?? newRange
     }
 
     private func ghostBlock(_ range: NewRange) -> some View {
         let color = Color.accentColor
+        let day = columnDay(range.dayIndex)
         return RoundedRectangle(cornerRadius: 5)
             .fill(color.opacity(0.35))
             .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(color, lineWidth: 1))
@@ -1289,15 +1613,15 @@ struct CalendarTabView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { newRange = nil }
                 NewEventCard(
-                    start: day.addingTimeInterval(range.start),
-                    end: day.addingTimeInterval(range.end),
+                    start: columnDay(range.dayIndex).addingTimeInterval(range.start),
+                    end: columnDay(range.dayIndex).addingTimeInterval(range.end),
                     calendars: calendarManager.editableEventCalendars,
                     defaultCalendarID: calendarManager.newEventCalendarID,
                     onSave: { details in
                         await calendarManager.createEvent(
                             title: details.title,
-                            start: day.addingTimeInterval(range.start),
-                            end: day.addingTimeInterval(range.end),
+                            start: columnDay(range.dayIndex).addingTimeInterval(range.start),
+                            end: columnDay(range.dayIndex).addingTimeInterval(range.end),
                             calendarID: details.calendarID,
                             location: details.location,
                             notes: details.notes
@@ -1315,7 +1639,7 @@ struct CalendarTabView: View {
         guard let found = hit(at: point), found.item.event.type.isEvent else { return .arrow }
         switch found.mode {
         case .move: return .openHand
-        case .resizeEnd: return isVertical ? .resizeUpDown : .resizeLeftRight
+        case .resizeEnd: return isColumns ? .resizeUpDown : .resizeLeftRight
         }
     }
 
@@ -1394,7 +1718,7 @@ struct CalendarTabView: View {
 
     @MainActor
     private func toggleExpanded() {
-        guard !isVertical else {
+        guard !isTall else {
             toggleVerticalSize()
             return
         }
@@ -1438,8 +1762,9 @@ struct CalendarTabView: View {
     /// in the top-to-bottom view, the height it was last dragged to.
     @MainActor
     private func restoreSize() {
-        isExpanded = !isVertical && wasExpanded
-        if isVertical && wasExpanded {
+        isExpanded = !isTall && wasExpanded
+        // Week and month always open tall: they don't fit the normal height.
+        if isTall && (wasExpanded || span != .day) {
             let remembered = CGFloat(rememberedVerticalExtra)
             verticalExtra = min(remembered > 0 ? remembered : Self.verticalExtraHeight, maxVerticalExtra)
         } else {
@@ -1457,7 +1782,7 @@ struct CalendarTabView: View {
 
     private var desiredExtraHeight: CGFloat {
         let collapsed = Self.lanesHeight(count: Self.collapsedLaneCount, laneHeight: Self.collapsedLaneHeight)
-        let rows = isVertical ? verticalExtra : (isExpanded ? max(0, lanesHeight - collapsed) : 0)
+        let rows = isTall ? verticalExtra : (isExpanded ? max(0, lanesHeight - collapsed) : 0)
         let strip = hasTasks ? Self.tasksStripHeight + 6 : 0
         let total = rows + strip
         guard let screenHeight = getScreenFrame(vm.screenUUID)?.height else { return total }

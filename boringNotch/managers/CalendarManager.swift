@@ -17,6 +17,9 @@ class CalendarManager: ObservableObject {
     static let shared = CalendarManager()
 
     @Published var currentWeekStartDate: Date
+    /// How many days from `currentWeekStartDate` are loaded: one for a day,
+    /// seven for a week, a month's grid for a month.
+    private var loadedDayCount = 1
     @Published var events: [EventModel] = []
     @Published var allCalendars: [CalendarModel] = []
     @Published var eventCalendars: [CalendarModel] = []
@@ -132,7 +135,7 @@ class CalendarManager: ObservableObject {
                 await reloadCalendarAndReminderLists()
                 events = visible(await calendarService.events(
                     from: currentWeekStartDate,
-                    to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
+                    to: loadedEnd,
                     calendars: selectedCalendars.map { $0.id }))
             }
         case .restricted, .denied:
@@ -142,7 +145,7 @@ class CalendarManager: ObservableObject {
             await reloadCalendarAndReminderLists()
             events = visible(await calendarService.events(
                 from: currentWeekStartDate,
-                to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
+                to: loadedEnd,
                 calendars: selectedCalendars.map { $0.id }))
         case .writeOnly:
             NSLog("Write only")
@@ -412,8 +415,18 @@ class CalendarManager: ObservableObject {
     }
 
     func updateCurrentDate(_ date: Date) async {
-        currentWeekStartDate = Calendar.current.startOfDay(for: date)
+        await load(from: date, days: 1)
+    }
+
+    /// Loads `days` days starting at `start`, for the week and month views.
+    func load(from start: Date, days: Int) async {
+        currentWeekStartDate = Calendar.current.startOfDay(for: start)
+        loadedDayCount = max(1, days)
         await updateEvents()
+    }
+
+    private var loadedEnd: Date {
+        Calendar.current.date(byAdding: .day, value: loadedDayCount, to: currentWeekStartDate)!
     }
 
     private func updateEvents() async {
@@ -428,7 +441,7 @@ class CalendarManager: ObservableObject {
         let calendarIDs = selectedCalendars.map { $0.id }
         let eventsResult = await calendarService.events(
             from: currentWeekStartDate,
-            to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
+            to: loadedEnd,
             calendars: calendarIDs
         )
         let shown = visible(eventsResult)
@@ -442,7 +455,7 @@ class CalendarManager: ObservableObject {
         // Refresh events after updating
         events = visible(await calendarService.events(
             from: currentWeekStartDate,
-            to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
+            to: loadedEnd,
             calendars: selectedCalendars.map { $0.id }))
     }
 }
