@@ -99,13 +99,16 @@ grep -q "<sparkle:version>$BUILD</sparkle:version>" "$WORK/feed/appcast.xml" || 
 grep -q "sparkle:edSignature" "$WORK/feed/appcast.xml" || fail "appcast isn't signed"
 
 # Release first, feed second — so the feed never points at a missing file.
-{ cat "$WORK/notes.md"; printf '\n---\n\nInstall: drag the app to Applications, then run\n`xattr -dr com.apple.quarantine /Applications/Chora.app`\nbefore opening it (the build is unsigned). Already installed? It updates itself.\n'; } > "$WORK/release-notes.md"
+{ cat "$WORK/notes.md"; printf '\n---\n\nInstall: open Chora.dmg and drag Chora into Applications, then open it. When macOS says it can'"'"'t check it, click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Already installed? It updates itself.\n'; } > "$WORK/release-notes.md"
 gh release create "$TAG" "$WORK/feed/Chora.dmg" --repo "$REPO" --title "$TAG" --notes-file "$WORK/release-notes.md"
 
 cp "$WORK/feed/appcast.xml" updater/appcast.xml
 git add updater/appcast.xml
 git commit -q -m "chore: release $TAG"
-git push -q fork live-audio-visualizer
-git push -q fork live-audio-visualizer:main
+# Works from any branch whose tip is fork/main: the release commit goes to
+# main, and to the branch too so it stays level.
+git push -q fork HEAD:main
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+[ "$BRANCH" = main ] || [ "$BRANCH" = HEAD ] || git push -q fork "$BRANCH"
 
 echo "Released $TAG: https://github.com/$REPO/releases/tag/$TAG"
