@@ -12,6 +12,7 @@
 import AppKit
 import Defaults
 import Foundation
+import Security
 
 struct GoogleTask: Identifiable, Equatable {
     let id: String
@@ -39,7 +40,7 @@ final class GoogleTasksManager: ObservableObject {
     static let shared = GoogleTasksManager()
 
     @Published private(set) var tasks: [GoogleTask] = []
-    @Published private(set) var isSignedIn: Bool = !Defaults[.googleRefreshToken].isEmpty
+    @Published private(set) var isSignedIn: Bool = !GoogleTasksManager.refreshToken.isEmpty
     @Published private(set) var statusMessage: String?
     @Published private(set) var isSigningIn = false
     /// Whether the sign-in also covers Google Calendar (RSVP, guests, Meet,
@@ -55,6 +56,17 @@ final class GoogleTasksManager: ObservableObject {
     private var accessToken: (value: String, expires: Date)?
 
     private init() {}
+
+    /// The refresh token lives in the Keychain. Versions before 0.9.1 kept it
+    /// in preferences, so it moves over the first time it's read.
+    private static var refreshToken: String {
+        let legacy = Defaults[.googleRefreshToken]
+        if !legacy.isEmpty, RefreshTokenKeychain.save(legacy) {
+            Defaults[.googleRefreshToken] = ""
+            return legacy
+        }
+        return RefreshTokenKeychain.load() ?? legacy
+    }
 
     var isConfigured: Bool { !Defaults[.googleClientID].trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -105,7 +117,9 @@ final class GoogleTasksManager: ObservableObject {
             guard let refresh = token.refreshToken else {
                 throw GoogleTasksError.server("Google didn't return a refresh token. Try again.")
             }
-            Defaults[.googleRefreshToken] = refresh
+            guard RefreshTokenKeychain.save(refresh) else {
+                throw GoogleTasksError.server("Couldn't save the sign-in to the Keychain. Try again.")
+            }
             store(token)
             isSignedIn = true
             statusMessage = nil
@@ -115,6 +129,7 @@ final class GoogleTasksManager: ObservableObject {
     }
 
     func signOut() {
+        RefreshTokenKeychain.delete()
         Defaults[.googleRefreshToken] = ""
         accessToken = nil
         tasks = []
@@ -225,7 +240,7 @@ final class GoogleTasksManager: ObservableObject {
         if let accessToken, accessToken.expires > Date() { return accessToken.value }
         let token = try await tokenRequest([
             "grant_type": "refresh_token",
-            "refresh_token": Defaults[.googleRefreshToken],
+            "refresh_token": Self.refreshToken,
         ])
         store(token)
         return token.accessToken
@@ -272,5 +287,40 @@ final class GoogleTasksManager: ObservableObject {
             throw GoogleTasksError.server(message)
         }
         return json
+    }
+}
+
+/// Keeps the Google refresh token in the login Keychain, readable only by Chora.
+private enum RefreshTokenKeychain {
+    private static let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: "Chora Google sign-in",
+        kSecAttrAccount as String: "refresh-token",
+    ]
+
+    static func load() -> String? {
+        var lookup = query
+        lookup[kSecReturnData as String] = true
+        lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(lookup as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func save(_ token: String) -> Bool {
+        let data = Data(token.utf8)
+        let update = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if update == errSecSuccess { return true }
+        guard update == errSecItemNotFound else { return false }
+        var item = query
+        item[kSecValueData as String] = data
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func delete() {
+        SecItemDelete(query as CFDictionary)
     }
 }
