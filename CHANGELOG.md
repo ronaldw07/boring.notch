@@ -11,6 +11,15 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.9.1 — 2026-11-18
+
+### Changed
+
+- **Your Google sign-in is kept in the Keychain.** Chora used to store it alongside its other settings. It moves over on its own the first time this version opens, so you stay signed in.
+- **Chora only connects over secure links**, except to your Mac itself and to Spotify's album art, which Spotify still sends without one.
+
+---
+
 ## 0.9.0 — 2026-11-17
 
 ### Added
