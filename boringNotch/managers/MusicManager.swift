@@ -798,6 +798,10 @@ class MusicManager: ObservableObject {
 
     private func allowBackwardMove() {
         backwardMoveAllowedUntil = Date().addingTimeInterval(Self.backwardMoveGrace)
+        // The grace window only helps while the notch is open and reading. A
+        // jump back made while it's closed would otherwise outlast the window
+        // and leave the old, higher number on screen until playback caught up.
+        lastDisplayed = nil
     }
 
     /// Falls back to now for a stamp that can't be a real report time.
