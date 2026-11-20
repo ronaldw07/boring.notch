@@ -360,6 +360,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         allowCursorChangesInBackground()
 
+        // The menu bar icon is the way back into Settings, so it comes back on
+        // every launch even if it was hidden last time.
+        Defaults[.menubarIcon] = true
+
         // `.shared` is a lazy singleton, and its init is what starts the
         // pasteboard poll loop — without touching it here, nothing does that
         // until ClipboardView first appears (the user opens the Clipboard
