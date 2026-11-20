@@ -26,8 +26,17 @@ class MusicManager: ObservableObject {
     public private(set) var isNowPlayingDeprecated: Bool = false
     private let mediaChecker = MediaChecker()
 
-    // Active controller
+    // Active controller — the one on screen, and the one commands go to
     private var activeController: (any MediaControllerProtocol)?
+
+    // macOS's Now Playing names a single app, and a browser tab can hold it
+    // (even paused) while Spotify plays, leaving Spotify invisible to it. So
+    // the Now Playing source also reads Spotify directly and shows whichever
+    // of the two is actually playing.
+    private var nowPlayingSource: (any MediaControllerProtocol)?
+    private var spotifyCompanion: SpotifyController?
+    private var lastNowPlayingState: PlaybackState?
+    private var lastSpotifyState: PlaybackState?
 
     // Published properties for UI
     @Published var songTitle: String = "I'm Handsome"
@@ -178,10 +187,12 @@ class MusicManager: ObservableObject {
     // MARK: - Setup Methods
     private func createController(for type: MediaControllerType) -> (any MediaControllerProtocol)? {
         // Cleanup previous controller
-        if activeController != nil {
-            controllerCancellables.removeAll()
-            activeController = nil
-        }
+        controllerCancellables.removeAll()
+        activeController = nil
+        nowPlayingSource = nil
+        spotifyCompanion = nil
+        lastNowPlayingState = nil
+        lastSpotifyState = nil
 
         let newController: (any MediaControllerProtocol)?
 
@@ -189,7 +200,12 @@ class MusicManager: ObservableObject {
         case .nowPlaying:
             // Only create NowPlayingController if not deprecated on this macOS version
             if !self.isNowPlayingDeprecated {
-                newController = NowPlayingController()
+                let source = NowPlayingController()
+                let spotify = SpotifyController()
+                nowPlayingSource = source
+                spotifyCompanion = spotify
+                observe(spotify)
+                newController = source
             } else {
                 return nil
             }
@@ -201,19 +217,63 @@ class MusicManager: ObservableObject {
             newController = YouTubeMusicController()
         }
 
-        // Set up state observation for the new controller
         if let controller = newController {
-            controller.playbackStatePublisher
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] state in
-                    guard let self = self,
-                          self.activeController === controller else { return }
-                    self.updateFromPlaybackState(state)
-                }
-                .store(in: &controllerCancellables)
+            observe(controller)
         }
 
         return newController
+    }
+
+    private func observe(_ controller: any MediaControllerProtocol) {
+        controller.playbackStatePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.receive(state, from: controller)
+            }
+            .store(in: &controllerCancellables)
+    }
+
+    @MainActor
+    private func receive(_ state: PlaybackState, from controller: any MediaControllerProtocol) {
+        guard let source = nowPlayingSource, let spotify = spotifyCompanion else {
+            guard activeController === controller else { return }
+            updateFromPlaybackState(state)
+            return
+        }
+
+        if controller === spotify {
+            lastSpotifyState = state
+        } else if controller === source {
+            lastNowPlayingState = state
+        } else {
+            return
+        }
+
+        let pick = pickedController(source: source, spotify: spotify)
+        guard pick !== activeController else {
+            if controller === pick { updateFromPlaybackState(state) }
+            return
+        }
+
+        activeController = pick
+        canFavoriteTrack = pick.supportsFavorite
+        if let pickedState = pick === spotify ? lastSpotifyState : lastNowPlayingState {
+            updateFromPlaybackState(pickedState)
+        }
+    }
+
+    /// Spotify while it plays, otherwise whatever Now Playing has playing.
+    /// With nothing playing the current pick stays, so pausing Spotify doesn't
+    /// hand the notch to a paused browser tab.
+    private func pickedController(
+        source: any MediaControllerProtocol,
+        spotify: SpotifyController
+    ) -> any MediaControllerProtocol {
+        let spotifyRunning = spotify.isActive()
+        if spotifyRunning, lastSpotifyState?.isPlaying == true { return spotify }
+        if lastNowPlayingState?.isPlaying == true { return source }
+        if activeController === spotify, !spotifyRunning { return source }
+        return activeController ?? source
     }
 
     private func setActiveControllerBasedOnPreference() {
