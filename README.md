@@ -46,11 +46,15 @@ action, without opening anything.
   change. Drag on an empty spot to create an event, or type one ("Lunch
   with Sam 1pm"), make it repeat or remind you, duplicate it, or join its
   call from its details. Search a year of events, answer Google invites and
-  add a Meet link. Google Tasks sit alongside.
+  add a Meet link. Google Tasks sit alongside. Events come from the Mac's
+  own accounts (Google, iCloud, Outlook), so nobody signs in to see them,
+  and the Google extras are one Sign in with Google click.
 - **A timer that forgives mistakes.** Lengths down to the second, recent
   lengths one tap away, and undo after an accidental reset.
 - **Music that shares the space.** Album art, a live visualizer and synced
-  lyrics. A running timer sits beside the music instead of replacing it.
+  lyrics, and it follows Spotify even when a paused browser tab is holding
+  macOS's Now Playing. A running timer sits beside the music instead of
+  replacing it.
 - **Quick to move around.** Hover the notch and press 1 to 5 to switch tabs
   (or ⌥1 to ⌥5 from anywhere while it's open), the calendar has its own
   keyboard shortcuts, a shelf holds files you drop on the notch, and
@@ -58,7 +62,7 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 24 versions since September 2026, each with a
+- **Small releases, often.** 25 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app
