@@ -11,6 +11,25 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.9.2 — 2026-11-19
+
+### Added
+
+- **Sign in with Google in one click.** Settings › Connections now has a single Sign in with Google button for answering invites, guests and Meet links, event colors and Google Tasks. No more creating your own Google project and pasting codes. Google will say it hasn't verified Chora yet: click Advanced, then Go to Chora.
+- **Add a calendar account from Chora.** Connections › Add account… opens Internet Accounts in System Settings, where you add Google, iCloud or Outlook. Their events show up in Chora without signing in to Chora at all.
+
+### Fixed
+
+- **The notch shows Spotify even when a browser tab holds Now Playing.** macOS can keep reporting a paused video in a browser while Spotify plays. Chora now also asks Spotify directly and shows whichever is actually playing. The first time, macOS asks to let Chora control Spotify.
+- **The song time no longer sticks** at the old position when a song restarts while the notch is closed.
+- **The menu bar icon comes back every time Chora opens**, so Settings is always within reach.
+
+### Changed
+
+- **Updates use Sparkle 2.9.6**, which includes its security fixes.
+
+---
+
 ## 0.9.1 — 2026-11-18
 
 ### Changed
