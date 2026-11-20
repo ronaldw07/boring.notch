@@ -40,6 +40,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Calendar") {
                     Label("Calendar", systemImage: "calendar")
                 }
+                NavigationLink(value: "Connections") {
+                    Label("Connections", systemImage: "link")
+                }
                 NavigationLink(value: "HUD") {
                     Label("HUDs", systemImage: "dial.medium.fill")
                 }
@@ -80,6 +83,8 @@ struct SettingsView: View {
                     Media()
                 case "Calendar":
                     CalendarSettings()
+                case "Connections":
+                    ConnectionsSettings()
                 case "HUD":
                     HUD()
                 case "Battery":
@@ -715,15 +720,78 @@ struct Media: View {
     }
 }
 
+struct ConnectionsSettings: View {
+    @ObservedObject private var googleTasks = GoogleTasksManager.shared
+
+    var body: some View {
+        Form {
+            Section(header: Text("Calendar")) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Google, iCloud, Outlook and more")
+                        Text("Chora shows the events in your Mac's Calendar. Add an account in System Settings and its events show up here.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Add account…") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension")!)
+                    }
+                }
+            }
+
+            Section(header: Text("Google")) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(googleTasks.isSignedIn ? "Signed in" : "Not signed in")
+                        Text("Optional. RSVP to invites, add guests and Meet links, color events, and see Google Tasks.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    if googleTasks.isSignedIn {
+                        Button("Sign out") { googleTasks.signOut() }
+                    } else {
+                        signInButton("Sign in with Google")
+                    }
+                }
+                if googleTasks.isSignedIn && !googleTasks.hasCalendarAccess {
+                    HStack {
+                        Text("Sign in again to turn on RSVPs, guests, Meet links and colors.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        signInButton("Sign in again")
+                    }
+                }
+                if !googleTasks.isConfigured {
+                    Text("This copy of Chora was built without Google sign-in.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                if let message = googleTasks.statusMessage {
+                    Text(message).font(.caption).foregroundColor(.red)
+                }
+            }
+        }
+        .accentColor(.effectiveAccent)
+        .navigationTitle("Connections")
+    }
+
+    private func signInButton(_ title: String) -> some View {
+        Button(googleTasks.isSigningIn ? "Waiting for browser…" : title) {
+            Task { await googleTasks.signIn() }
+        }
+        .disabled(!googleTasks.isConfigured || googleTasks.isSigningIn)
+    }
+}
+
 struct CalendarSettings: View {
     @ObservedObject private var calendarManager = CalendarManager.shared
     @Default(.showCalendar) var showCalendar: Bool
     @Default(.hideCompletedReminders) var hideCompletedReminders
     @Default(.hideAllDayEvents) var hideAllDayEvents
     @Default(.autoScrollToNextEvent) var autoScrollToNextEvent
-    @Default(.googleClientID) var googleClientID
-    @Default(.googleClientSecret) var googleClientSecret
-    @ObservedObject private var googleTasks = GoogleTasksManager.shared
 
     var body: some View {
         Form {
@@ -741,40 +809,6 @@ struct CalendarSettings: View {
             }
             Defaults.Toggle(key: .showFullEventTitles) {
                 Text("Always show full event titles")
-            }
-            Section(header: Text("Google")) {
-                if googleTasks.isSignedIn {
-                    HStack {
-                        Text("Signed in. Tasks due on the day you're viewing show above the timeline.")
-                        Spacer()
-                        Button("Sign out") { googleTasks.signOut() }
-                    }
-                    if !googleTasks.hasCalendarAccess {
-                        HStack {
-                            Text("Sign in again to RSVP, add guests and Meet links, and color events. Enable the Google Calendar API in your Cloud project first.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button(googleTasks.isSigningIn ? "Waiting for browser…" : "Sign in again") {
-                                Task { await googleTasks.signIn() }
-                            }
-                            .disabled(googleTasks.isSigningIn)
-                        }
-                    }
-                } else {
-                    TextField("Client ID", text: $googleClientID)
-                    SecureField("Client secret", text: $googleClientSecret)
-                    Button(googleTasks.isSigningIn ? "Waiting for browser…" : "Sign in with Google") {
-                        Task { await googleTasks.signIn() }
-                    }
-                    .disabled(googleClientID.isEmpty || googleTasks.isSigningIn)
-                    Text("Google Tasks, RSVPs, guests, Meet links and event colors don't go through the Mac's Calendar, so this signs in to Google directly. In console.cloud.google.com: create a project, enable the Google Tasks API and the Google Calendar API, set up the OAuth consent screen (add yourself as a test user), then Credentials › Create credentials › OAuth client ID › Desktop app. Paste its client ID and secret here.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                if let message = googleTasks.statusMessage {
-                    Text(message).font(.caption).foregroundColor(.red)
-                }
             }
             Section(header: Text("Calendars")) {
                 if calendarManager.calendarAuthorizationStatus != .fullAccess {

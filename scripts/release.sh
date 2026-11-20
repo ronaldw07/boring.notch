@@ -22,6 +22,13 @@ git fetch -q fork
 grep -q "^## $VERSION " CHANGELOG.md || fail "CHANGELOG.md has no '## $VERSION' section"
 gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 && fail "$TAG already exists"
 
+# Chora's Google sign-in client (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET). Kept
+# out of the repo; the build puts it into the app's Info.plist.
+GOOGLE_ENV="$HOME/.config/chora/google-oauth.env"
+[ -f "$GOOGLE_ENV" ] || fail "missing $GOOGLE_ENV"
+source "$GOOGLE_ENV"
+[ -n "${GOOGLE_CLIENT_ID:-}" ] && [ -n "${GOOGLE_CLIENT_SECRET:-}" ] || fail "$GOOGLE_ENV needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET"
+
 # Sparkle's signing tools, at the version the app links, cached between releases.
 SPARKLE_VERSION=$(python3 - <<'PY'
 import json
@@ -43,6 +50,7 @@ echo "Building $VERSION (build $BUILD)…"
 xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration Release \
   -derivedDataPath "$WORK/build" \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+  GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
   build >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; fail "build failed"; }
 

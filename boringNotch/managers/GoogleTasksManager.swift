@@ -5,8 +5,8 @@
 //  Google Tasks don't sync to the Mac's Calendar, so they're fetched from
 //  Google directly. Sign-in is the standard desktop flow: the browser opens,
 //  Google redirects back to a one-shot listener on 127.0.0.1, and the code
-//  is traded for tokens. Needs a client ID created in Google Cloud Console
-//  (Settings › Calendar explains how).
+//  is traded for tokens. Uses Chora's own Google client, built into release
+//  copies (Settings › Connections).
 //
 
 import AppKit
@@ -28,7 +28,7 @@ enum GoogleTasksError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Add your Google client ID first."
+        case .notConfigured: return "This copy of Chora was built without Google sign-in."
         case .denied(let reason): return "Google said no: \(reason)"
         case .server(let message): return message
         }
@@ -68,7 +68,17 @@ final class GoogleTasksManager: ObservableObject {
         return RefreshTokenKeychain.load() ?? legacy
     }
 
-    var isConfigured: Bool { !Defaults[.googleClientID].trimmingCharacters(in: .whitespaces).isEmpty }
+    /// Chora's own Google client, put into Info.plist at release time (see
+    /// scripts/release.sh). A client pasted into older versions still wins,
+    /// so sign-ins made with it keep working.
+    private static var client: (id: String, secret: String) {
+        let pastedID = Defaults[.googleClientID].trimmingCharacters(in: .whitespaces)
+        if !pastedID.isEmpty { return (pastedID, Defaults[.googleClientSecret]) }
+        let info = Bundle.main.infoDictionary ?? [:]
+        return (info["GoogleClientID"] as? String ?? "", info["GoogleClientSecret"] as? String ?? "")
+    }
+
+    var isConfigured: Bool { !Self.client.id.isEmpty }
 
     // MARK: - Sign in
 
@@ -90,7 +100,7 @@ final class GoogleTasksManager: ObservableObject {
 
             var components = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
             components.queryItems = [
-                .init(name: "client_id", value: Defaults[.googleClientID]),
+                .init(name: "client_id", value: Self.client.id),
                 .init(name: "redirect_uri", value: redirect),
                 .init(name: "response_type", value: "code"),
                 .init(name: "scope", value: Self.scope),
@@ -248,9 +258,9 @@ final class GoogleTasksManager: ObservableObject {
 
     private func tokenRequest(_ fields: [String: String]) async throws -> TokenResponse {
         var body = fields
-        body["client_id"] = Defaults[.googleClientID]
-        let secret = Defaults[.googleClientSecret]
-        if !secret.isEmpty { body["client_secret"] = secret }
+        let client = Self.client
+        body["client_id"] = client.id
+        if !client.secret.isEmpty { body["client_secret"] = client.secret }
 
         var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         request.httpMethod = "POST"

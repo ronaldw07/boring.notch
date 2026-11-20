@@ -221,8 +221,9 @@ extension Defaults.Keys {
     static let timerCustomSeconds = Key<Int>("timerCustomSeconds", default: 15 * 60)
     static let timerRecentSeconds = Key<[Int]>("timerRecentSeconds", default: [])
 
-    // Google Tasks sign-in. The client ID and secret come from the user's own
-    // Google Cloud project; the secret of a desktop client isn't confidential.
+    // A Google client pasted in before Chora had its own built in. Still
+    // used when set, so those sign-ins keep working; the secret of a desktop
+    // client isn't confidential.
     static let googleClientID = Key<String>("googleClientID", default: "")
     static let googleClientSecret = Key<String>("googleClientSecret", default: "")
     static let googleRefreshToken = Key<String>("googleRefreshToken", default: "")
