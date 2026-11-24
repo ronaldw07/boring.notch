@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <a href="https://ronaldw07.github.io/chora-site/"><img src="https://ronaldw07.github.io/chora-site/logo.png" alt="Chora" width="120"></a>
+  <a href="https://getchora.vercel.app/"><img src="https://getchora.vercel.app/logo.png" alt="Chora" width="120"></a>
   <br>
   Chora
   <br>
@@ -13,14 +13,14 @@
 
 <p align="center">
   <a href="https://github.com/ronaldw07/boring.notch/releases/latest/download/Chora.dmg"><b>Download</b></a> ·
-  <a href="https://ronaldw07.github.io/chora-site/">Website</a> ·
-  <a href="https://ronaldw07.github.io/chora-site/changelog.html">What's new</a> ·
+  <a href="https://getchora.vercel.app/">Website</a> ·
+  <a href="https://getchora.vercel.app/changelog.html">What's new</a> ·
   <a href="https://discord.gg/8GVjCq4fE5">Discord</a>
 </p>
 
 <p align="center">
-  <img src="https://ronaldw07.github.io/chora-site/shots/volume.png" width="49%" alt="A master volume slider and one for each app" />
-  <img src="https://ronaldw07.github.io/chora-site/shots/calendar.png" width="49%" alt="The day as a timeline you can drag" />
+  <img src="https://getchora.vercel.app/shots/volume.png" width="49%" alt="A master volume slider and one for each app" />
+  <img src="https://getchora.vercel.app/shots/calendar.png" width="49%" alt="The day as a timeline you can drag" />
 </p>
 
 ---
@@ -43,10 +43,13 @@ action, without opening anything.
 - **A calendar you can edit.** See one day, 4 days, a week or a month,
   with the weather for each. Drag events to move them, pull the bottom edge
   to change the time, drag the notch taller to see more, and undo any
-  change. Drag on an empty spot to create an event, or type one ("Lunch
-  with Sam 1pm"), make it repeat or remind you, duplicate it, or join its
-  call from its details. Search a year of events, answer Google invites and
-  add a Meet link. Google Tasks sit alongside. Events come from the Mac's
+  change (⌘Z works too). Drag on an empty spot to create an event, or type
+  one ("Lunch with Sam 1pm"), make it repeat on any schedule or remind you,
+  copy and paste it, duplicate it, or join its call from its details. A
+  heads-up beside the notch says when the next event starts in 5 minutes.
+  Search a year of events, answer Google invites and add a Meet link.
+  Google Tasks show on every day, and you can edit them and give them a
+  time. Events come from the Mac's
   own accounts (Google, iCloud, Outlook), so nobody signs in to see them,
   and the Google extras are one Sign in with Google click.
 - **A timer that forgives mistakes.** Lengths down to the second, recent
@@ -62,7 +65,7 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 25 versions since September 2026, each with a
+- **Small releases, often.** 26 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app
