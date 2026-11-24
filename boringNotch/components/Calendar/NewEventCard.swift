@@ -5,8 +5,8 @@
 //  Created by Ronald Wen on 2026-11-16.
 //
 //  What shows after dragging out a new event on an empty part of the
-//  calendar: a title, the time it covers, which calendar, whether it
-//  repeats, a reminder, a location and a description, then Save.
+//  calendar: a title, the time it covers, which calendar and color,
+//  whether it repeats, a reminder, a location and a description, then Save.
 //
 
 import SwiftUI
@@ -21,13 +21,15 @@ struct NewEventCard: View {
         let reminderMinutes: Int?
         let guests: [String]
         let addsMeet: Bool
+        /// Nil keeps the calendar's color.
+        let color: GoogleEventColor?
     }
 
     let start: Date
     let end: Date
     let calendars: [CalendarModel]
     let defaultCalendarID: String?
-    /// Signed in to Google Calendar, so guests and Meet links can be added.
+    /// Signed in to Google Calendar, so guests, Meet links and a color can be added.
     var canInvite = false
     /// True if the calendar took the new event.
     let onSave: (Details) async -> Bool
@@ -41,6 +43,7 @@ struct NewEventCard: View {
     @State private var reminderMinutes: Int?
     @State private var guestsText = ""
     @State private var addsMeet = false
+    @State private var color: GoogleEventColor?
     @State private var saveFailed = false
     @State private var escapeMonitor: Any?
     @FocusState private var isTitleFocused: Bool
@@ -55,7 +58,7 @@ struct NewEventCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(nsColor: calendar?.color ?? .systemBlue))
+                    .fill(shownColor)
                     .frame(width: 4, height: 20)
                 TextField("", text: $title, prompt: Text("Add title").foregroundStyle(.white.opacity(0.35)))
                     .textFieldStyle(.plain)
@@ -82,14 +85,17 @@ struct NewEventCard: View {
                     field("mappin.and.ellipse", "Add location", text: $location)
                     field("text.alignleft", "Add description", text: $notes)
                     if saveFailed {
-                        Text(invites ? "Couldn't save it. Guests and Meet need a Google calendar." : "Couldn't save it. This calendar may be read-only.")
+                        Text(invites ? "Couldn't save it. Guests, Meet and colors need a Google calendar." : "Couldn't save it. This calendar may be read-only.")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.orange)
                     }
                 }
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 6) {
-                    calendarMenu
+                    HStack(spacing: 4) {
+                        calendarMenu
+                        if canInvite { colorMenu }
+                    }
                     Button(action: save) {
                         Text("Save")
                             .font(.system(size: 10, weight: .semibold))
@@ -170,9 +176,51 @@ struct NewEventCard: View {
         .fixedSize()
     }
 
-    /// Guests or a Meet link were asked for.
+    /// Guests, a Meet link or a color were asked for, so it goes through Google.
     private var invites: Bool {
-        canInvite && (addsMeet || !GoogleCalendarFormat.guestEmails(from: guestsText).isEmpty)
+        canInvite && (addsMeet || color != nil || !GoogleCalendarFormat.guestEmails(from: guestsText).isEmpty)
+    }
+
+    /// The chosen color, else the calendar's.
+    private var shownColor: Color {
+        Color(nsColor: color?.color ?? calendar?.color ?? .systemBlue)
+    }
+
+    /// Google Calendar's event colors, beside the calendar menu.
+    private var colorMenu: some View {
+        Menu {
+            Button {
+                color = nil
+            } label: {
+                Label { Text("Calendar color") } icon: { Image(nsImage: Self.dot(calendar?.color ?? .systemBlue)).renderingMode(.original) }
+                    .labelStyle(.titleAndIcon)
+            }
+            ForEach(GoogleEventColor.allCases, id: \.self) { option in
+                Button {
+                    color = option
+                } label: {
+                    Label { Text(option.name) } icon: { Image(nsImage: Self.dot(option.color)).renderingMode(.original) }
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(shownColor)
+                    .frame(width: 9, height: 9)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 7)
+            .frame(height: 22)
+            .background(Capsule().fill(.white.opacity(0.12)))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Event color")
     }
 
     private var meetToggle: some View {
@@ -294,7 +342,8 @@ struct NewEventCard: View {
             repeats: repeats,
             reminderMinutes: reminderMinutes,
             guests: canInvite ? GoogleCalendarFormat.guestEmails(from: guestsText) : [],
-            addsMeet: canInvite && addsMeet
+            addsMeet: canInvite && addsMeet,
+            color: canInvite ? color : nil
         )
         Task {
             if await onSave(details) {

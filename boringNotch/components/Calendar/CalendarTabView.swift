@@ -1780,7 +1780,7 @@ struct CalendarTabView: View {
                     defaultCalendarID: calendarManager.newEventCalendarID,
                     canInvite: googleCalendar.isAvailable,
                     onSave: { details in
-                        if !details.guests.isEmpty || details.addsMeet {
+                        if !details.guests.isEmpty || details.addsMeet || details.color != nil {
                             return await createOnGoogle(details,
                                                         start: columnDay(range.dayIndex).addingTimeInterval(range.start),
                                                         end: columnDay(range.dayIndex).addingTimeInterval(range.end))
@@ -1851,7 +1851,7 @@ struct CalendarTabView: View {
         googleCalendar.isAvailable && event.externalID != nil
     }
 
-    /// Guests and Meet links go through Google; the Mac's calendar picks
+    /// Guests, Meet links and colors go through Google; the Mac's calendar picks
     /// the event up on its next sync.
     private func createOnGoogle(_ details: NewEventCard.Details, start: Date, end: Date) async -> Bool {
         guard let model = calendarManager.editableEventCalendars.first(where: { $0.id == details.calendarID }),
@@ -1859,7 +1859,7 @@ struct CalendarTabView: View {
         let body = GoogleCalendarFormat.newEvent(
             title: details.title, start: start, end: end, isAllDay: false,
             location: details.location, notes: details.notes, guests: details.guests, addsMeet: details.addsMeet,
-            repeats: details.repeats, reminderMinutes: details.reminderMinutes
+            repeats: details.repeats, reminderMinutes: details.reminderMinutes, color: details.color
         )
         return await googleCalendar.create(in: googleID, body: body, addsMeet: details.addsMeet)
     }

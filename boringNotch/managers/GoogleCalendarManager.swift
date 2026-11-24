@@ -108,7 +108,9 @@ final class GoogleCalendarManager: ObservableObject {
         do {
             let path = "/calendars/\(Self.escaped(calendarID))/events?sendUpdates=all"
                 + (addsMeet ? "&conferenceDataVersion=1" : "")
-            _ = try await request("POST", path, body: body)
+            let item = try await request("POST", path, body: body)
+            // Show its color now, before the shown days next change.
+            colors.merge(GoogleCalendarFormat.colors(in: [item])) { $1 }
             return true
         } catch {
             NSLog("GoogleCalendar: couldn't create event: \(error)")

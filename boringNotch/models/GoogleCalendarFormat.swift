@@ -101,7 +101,7 @@ enum GoogleCalendarFormat {
     static func newEvent(
         title: String, start: Date, end: Date, isAllDay: Bool,
         location: String?, notes: String?, guests: [String], addsMeet: Bool,
-        repeats: EventRepeat, reminderMinutes: Int?,
+        repeats: EventRepeat, reminderMinutes: Int?, color: GoogleEventColor? = nil,
         timeZone: TimeZone = .current, requestID: String = UUID().uuidString,
         calendar: Calendar = .current
     ) -> [String: Any] {
@@ -131,6 +131,7 @@ enum GoogleCalendarFormat {
             ]]
         }
         if let rule = rrule(repeats) { body["recurrence"] = [rule] }
+        if let color { body["colorId"] = String(color.rawValue) }
         if let reminderMinutes {
             body["reminders"] = ["useDefault": false, "overrides": [["method": "popup", "minutes": reminderMinutes]]]
         }
