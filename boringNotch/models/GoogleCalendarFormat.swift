@@ -66,6 +66,7 @@ enum GoogleCalendarFormat {
         case .weekly: "RRULE:FREQ=WEEKLY"
         case .monthly: "RRULE:FREQ=MONTHLY"
         case .yearly: "RRULE:FREQ=YEARLY"
+        case .custom(let custom): custom.rrule()
         }
     }
 

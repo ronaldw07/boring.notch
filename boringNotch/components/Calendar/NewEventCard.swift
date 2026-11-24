@@ -76,6 +76,9 @@ struct NewEventCard: View {
                         repeatMenu
                         reminderMenu
                     }
+                    if case .custom = repeats {
+                        CustomRepeatEditor(start: start, custom: customBinding)
+                    }
                     if canInvite {
                         HStack(spacing: 6) {
                             field("person.2", "Add guests (emails)", text: $guestsText)
@@ -243,8 +246,13 @@ struct NewEventCard: View {
 
     private var repeatMenu: some View {
         Menu {
-            ForEach(EventRepeat.allCases, id: \.self) { option in
+            ForEach(EventRepeat.presets, id: \.self) { option in
                 Button(option.label(for: start)) { repeats = option }
+            }
+            Divider()
+            Button("Custom…") {
+                if case .custom = repeats { return }
+                repeats = .custom(.starting(on: start))
             }
         } label: {
             pill("arrow.clockwise", repeats.label(for: start))
@@ -253,6 +261,17 @@ struct NewEventCard: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
+    }
+
+    /// The custom rule being edited; only read while `repeats` is custom.
+    private var customBinding: Binding<CustomRepeat> {
+        Binding(
+            get: {
+                if case .custom(let custom) = repeats { return custom }
+                return .starting(on: start)
+            },
+            set: { repeats = .custom($0) }
+        )
     }
 
     private var reminderMenu: some View {
