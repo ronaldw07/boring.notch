@@ -11,6 +11,26 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.9.3 — 2026-11-24
+
+### Added
+
+- **Custom repeats.** In a new event's Repeat menu, choose Custom… to repeat every few days, weeks, months or years, on the weekdays you pick, until a date or for a set number of times.
+- **A heads-up before events.** Five minutes before an event starts, its title and "in 5 min" show beside the closed notch for a few seconds. Turn it off in Settings › Calendar.
+- **Copy and paste events.** Open an event and press ⌘C, then point at a time on any day and press ⌘V.
+- **⌘Z undoes** the last change in the calendar, the same as the Undo button.
+- **Google Tasks on every day.** Week shows each day's tasks under its date and Month inside each day. Done tasks stay, crossed out, the way Google Calendar shows them.
+- **Edit Google Tasks.** Click a task's name to change its name, day and details, mark it done, delete it, or open it in Google.
+- **Give a task a time.** Add a time in a task's box and it shows at that time in the day. Google Tasks keeps only the day, so the time stays in Chora on this Mac.
+
+### Changed
+
+- **Deleting a repeating event says how much went**: this event, this and following, or all events.
+- **Undoing a delete is instant**, and tasks show the moment the calendar opens.
+- **Chora follows your Mac's time zone** when it changes, for example after a flight.
+
+---
+
 ## 0.9.2 — 2026-11-19
 
 ### Added
