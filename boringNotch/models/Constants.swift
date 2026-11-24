@@ -184,6 +184,10 @@ extension Defaults.Keys {
     static let hideAllDayEvents = Key<Bool>("hideAllDayEvents", default: false)
     static let showFullEventTitles = Key<Bool>("showFullEventTitles", default: false)
     static let autoScrollToNextEvent = Key<Bool>("autoScrollToNextEvent", default: true)
+    static let eventHeadsUp = Key<Bool>("eventHeadsUp", default: true)
+    /// Times given to Google tasks in Chora, minutes after midnight, by task
+    /// id. Google Tasks keeps only a date, so these live on this Mac.
+    static let googleTaskTimes = Key<[String: Int]>("googleTaskTimes", default: [:])
     
     // MARK: Fullscreen Media Detection
     static let hideNotchOption = Key<HideNotchOption>("hideNotchOption", default: .nowPlayingOnly)

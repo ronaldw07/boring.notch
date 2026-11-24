@@ -45,6 +45,8 @@ struct EventDetailsCard: View {
     @State private var answer: AttendanceStatus?
     @State private var googleFailed = false
     @State private var deleteFailed = false
+    /// ⌘C took a copy; says so for a moment.
+    @State private var didCopy = false
     @State private var confirmResetTask: Task<Void, Never>?
     /// Backspace asked "Delete this event?"; Enter confirms, Escape backs out.
     @State private var isAskingToDelete = false
@@ -57,6 +59,8 @@ struct EventDetailsCard: View {
         static let enter: UInt16 = 76
         static let escape: UInt16 = 53
     }
+
+    private static let copiedNoticeSeconds: Double = 2
 
     private var color: Color { Color(nsColor: event.calendar.color) }
 
@@ -83,6 +87,11 @@ struct EventDetailsCard: View {
                             Text("Couldn't delete it. This calendar may be read-only.")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.orange)
+                        }
+                        if didCopy {
+                            Text("Copied. Point at a time and press ⌘V to paste.")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.green)
                         }
                     }
                     Spacer(minLength: 0)
@@ -120,6 +129,11 @@ struct EventDetailsCard: View {
             }
             return nil
         }
+        if key.modifierFlags.contains(.command) {
+            guard key.charactersIgnoringModifiers?.lowercased() == "c" else { return key }
+            copyEvent()
+            return nil
+        }
         switch key.keyCode {
         case Key.backspace, Key.forwardDelete:
             guard !isAskingToDelete, !isChoosingScope else { return nil }
@@ -144,6 +158,15 @@ struct EventDetailsCard: View {
             return nil
         default:
             return key
+        }
+    }
+
+    private func copyEvent() {
+        EventClipboard.copied = CopiedEvent(event)
+        didCopy = true
+        Task {
+            try? await Task.sleep(for: .seconds(Self.copiedNoticeSeconds))
+            didCopy = false
         }
     }
 

@@ -19,6 +19,33 @@ struct GoogleTask: Identifiable, Equatable {
     let listID: String
     let title: String
     var isCompleted: Bool
+    /// The start of the local day it's due.
+    let due: Date
+    var notes: String? = nil
+    /// A time set in Chora, minutes after midnight; nil for a task with
+    /// only a day. Google never sees it.
+    var minutes: Int? = nil
+    /// Google's page for the task, for Open in Google.
+    var link: URL? = nil
+
+    /// When it's due, at its Chora time; nil without one.
+    var timedStart: Date? {
+        minutes.map { due.addingTimeInterval(TimeInterval($0) * 60) }
+    }
+
+    /// The due date as Google wants it: the local date at midnight UTC.
+    static func dueText(for day: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: day)
+        return String(format: "%04d-%02d-%02dT00:00:00.000Z", parts.year ?? 1970, parts.month ?? 1, parts.day ?? 1)
+    }
+
+    /// Google keeps a due date as midnight UTC ("2026-11-23T00:00:00.000Z");
+    /// the date part is the day, wherever you are.
+    static func dueDay(from text: String, calendar: Calendar = .current) -> Date? {
+        let parts = text.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
 }
 
 enum GoogleTasksError: LocalizedError {
@@ -150,45 +177,148 @@ final class GoogleTasksManager: ObservableObject {
 
     // MARK: - Tasks
 
-    /// Tasks due on `day`. Google keeps a due *date*, no time, so these
-    /// show as a strip rather than on the timeline.
-    func reload(for day: Date) async {
+    /// Tasks due on any day from `first` through `last`. Google keeps a due
+    /// *date*, no time, so these show beside a day rather than on the timeline.
+    ///
+    /// Every task with a due date is fetched and the days picked out here:
+    /// Google's own due filter missed tasks that Google Calendar shows.
+    func reload() async {
         guard isSignedIn else {
             if !tasks.isEmpty { tasks = [] }
             return
         }
+        // A newer reload (another day or view) wins over one still running.
+        reloadGeneration += 1
+        let generation = reloadGeneration
         do {
             let token = try await validAccessToken()
-            let (min, max) = Self.dueRange(for: day)
-
             let lists = try await get("https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=100", token: token)
             var found: [GoogleTask] = []
             for list in lists["items"] as? [[String: Any]] ?? [] {
                 guard let listID = list["id"] as? String else { continue }
-                var query = URLComponents(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listID)/tasks")!
-                query.queryItems = [
-                    .init(name: "showCompleted", value: "true"),
-                    .init(name: "showHidden", value: "true"),
-                    .init(name: "maxResults", value: "100"),
-                    .init(name: "dueMin", value: min),
-                    .init(name: "dueMax", value: max),
-                ]
-                let page = try await get(query.url!.absoluteString, token: token)
-                for item in page["items"] as? [[String: Any]] ?? [] {
-                    guard let id = item["id"] as? String,
-                          let title = item["title"] as? String, !title.isEmpty else { continue }
-                    found.append(GoogleTask(
-                        id: id, listID: listID, title: title,
-                        isCompleted: (item["status"] as? String) == "completed"
-                    ))
-                }
+                found += try await allTasks(in: listID, token: token)
             }
-            if Defaults[.hideCompletedReminders] {
-                found.removeAll { $0.isCompleted }
-            }
+            // Done tasks stay, crossed out, the way Google Calendar shows them.
+            guard generation == reloadGeneration else { return }
             if found != tasks { tasks = found }
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    private var reloadGeneration = 0
+    private var refreshLoop: Task<Void, Never>?
+    private static let refreshEvery: Duration = .seconds(30)
+
+    /// Loads tasks at launch and keeps them fresh in the background, so the
+    /// calendar shows them the moment it opens and on any day you go to.
+    func startRefreshing() {
+        guard refreshLoop == nil else { return }
+        refreshLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.reload()
+                try? await Task.sleep(for: Self.refreshEvery)
+            }
+        }
+    }
+    private static let pageLimit = 20
+
+    /// Every task with a due date in one list, following Google's pages.
+    private func allTasks(in listID: String, token: String) async throws -> [GoogleTask] {
+        var found: [GoogleTask] = []
+        var pageToken: String?
+        for _ in 0..<Self.pageLimit {
+            var query = URLComponents(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listID)/tasks")!
+            query.queryItems = [
+                .init(name: "showCompleted", value: "true"),
+                .init(name: "showHidden", value: "true"),
+                .init(name: "maxResults", value: "100"),
+            ]
+            if let pageToken { query.queryItems?.append(.init(name: "pageToken", value: pageToken)) }
+            let page = try await get(query.url!.absoluteString, token: token)
+            for item in page["items"] as? [[String: Any]] ?? [] {
+                guard let id = item["id"] as? String,
+                      let title = item["title"] as? String, !title.isEmpty,
+                      let due = (item["due"] as? String).flatMap({ GoogleTask.dueDay(from: $0) }) else { continue }
+                found.append(GoogleTask(
+                    id: id, listID: listID, title: title,
+                    isCompleted: (item["status"] as? String) == "completed",
+                    due: due,
+                    notes: (item["notes"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                    minutes: Defaults[.googleTaskTimes][id],
+                    link: (item["webViewLink"] as? String).flatMap(URL.init(string:))
+                ))
+            }
+            pageToken = page["nextPageToken"] as? String
+            if pageToken == nil { break }
+        }
+        return found
+    }
+
+    /// Saves a new title, due day, notes and done state; true if Google took it.
+    func update(_ task: GoogleTask, title: String, due: Date, notes: String, isCompleted: Bool, minutes: Int?) async -> Bool {
+        var times = Defaults[.googleTaskTimes]
+        times[task.id] = minutes
+        Defaults[.googleTaskTimes] = times
+        var body: [String: Any] = [
+            "title": title,
+            "due": GoogleTask.dueText(for: due),
+            "notes": notes,
+            "status": isCompleted ? "completed" : "needsAction",
+        ]
+        if !isCompleted { body["completed"] = NSNull() }
+        // Shown at once; Google confirms in the background and a failure
+        // puts the old task back.
+        let updated = GoogleTask(id: task.id, listID: task.listID, title: title, isCompleted: isCompleted,
+                                 due: Calendar.current.startOfDay(for: due), notes: notes.isEmpty ? nil : notes,
+                                 minutes: minutes, link: task.link)
+        replace(task.id, with: updated)
+        Task {
+            do {
+                try await send("PATCH", task, body: body)
+            } catch {
+                replace(task.id, with: task)
+                var times = Defaults[.googleTaskTimes]
+                times[task.id] = task.minutes
+                Defaults[.googleTaskTimes] = times
+                statusMessage = error.localizedDescription
+            }
+        }
+        return true
+    }
+
+    private func replace(_ id: String, with task: GoogleTask) {
+        if let index = tasks.firstIndex(where: { $0.id == id }) { tasks[index] = task }
+    }
+
+    /// Deletes the task on Google; true if it's gone.
+    func delete(_ task: GoogleTask) async -> Bool {
+        // Gone at once; back if Google refuses.
+        tasks.removeAll { $0.id == task.id }
+        Task {
+            do {
+                try await send("DELETE", task, body: nil)
+            } catch {
+                tasks.append(task)
+                statusMessage = error.localizedDescription
+            }
+        }
+        return true
+    }
+
+    private func send(_ method: String, _ task: GoogleTask, body: [String: Any]?) async throws {
+        let token = try await validAccessToken()
+        var request = URLRequest(url: URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(task.listID)/tasks/\(task.id)")!)
+        request.httpMethod = method
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (_, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw GoogleTasksError.server("Couldn't save the task.")
         }
     }
 
@@ -219,12 +349,9 @@ final class GoogleTasksManager: ObservableObject {
         }
     }
 
-    /// RFC 3339 bounds for tasks due on a local calendar date. Google stores
-    /// a due date as midnight UTC of that date.
-    private static func dueRange(for day: Date) -> (String, String) {
-        let parts = Calendar.current.dateComponents([.year, .month, .day], from: day)
-        let date = String(format: "%04d-%02d-%02d", parts.year ?? 1970, parts.month ?? 1, parts.day ?? 1)
-        return ("\(date)T00:00:00.000Z", "\(date)T23:59:59.000Z")
+    /// Tasks due on `day`, from what's loaded.
+    func tasks(on day: Date, calendar: Calendar = .current) -> [GoogleTask] {
+        tasks.filter { calendar.isDate($0.due, inSameDayAs: day) }
     }
 
     // MARK: - Tokens and requests
@@ -334,3 +461,5 @@ private enum RefreshTokenKeychain {
         SecItemDelete(query as CFDictionary)
     }
 }
+
+

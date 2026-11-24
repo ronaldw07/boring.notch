@@ -218,6 +218,11 @@ struct CalendarTabView: View {
     /// What search looks through; nil while it loads.
     @State private var searchable: [EventModel]?
     @State private var creating: Creating?
+    /// A Google task open to edit.
+    @State private var editingTask: GoogleTask?
+    /// Where the pointer is, for ⌘V. A plain box so moving the pointer
+    /// doesn't redraw the tab.
+    @State private var pointer = PointerSpot()
     @State private var newRange: NewRange?
     @State private var isHoveringHandle = false
     @State private var activeDrag: ActiveDrag?
@@ -423,13 +428,29 @@ struct CalendarTabView: View {
         }
         .onChange(of: hasTasks) { applyExtraHeight() }
         .onChange(of: hasAllDayRow) { applyExtraHeight() }
-        // Google tasks for the shown day, refreshed while the tab is open.
-        .task(id: "\(day.timeIntervalSince1970)-\(googleTasks.isSignedIn)") {
-            while !Task.isCancelled {
-                await googleTasks.reload(for: day)
-                try? await Task.sleep(for: .seconds(15))
-            }
-        }
+        // Google tasks for the days on screen, refreshed while the tab is open.
+        .modifier(TabWatchers(tasksKey: tasksKey, keepTasksLoaded: keepTasksLoaded, onTimeZoneChange: followTimeZone,
+                             editingTaskID: editingTask?.id))
+    }
+
+    /// The Mac moved to another time zone: days start at the new midnight,
+    /// so re-anchor the day shown (midday keeps it the same date) and reload.
+    private func followTimeZone() {
+        NSTimeZone.resetSystemTimeZone()
+        show(Calendar.current.startOfDay(for: day.addingTimeInterval(Self.halfDay)))
+    }
+
+    private static let halfDay: TimeInterval = 12 * 3600
+
+    /// Tasks are already in memory from launch; opening the tab (or signing
+    /// in) just asks for a fresh copy in the background.
+    private var tasksKey: String {
+        "\(googleTasks.isSignedIn)"
+    }
+
+    private func keepTasksLoaded() async {
+        googleTasks.startRefreshing()
+        await googleTasks.reload()
     }
 
     // MARK: - Data
@@ -501,17 +522,56 @@ struct CalendarTabView: View {
     private var placed: [DayTimelineLayout.Placed] {
         let timed = events.filter { !$0.isAllDay }
         guard isColumns else {
-            return DayTimelineLayout.place(timed, dayStart: day, dayLength: dayLength)
+            return DayTimelineLayout.place(timed + taskBlocks(on: day), dayStart: day, dayLength: dayLength)
         }
         let footprint = TimeInterval(Self.minBlockHeight / Self.hourHeight) * 3600
         return columnDays.enumerated().flatMap { index, columnDay in
-            DayTimelineLayout.columns(timed, dayStart: columnDay, dayLength: dayLength, footprint: footprint)
+            DayTimelineLayout.columns(timed + taskBlocks(on: columnDay), dayStart: columnDay, dayLength: dayLength, footprint: footprint)
                 .map { item in
                     var item = item
                     item.dayIndex = index
                     return item
                 }
         }
+    }
+
+    // MARK: - Tasks on the grid
+
+    /// Tasks with only a day sit in the row above the hours (in the day
+    /// view) or under the date (in the week), the way Google shows them.
+    private func untimedTasks(on columnDay: Date) -> [GoogleTask] {
+        googleTasks.tasks(on: columnDay).filter { $0.minutes == nil }
+    }
+
+    private static let taskBlockPrefix = "gtask:"
+    private static let tasksCalendar = CalendarModel(
+        id: "google-tasks", account: "Google", title: "Tasks", color: .systemBlue,
+        isSubscribed: false, isReminder: true
+    )
+
+    /// Tasks given a time in Chora, as blocks at that time. Shaped like a
+    /// reminder: it can be clicked, not dragged.
+    private func taskBlocks(on columnDay: Date) -> [EventModel] {
+        googleTasks.tasks(on: columnDay).compactMap { task in
+            guard let start = task.timedStart else { return nil }
+            return EventModel(
+                id: Self.taskBlockPrefix + task.id, start: start, end: start,
+                title: (task.isCompleted ? "✓ " : "○ ") + task.title,
+                location: nil, notes: task.notes, url: nil, isAllDay: false,
+                type: .reminder(completed: task.isCompleted), calendar: Self.tasksCalendar,
+                participants: [], timeZone: nil, hasRecurrenceRules: false, priority: nil
+            )
+        }
+    }
+
+    /// Clicking a block opens its task box if it's a task, else the event's.
+    private func open(block event: EventModel) {
+        guard event.id.hasPrefix(Self.taskBlockPrefix) else {
+            selectedEvent = event
+            return
+        }
+        let id = String(event.id.dropFirst(Self.taskBlockPrefix.count))
+        editingTask = googleTasks.tasks.first { $0.id == id }
     }
 
     private var laneCount: Int {
@@ -528,8 +588,10 @@ struct CalendarTabView: View {
         isExpanded ? Self.expandedLaneHeight : Self.collapsedLaneHeight
     }
 
+    /// The day view's strip of tasks, there whenever signed in to Google so
+    /// it doesn't come and go between days; the other views show them per day.
     private var hasTasks: Bool {
-        !googleTasks.tasks.isEmpty
+        span == .day && googleTasks.isSignedIn
     }
 
     /// The day's all-day events sit on a row of their own under the header.
@@ -719,7 +781,7 @@ struct CalendarTabView: View {
 
     /// A card or prompt is up; it has the keyboard, not the shortcuts.
     private var isOverlayOpen: Bool {
-        selectedEvent != nil || isQuickAdding || newRange != nil || pendingMove != nil || isShowingWeather || isSearching
+        selectedEvent != nil || editingTask != nil || isQuickAdding || newRange != nil || pendingMove != nil || isShowingWeather || isSearching
     }
 
     /// Google Calendar's keys work while the pointer is over the calendar
@@ -747,9 +809,21 @@ struct CalendarTabView: View {
     }
 
     /// C new event, T today, J/K or arrows forward/back, D/X/W/M the
-    /// views, / search. Anything held with ⌘, ⌃ or ⌥ passes through.
+    /// views, / search, ⌘V paste a copied event. Anything else held with
+    /// ⌘, ⌃ or ⌥ passes through.
     @MainActor
     private func handleShortcut(_ key: NSEvent) -> Bool {
+        if key.modifierFlags.intersection([.command, .control, .option, .shift]) == .command,
+           key.charactersIgnoringModifiers?.lowercased() == "z" {
+            Task { await calendarManager.undoLastChange() }
+            return true
+        }
+        if key.modifierFlags.intersection([.command, .control, .option]) == .command,
+           key.charactersIgnoringModifiers?.lowercased() == "v",
+           let copied = EventClipboard.copied {
+            paste(copied)
+            return true
+        }
         guard key.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
         switch key.keyCode {
         case Self.leftArrowKey: step(by: -1); return true
@@ -769,6 +843,23 @@ struct CalendarTabView: View {
         default: return false
         }
         return true
+    }
+
+    /// At the slot under the pointer; over a month day, that day at the
+    /// copy's own time; anywhere else, the first day on screen at that time.
+    private func paste(_ copied: CopiedEvent) {
+        let targetDay: Date
+        var slot: TimeInterval?
+        if span == .month {
+            targetDay = pointer.monthDay ?? day
+        } else if let point = pointer.point {
+            targetDay = columnDay(isColumns ? dayIndex(at: point) : 0)
+            slot = time(at: point)
+        } else {
+            targetDay = columnDay(0)
+        }
+        let times = copied.pasteTimes(on: targetDay, slot: slot, snap: DayTimelineLayout.snap)
+        Task { _ = await calendarManager.pasteEvent(copied, start: times.start, end: times.end) }
     }
 
     private static let leftArrowKey: UInt16 = 123
@@ -905,7 +996,7 @@ struct CalendarTabView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .frame(height: Self.weekHeaderHeight, alignment: .top)
+        .frame(height: weekHeaderHeight, alignment: .top)
     }
 
     private func weekHeaderCell(_ columnDay: Date) -> some View {
@@ -953,6 +1044,50 @@ struct CalendarTabView: View {
                     .padding(.horizontal, 2)
                     .onTapGesture { selectedEvent = first }
             }
+            weekTaskLine(columnDay)
+        }
+    }
+
+    /// The day's first task, its circle ticks it off; "+2" opens the day,
+    /// where the strip shows them all.
+    @ViewBuilder
+    private func weekTaskLine(_ columnDay: Date) -> some View {
+        let tasks = untimedTasks(on: columnDay)
+        if let first = tasks.first {
+            HStack(spacing: 3) {
+                Button {
+                    Task { await googleTasks.setCompleted(first, !first.isCompleted) }
+                } label: {
+                    Image(systemName: first.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(first.isCompleted ? .green : .gray)
+                }
+                .buttonStyle(.plain)
+                .help(first.isCompleted ? "Mark not done" : "Mark done")
+                Button { editingTask = first } label: {
+                    Text(first.title)
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(first.isCompleted ? .gray : .white)
+                        .strikethrough(first.isCompleted)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .help("Edit task")
+                Spacer(minLength: 0)
+                if tasks.count > 1 {
+                    Button { openDay(columnDay) } label: {
+                        Text("+\(tasks.count - 1)")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.gray)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open the day to see all its tasks")
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, minHeight: 13, maxHeight: 13)
+            .background(RoundedRectangle(cornerRadius: 3).fill(Color(nsColor: .secondarySystemFill)))
+            .padding(.horizontal, 2)
         }
     }
 
@@ -964,8 +1099,21 @@ struct CalendarTabView: View {
                 days: CalendarGrid.month(containing: day),
                 month: day,
                 events: events,
+                tasks: googleTasks.tasks,
                 weather: weather.forecast?.days ?? [:],
-                onOpenDay: openDay
+                onOpenDay: openDay,
+                onToggleTask: { task in
+                    Task { await googleTasks.setCompleted(task, !task.isCompleted) }
+                },
+                onOpenTask: { editingTask = $0 },
+                onHoverDay: { hoveredDay, isInside in
+                    // Leaving one day can be heard after entering the next.
+                    if isInside {
+                        pointer.monthDay = hoveredDay
+                    } else if pointer.monthDay == hoveredDay {
+                        pointer.monthDay = nil
+                    }
+                }
             )
             .id(day)
             .transition(dayTransition)
@@ -1168,25 +1316,37 @@ struct CalendarTabView: View {
     private var tasksStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(googleTasks.tasks) { task in
-                    Button {
-                        Task { await googleTasks.setCompleted(task, !task.isCompleted) }
-                    } label: {
-                        HStack(spacing: 5) {
+                if untimedTasks(on: day).isEmpty {
+                    Text("No tasks due")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.gray)
+                        .padding(.horizontal, 4)
+                }
+                // The circle ticks a task off; its title opens it to edit.
+                ForEach(untimedTasks(on: day)) { task in
+                    HStack(spacing: 5) {
+                        Button {
+                            Task { await googleTasks.setCompleted(task, !task.isCompleted) }
+                        } label: {
                             Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 11))
                                 .foregroundStyle(task.isCompleted ? .green : .gray)
+                        }
+                        .buttonStyle(.plain)
+                        .help(task.isCompleted ? "Mark not done" : "Mark done")
+                        Button { editingTask = task } label: {
                             Text(task.title)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(task.isCompleted ? .gray : .white)
                                 .strikethrough(task.isCompleted)
                                 .lineLimit(1)
                         }
-                        .padding(.horizontal, 8)
-                        .frame(height: 20)
-                        .background(Capsule().fill(Color(nsColor: .secondarySystemFill)))
+                        .buttonStyle(.plain)
+                        .help("Edit task")
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background(Capsule().fill(Color(nsColor: .secondarySystemFill)))
                 }
             }
         }
@@ -1219,14 +1379,15 @@ struct CalendarTabView: View {
         .overlay {
             // Off while a details box is up, so clicks reach it and its
             // backdrop instead of the timeline underneath.
-            if selectedEvent == nil && pendingMove == nil && !isShowingWeather && !isSearching {
+            if selectedEvent == nil && editingTask == nil && pendingMove == nil && !isShowingWeather && !isSearching {
                 TimelineScrollCapture(
                     isVertical: false,
                     onScroll: scroll(by:),
                     onPress: press(at:),
                     onDrag: drag(to:),
                     onRelease: release(at:in:),
-                    cursorAt: cursor(at:)
+                    cursorAt: cursor(at:),
+                    onExit: { pointer.point = nil }
                 )
             }
         }
@@ -1310,13 +1471,19 @@ struct CalendarTabView: View {
     // MARK: - Vertical timeline
 
     /// The day names, weather and all-day row over the week's columns.
-    private static let weekHeaderHeight: CGFloat = 46
+    private static let baseWeekHeaderHeight: CGFloat = 46
+    /// Room for a line of tasks under each day, kept whenever signed in to
+    /// Google so the header doesn't change height from week to week.
+    private static let weekTaskLineHeight: CGFloat = 15
+    private var weekHeaderHeight: CGFloat {
+        Self.baseWeekHeaderHeight + (googleTasks.isSignedIn ? Self.weekTaskLineHeight : 0)
+    }
     private static let weekHeaderSpacing: CGFloat = 4
 
     /// The week's columns give up the room its header row takes, so the
     /// week ends where the day does, inside the notch.
     private var columnsHeight: CGFloat {
-        verticalTimelineHeight - (span.isMultiDay ? Self.weekHeaderHeight + Self.weekHeaderSpacing : 0)
+        verticalTimelineHeight - (span.isMultiDay ? weekHeaderHeight + Self.weekHeaderSpacing : 0)
     }
 
     private var verticalTimelineHeight: CGFloat {
@@ -1351,14 +1518,15 @@ struct CalendarTabView: View {
         }
         .frame(height: columnsHeight)
         .overlay {
-            if selectedEvent == nil && pendingMove == nil && !isShowingWeather && !isSearching {
+            if selectedEvent == nil && editingTask == nil && pendingMove == nil && !isShowingWeather && !isSearching {
                 TimelineScrollCapture(
                     isVertical: true,
                     onScroll: scroll(by:),
                     onPress: press(at:),
                     onDrag: drag(to:),
                     onRelease: release(at:in:),
-                    cursorAt: cursor(at:)
+                    cursorAt: cursor(at:),
+                    onExit: { pointer.point = nil }
                 )
             }
         }
@@ -1646,7 +1814,7 @@ struct CalendarTabView: View {
         activeDrag = nil
 
         guard finished.moved else {
-            selectedEvent = finished.item.event
+            open(block: finished.item.event)
             return
         }
         guard let moved = preview, moved.id == finished.item.id,
@@ -1805,6 +1973,7 @@ struct CalendarTabView: View {
     }
 
     private func cursor(at point: CGPoint) -> NSCursor {
+        pointer.point = point
         guard let found = hit(at: point), found.item.event.type.isEvent else { return .arrow }
         switch found.mode {
         case .move: return .openHand
@@ -1814,7 +1983,23 @@ struct CalendarTabView: View {
 
     @ViewBuilder
     private var detailsOverlay: some View {
-        if let event = selectedEvent {
+        if let task = editingTask {
+            ZStack {
+                Color.black.opacity(0.55)
+                    .contentShape(Rectangle())
+                    .onTapGesture { editingTask = nil }
+                TaskEditCard(
+                    task: task,
+                    onSave: { title, due, notes, done, minutes in
+                        await googleTasks.update(task, title: title, due: due, notes: notes, isCompleted: done, minutes: minutes)
+                    },
+                    onDelete: { await googleTasks.delete(task) },
+                    onClose: { editingTask = nil }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .transition(.opacity)
+        } else if let event = selectedEvent {
             ZStack {
                 Color.black.opacity(0.55)
                     .contentShape(Rectangle())
@@ -2087,6 +2272,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
     var onDrag: (CGPoint) -> Void
     var onRelease: (CGPoint, NSView) -> Void
     var cursorAt: (CGPoint) -> NSCursor
+    var onExit: () -> Void
 
     func makeNSView(context: Context) -> CaptureView {
         let view = CaptureView()
@@ -2105,6 +2291,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
         view.onDrag = onDrag
         view.onRelease = onRelease
         view.cursorAt = cursorAt
+        view.onExit = onExit
     }
 
     final class CaptureView: NSView {
@@ -2114,6 +2301,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
         var onDrag: ((CGPoint) -> Void)?
         var onRelease: ((CGPoint, NSView) -> Void)?
         var cursorAt: ((CGPoint) -> NSCursor)?
+        var onExit: (() -> Void)?
         private var isDragging = false
         private var dragCursor: NSCursor = .arrow
 
@@ -2156,6 +2344,7 @@ private struct TimelineScrollCapture: NSViewRepresentable {
         }
 
         override func mouseExited(with event: NSEvent) {
+            onExit?()
             guard !isDragging else { return }
             CursorLock.release(self)
         }
@@ -2286,5 +2475,31 @@ private struct NotchResizeCapture: NSViewRepresentable {
             let inside = bounds.contains(convert(event.locationInWindow, from: nil))
             if !inside { CursorLock.release(self) }
         }
+    }
+}
+
+/// The pointer's last spot over the timeline (or day in the month), kept
+/// out of SwiftUI state on purpose: it changes on every mouse move.
+private final class PointerSpot {
+    var point: CGPoint?
+    var monthDay: Date?
+}
+
+/// The tab's background jobs, kept out of its body so that stays quick to
+/// compile: Google tasks for the days on screen, and the Mac changing time zone.
+private struct TabWatchers: ViewModifier {
+    let tasksKey: String
+    let keepTasksLoaded: () async -> Void
+    let onTimeZoneChange: () -> Void
+    /// The task box opens and closes like the event box.
+    let editingTaskID: String?
+
+    func body(content: Content) -> some View {
+        content
+            .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18), value: editingTaskID)
+            .task(id: tasksKey) { await keepTasksLoaded() }
+            .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                onTimeZoneChange()
+            }
     }
 }

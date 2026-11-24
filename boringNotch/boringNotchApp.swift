@@ -373,6 +373,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // already on the pasteboard at that moment, so it never reads as a
         // change. Touching it here means capture starts at launch instead.
         _ = ClipboardManager.shared
+        EventHeadsUp.shared.start()
+        GoogleTasksManager.shared.startRefreshing()
 
         NotificationCenter.default.addObserver(
             self,

@@ -63,6 +63,8 @@ class CalendarManager: ObservableObject {
     private var undoStack: [(change: Change, message: String)] = []
     /// Deletes that aren't done yet; their events stay off the timeline.
     private var hiddenDeletions: [PendingDeletion] = []
+    /// What each waiting delete took off the screen, by its token.
+    private var hiddenEvents: [UUID: [EventModel]] = [:]
     private var undoFailedReset: Task<Void, Never>?
     private var terminateObserver: NSObjectProtocol?
     private static let undoFailedDisplay: Duration = .seconds(3)
@@ -333,6 +335,20 @@ class CalendarManager: ObservableObject {
         return events.first { $0.id == id }
     }
 
+    /// A one-off event from a copied one, with undo.
+    func pasteEvent(_ copied: CopiedEvent, start: Date, end: Date) async -> Bool {
+        guard let id = await calendarService.createEvent(
+            // A copy from a read-only calendar goes into the default one.
+            title: copied.title, start: start, end: end,
+            calendarID: calendarService.editableEventCalendarIDs.contains(copied.calendarID) ? copied.calendarID : nil,
+            location: copied.location, notes: copied.notes,
+            repeats: .never, reminderMinutes: nil, isAllDay: copied.isAllDay
+        ) else { return false }
+        remember(.created(id: id, start: start), message: "Pasted \(copied.title)")
+        await updateEvents()
+        return true
+    }
+
     /// Saves an edit from the details box or a drag, with undo.
     func updateEvent(_ event: EventModel, edit: EventEdit, scope: EventScope) async -> Bool {
         let previous = EventEdit(event)
@@ -357,9 +373,21 @@ class CalendarManager: ObservableObject {
         guard calendarService.canEdit(id: event.id, originalStart: event.start) else { return false }
         let pending = PendingDeletion(token: UUID(), id: event.id, originalStart: event.start, scope: scope)
         hiddenDeletions.append(pending)
-        remember(.deleted(pending), message: "Deleted \(event.title)")
+        // Kept so an undo can put them back on screen at once.
+        hiddenEvents[pending.token] = events.filter { pending.covers(id: $0.id, start: $0.start) }
+        remember(.deleted(pending), message: "Deleted \(event.title)\(Self.scopeNote(scope, repeats: event.hasRecurrenceRules))")
         events = visible(events)
         return true
+    }
+
+    /// " · this event", " · this and following", " · all events"; nothing for a one-off.
+    private static func scopeNote(_ scope: EventScope, repeats: Bool) -> String {
+        guard repeats else { return "" }
+        switch scope {
+        case .thisEvent: return " · this event"
+        case .thisAndFollowing: return " · this and following"
+        case .allEvents: return " · all events"
+        }
     }
 
     /// Takes back the newest change.
@@ -372,6 +400,13 @@ class CalendarManager: ObservableObject {
             if restored == nil { showUndoFailed() }
         case .deleted(let pending):
             hiddenDeletions.removeAll { $0.token == pending.token }
+            // Back on screen this instant; the refresh below only confirms it.
+            if let restored = hiddenEvents.removeValue(forKey: pending.token) {
+                events = (events + restored.filter { r in !events.contains { $0.id == r.id && $0.start == r.start } })
+                    .sorted { $0.start < $1.start }
+            }
+            Task { await updateEvents() }
+            return
         case .created(let id, let start):
             // From the first occurrence on: the whole series, if it repeats.
             let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisAndFollowing)
@@ -396,6 +431,7 @@ class CalendarManager: ObservableObject {
             NSLog("CalendarManager: a delete couldn't be carried out; the event stays")
         }
         hiddenDeletions.removeAll()
+        hiddenEvents.removeAll()
         guard !pending.isEmpty else { return }
         Task { await updateEvents() }
     }
@@ -443,6 +479,14 @@ class CalendarManager: ObservableObject {
         currentWeekStartDate = Calendar.current.startOfDay(for: start)
         loadedDayCount = max(1, days)
         await updateEvents()
+    }
+
+    /// Events in the shown calendars between two moments, for the heads-up.
+    func events(from start: Date, to end: Date) async -> [EventModel] {
+        if allCalendars.isEmpty {
+            await reloadCalendarAndReminderLists()
+        }
+        return visible(await calendarService.events(from: start, to: end, calendars: selectedCalendars.map(\.id)))
     }
 
     /// Events from a year back to a year ahead in the shown calendars, for
