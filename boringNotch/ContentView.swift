@@ -423,6 +423,10 @@ struct ContentView: View {
                             .frame(width: 76, alignment: .trailing)
                         }
                         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+                      } else if let notice = coordinator.eventHeadsUp, vm.notchState == .closed, !vm.hideOnClosed {
+                          EventHeadsUpView(notice: notice, notchWidth: vm.closedNotchSize.width)
+                              .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+                              .transition(.opacity)
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)

@@ -52,6 +52,8 @@ class BoringViewCoordinator: ObservableObject {
 
     @Published var currentView: NotchViews = .home
     @Published var helloAnimationRunning: Bool = false
+    /// An event starting soon, shown on the closed notch for a few seconds.
+    @Published var eventHeadsUp: EventHeadsUpNotice?
     private var sneakPeekDispatch: DispatchWorkItem?
     private var expandingViewDispatch: DispatchWorkItem?
     private var hudEnableTask: Task<Void, Never>?
