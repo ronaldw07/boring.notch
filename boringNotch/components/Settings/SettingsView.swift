@@ -923,12 +923,6 @@ struct About: View {
             Form {
                 Section {
                     HStack {
-                        Text("Release name")
-                        Spacer()
-                        Text(Defaults[.releaseName])
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack {
                         Text("Version")
                         Spacer()
                         if showBuildNumber {
