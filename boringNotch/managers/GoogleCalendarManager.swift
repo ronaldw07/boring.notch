@@ -17,6 +17,9 @@ final class GoogleCalendarManager: ObservableObject {
     /// Colors set on events in the range last loaded, by
     /// `GoogleCalendarFormat.key(uid:start:)`.
     @Published private(set) var colors: [String: GoogleEventColor] = [:]
+    /// Answers given here, by the same key, shown before the Mac's calendar
+    /// catches up with Google.
+    @Published private(set) var answers: [String: AttendanceStatus] = [:]
 
     private struct Entry {
         let id: String
@@ -55,33 +58,59 @@ final class GoogleCalendarManager: ObservableObject {
 
     /// The occurrence on Google and the calendar it's in.
     private func find(_ event: EventModel) async throws -> (calendarID: String, item: [String: Any])? {
-        guard let uid = event.externalID,
-              let calendarID = await googleCalendarID(for: event.calendar) else { return nil }
+        guard let uid = event.externalID else { return nil }
+        return try await find(uid: uid, start: event.start, in: event.calendar)
+    }
+
+    private func find(uid: String, start: Date, in model: CalendarModel) async throws -> (calendarID: String, item: [String: Any])? {
+        guard let calendarID = await googleCalendarID(for: model) else { return nil }
         var query = URLComponents()
         query.queryItems = [
             .init(name: "iCalUID", value: uid),
             .init(name: "singleEvents", value: "true"),
-            .init(name: "timeMin", value: GoogleCalendarFormat.timestamp(event.start.addingTimeInterval(-60))),
-            .init(name: "timeMax", value: GoogleCalendarFormat.timestamp(event.start.addingTimeInterval(60))),
+            .init(name: "timeMin", value: GoogleCalendarFormat.timestamp(start.addingTimeInterval(-60))),
+            .init(name: "timeMax", value: GoogleCalendarFormat.timestamp(start.addingTimeInterval(60))),
         ]
         let reply = try await request("GET", "/calendars/\(Self.escaped(calendarID))/events?\(query.percentEncodedQuery ?? "")")
         let items = reply["items"] as? [[String: Any]] ?? []
-        let match = items.first { GoogleCalendarFormat.start(of: $0) == event.start } ?? items.first
+        let match = items.first { GoogleCalendarFormat.start(of: $0) == start } ?? items.first
         return match.map { (calendarID, $0) }
     }
 
+    /// Like `find`, but waits for the Mac to hand a just-moved event over
+    /// to Google: tries again every few seconds for up to a minute.
+    private func findAfterSync(uid: String, start: Date, in model: CalendarModel) async throws -> (calendarID: String, item: [String: Any])? {
+        for attempt in 0..<Self.syncAttempts {
+            if attempt > 0 { try await Task.sleep(for: Self.syncRetryDelay) }
+            if let found = try await find(uid: uid, start: start, in: model) { return found }
+        }
+        return nil
+    }
+
+    private static let syncAttempts = 20
+    private static let syncRetryDelay: Duration = .seconds(3)
+
     // MARK: - Changes
 
-    /// Answers an invite for this occurrence.
+    /// Answers an invite for this occurrence. Shown at once, put back if
+    /// Google won't take it.
     func respond(to event: EventModel, with status: AttendanceStatus) async -> Bool {
+        guard let uid = event.externalID else { return false }
+        let key = GoogleCalendarFormat.key(uid: uid, start: event.start)
+        let previous = answers[key]
+        answers[key] = status
         do {
             guard let (calendarID, item) = try await find(event), let id = item["id"] as? String,
                   let attendees = GoogleCalendarFormat.attendees(item["attendees"] as? [[String: Any]] ?? [], answering: status)
-            else { return false }
+            else {
+                answers[key] = previous
+                return false
+            }
             _ = try await request("PATCH", "/calendars/\(Self.escaped(calendarID))/events/\(Self.escaped(id))",
                                   body: ["attendees": attendees])
             return true
         } catch {
+            answers[key] = previous
             NSLog("GoogleCalendar: couldn't RSVP: \(error)")
             return false
         }
@@ -89,31 +118,59 @@ final class GoogleCalendarManager: ObservableObject {
 
     /// Sets this occurrence's color; nil goes back to the calendar's.
     func setColor(_ color: GoogleEventColor?, of event: EventModel) async -> Bool {
+        guard let uid = event.externalID else { return false }
+        return await setColor(color, uid: uid, start: event.start, in: event.calendar, waitsForSync: false)
+    }
+
+    /// Sets the color of the occurrence at `start` in `model`. Shown at once
+    /// and put back if Google won't take it. `waitsForSync` is for an event
+    /// the Mac has just moved or changed, which Google may not have yet.
+    func setColor(_ color: GoogleEventColor?, uid: String, start: Date, in model: CalendarModel,
+                  waitsForSync: Bool) async -> Bool {
+        let key = GoogleCalendarFormat.key(uid: uid, start: start)
+        let previous = colors[key]
+        colors[key] = color
         do {
-            guard let (calendarID, item) = try await find(event), let id = item["id"] as? String else { return false }
+            let found = waitsForSync
+                ? try await findAfterSync(uid: uid, start: start, in: model)
+                : try await find(uid: uid, start: start, in: model)
+            guard let (calendarID, item) = found, let id = item["id"] as? String else {
+                colors[key] = previous
+                return false
+            }
             _ = try await request("PATCH", "/calendars/\(Self.escaped(calendarID))/events/\(Self.escaped(id))",
                                   body: ["colorId": color.map { String($0.rawValue) } ?? NSNull()])
-            if let uid = event.externalID {
-                colors[GoogleCalendarFormat.key(uid: uid, start: event.start)] = color
-            }
             return true
         } catch {
+            colors[key] = previous
             NSLog("GoogleCalendar: couldn't set color: \(error)")
             return false
         }
     }
 
     /// Adds an event with guests or a Meet link; invites go out by email.
-    func create(in calendarID: String, body: [String: Any], addsMeet: Bool) async -> Bool {
+    /// Returns its id, for undo.
+    func create(in calendarID: String, body: [String: Any], addsMeet: Bool) async -> String? {
         do {
             let path = "/calendars/\(Self.escaped(calendarID))/events?sendUpdates=all"
                 + (addsMeet ? "&conferenceDataVersion=1" : "")
             let item = try await request("POST", path, body: body)
             // Show its color now, before the shown days next change.
             colors.merge(GoogleCalendarFormat.colors(in: [item])) { $1 }
-            return true
+            return item["id"] as? String
         } catch {
             NSLog("GoogleCalendar: couldn't create event: \(error)")
+            return nil
+        }
+    }
+
+    /// Deletes an event made here, for undo; guests get Google's cancellation.
+    func delete(eventID: String, in calendarID: String) async -> Bool {
+        do {
+            _ = try await request("DELETE", "/calendars/\(Self.escaped(calendarID))/events/\(Self.escaped(eventID))?sendUpdates=all")
+            return true
+        } catch {
+            NSLog("GoogleCalendar: couldn't delete event: \(error)")
             return false
         }
     }

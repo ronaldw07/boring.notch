@@ -216,6 +216,10 @@ class CalendarService: CalendarServiceProviding {
         if edit.title != occurrence.title { target.title = edit.title }
         if edit.location != occurrence.location { target.location = edit.location }
         if edit.notes != occurrence.notes { target.notes = edit.notes }
+        if let calendarID = edit.calendarID, calendarID != occurrence.calendar.calendarIdentifier {
+            guard let calendar = store.calendar(withIdentifier: calendarID), calendar.allowsContentModifications else { return nil }
+            target.calendar = calendar
+        }
         target.isAllDay = edit.isAllDay
         target.startDate = newStart
         target.endDate = Self.storedEnd(start: newStart, length: edit.end.timeIntervalSince(edit.start), isAllDay: edit.isAllDay)

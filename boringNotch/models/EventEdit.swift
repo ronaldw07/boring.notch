@@ -2,7 +2,8 @@
 //  EventEdit.swift
 //  boringNotch
 //
-//  What saving an event sets: its text, its time, and whether it's all day.
+//  What saving an event sets: its text, its time, whether it's all day,
+//  and which calendar it's in.
 //  The time rules follow Google Calendar: moving the start keeps the length,
 //  and the end can never come before the start.
 //
@@ -16,6 +17,8 @@ struct EventEdit: Equatable {
     var start: Date
     var end: Date
     var isAllDay: Bool
+    /// The calendar to move it to; nil leaves it where it is.
+    var calendarID: String?
 
     /// The shortest an event can be made from the editor.
     static let minimumLength: TimeInterval = 15 * 60
@@ -23,18 +26,20 @@ struct EventEdit: Equatable {
     static let defaultStartHour = 9
     static let defaultLength: TimeInterval = 60 * 60
 
-    init(title: String, location: String?, notes: String?, start: Date, end: Date, isAllDay: Bool) {
+    init(title: String, location: String?, notes: String?, start: Date, end: Date, isAllDay: Bool,
+         calendarID: String? = nil) {
         self.title = title
         self.location = location
         self.notes = notes
         self.start = start
         self.end = end
         self.isAllDay = isAllDay
+        self.calendarID = calendarID
     }
 
     init(_ event: EventModel) {
         self.init(title: event.title, location: event.location, notes: event.notes,
-                  start: event.start, end: event.end, isAllDay: event.isAllDay)
+                  start: event.start, end: event.end, isAllDay: event.isAllDay, calendarID: event.calendar.id)
     }
 
     /// A new start that keeps the event's length.

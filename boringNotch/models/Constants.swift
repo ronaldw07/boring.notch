@@ -187,6 +187,10 @@ extension Defaults.Keys {
     /// Times given to Google tasks in Chora, minutes after midnight, by task
     /// id. Google Tasks keeps only a date, so these live on this Mac.
     static let googleTaskTimes = Key<[String: Int]>("googleTaskTimes", default: [:])
+    /// Google tasks deleted in Chora but not yet on Google (undo was still
+    /// possible), list id by task id. Carried out at the next launch if
+    /// Chora quit first.
+    static let googlePendingTaskDeletes = Key<[String: String]>("googlePendingTaskDeletes", default: [:])
     
     // MARK: Fullscreen Media Detection
     static let hideNotchOption = Key<HideNotchOption>("hideNotchOption", default: .nowPlayingOnly)

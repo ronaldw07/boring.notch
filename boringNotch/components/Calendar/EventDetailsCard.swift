@@ -10,14 +10,27 @@
 import SwiftUI
 
 struct EventDetailsCard: View {
+    /// A color picked in the edit box; nil `color` is the calendar's own.
+    struct ColorPick {
+        let color: GoogleEventColor?
+    }
+
     let event: EventModel
+    /// Calendars it can be moved to while editing.
+    var calendars: [CalendarModel] = []
+    /// Its color on Google, nil for the calendar's own.
+    var eventColor: GoogleEventColor? = nil
+    /// On Google, so the edit box offers its colors.
+    var canColor = false
+    /// Your answer as given here, ahead of the Mac's calendar.
+    var answer: AttendanceStatus? = nil
     let onClose: () -> Void
     let onOpen: () -> Void
     /// True if the calendar took the deletion.
     let onDelete: (EventScope) async -> Bool
-    /// The edited event and which occurrences it applies to; true if the
-    /// calendar took it.
-    let onEdit: (EventEdit, EventScope) async -> Bool
+    /// The edited event, which occurrences it applies to, and a color if one
+    /// was picked; true if the calendar took it.
+    let onEdit: (EventEdit, EventScope, ColorPick?) async -> Bool
     /// Makes a copy of the event; false if the calendar wouldn't take it.
     let onDuplicate: () async -> Bool
     /// Answers the invite on Google; nil when not signed in to Google Calendar.
@@ -33,6 +46,8 @@ struct EventDetailsCard: View {
     @State private var editStart = Date()
     @State private var editEnd = Date()
     @State private var editAllDay = false
+    @State private var editCalendarID = ""
+    @State private var editColor: GoogleEventColor?
     @State private var editFailed = false
     /// A repeating event asks which occurrences a save is for.
     @State private var isChoosingSaveScope = false
@@ -41,8 +56,6 @@ struct EventDetailsCard: View {
     @State private var isChoosingScope = false
     @State private var isConfirmingDelete = false
     @State private var duplicateFailed = false
-    /// Your answer, shown at once while Google takes it.
-    @State private var answer: AttendanceStatus?
     @State private var googleFailed = false
     @State private var deleteFailed = false
     /// ⌘C took a copy; says so for a moment.
@@ -178,7 +191,7 @@ struct EventDetailsCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(color)
+                    .fill(Color(nsColor: editColor?.color ?? editCalendarColor))
                     .frame(width: 4, height: 20)
                 TextField("", text: $editTitle, prompt: Text("Title").foregroundStyle(.white.opacity(0.35)))
                     .textFieldStyle(.plain)
@@ -188,7 +201,7 @@ struct EventDetailsCard: View {
                     .onSubmit(saveEdits)
             }
             timeRow
-            HStack(alignment: .bottom, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     editField("mappin.and.ellipse", "Add location", text: $editLocation)
                     editField("text.alignleft", "Add description", text: $editNotes)
@@ -199,10 +212,20 @@ struct EventDetailsCard: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if !isChoosingSaveScope {
-                    HStack(spacing: 6) {
-                        pill("Cancel", tint: .white.opacity(0.12), text: .white, action: endEditing)
-                        pill("Save", symbol: "return", tint: .accentColor, text: .white, action: saveEdits)
+                VStack(alignment: .trailing, spacing: 6) {
+                    HStack(spacing: 4) {
+                        if canMoveCalendar {
+                            CalendarPicker(calendars: calendars, selectedID: $editCalendarID)
+                        }
+                        if canColor {
+                            EventColorPicker(color: $editColor, calendarColor: editCalendarColor)
+                        }
+                    }
+                    if !isChoosingSaveScope {
+                        HStack(spacing: 6) {
+                            pill("Cancel", tint: .white.opacity(0.12), text: .white, action: endEditing)
+                            pill("Save", symbol: "return", tint: .accentColor, text: .white, action: saveEdits)
+                        }
                     }
                 }
             }
@@ -305,6 +328,8 @@ struct EventDetailsCard: View {
         editStart = event.start
         editEnd = event.end
         editAllDay = event.isAllDay
+        editCalendarID = event.calendar.id
+        editColor = eventColor
         editFailed = false
         isChoosingSaveScope = false
         isConfirmingDelete = false
@@ -332,33 +357,56 @@ struct EventDetailsCard: View {
             title: title.isEmpty ? event.title : title,
             location: location?.isEmpty == true ? nil : location,
             notes: notes?.isEmpty == true ? nil : notes,
-            start: editStart, end: editEnd, isAllDay: editAllDay
+            start: editStart, end: editEnd, isAllDay: editAllDay,
+            calendarID: editCalendarID
         )
     }
 
+    /// Its own calendar is one it can be moved out of.
+    private var canMoveCalendar: Bool {
+        calendars.contains { $0.id == event.calendar.id }
+    }
+
+    /// The chosen calendar's own color, under any color set on Google.
+    private var editCalendarColor: NSColor {
+        calendars.first { $0.id == editCalendarID }?.color ?? event.calendar.color
+    }
+
+    private var isColorChanged: Bool {
+        editColor != eventColor
+    }
+
     /// Return or Save. A repeating event first asks which occurrences; a
-    /// second Return then picks "This event".
+    /// second Return then picks "This event". A new calendar takes the whole
+    /// series, as on Google, and a color only this occurrence, so neither asks.
     private func saveEdits() {
-        guard draft != EventEdit(event) else {
+        let isEdited = draft != EventEdit(event)
+        guard isEdited || isColorChanged else {
             endEditing()
             return
         }
-        if event.hasRecurrenceRules && !isChoosingSaveScope {
+        if draft.calendarID != event.calendar.id {
+            save(.allEvents)
+            return
+        }
+        if isEdited && event.hasRecurrenceRules && !isChoosingSaveScope {
             isChoosingSaveScope = true
             return
         }
         save(.thisEvent)
     }
 
+    /// Closes the editor at once, the undo bar saying what changed; it
+    /// opens again, fields as typed, only if the calendar refused.
     private func save(_ scope: EventScope) {
         let edit = draft
+        let pick = isColorChanged ? ColorPick(color: editColor) : nil
+        endEditing()
         Task {
-            if await onEdit(edit, scope) {
-                endEditing()
-            } else {
-                isChoosingSaveScope = false
-                editFailed = true
-            }
+            guard !(await onEdit(edit, scope, pick)) else { return }
+            editFailed = true
+            isEditing = true
+            NotchKeyboardFocus.holdsNotchOpen = true
         }
     }
 
@@ -460,7 +508,8 @@ struct EventDetailsCard: View {
                     Button {
                         setColor(option, onSetColor)
                     } label: {
-                        Label { Text(option.name) } icon: { Image(nsImage: Self.dot(option.color)) }
+                        Label { Text(option.name) } icon: { Image(nsImage: Self.dot(option.color)).renderingMode(.original) }
+                            .labelStyle(.titleAndIcon)
                     }
                 }
             } label: {
@@ -505,14 +554,9 @@ struct EventDetailsCard: View {
                      (.maybe, "Maybe", Color.yellow),
                      (.declined, "No", Color.red)], id: \.1) { status, label, tint in
                 Button {
-                    let previous = answer
-                    answer = status
                     googleFailed = false
                     Task {
-                        if !(await onRespond(status)) {
-                            answer = previous
-                            googleFailed = true
-                        }
+                        if !(await onRespond(status)) { googleFailed = true }
                     }
                 } label: {
                     Text(label)
@@ -736,6 +780,101 @@ struct EventDetailsCard: View {
 }
 
 /// Liquid Glass on macOS 26 and later; a dark frosted panel before.
+/// Which calendar an edited event goes in, as a pill like the new-event box's.
+private struct CalendarPicker: View {
+    let calendars: [CalendarModel]
+    @Binding var selectedID: String
+
+    private var selected: CalendarModel? {
+        calendars.first { $0.id == selectedID }
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(calendars, id: \.id) { option in
+                Button {
+                    selectedID = option.id
+                } label: {
+                    Label { Text(option.title) } icon: { Image(nsImage: swatch(option.color)).renderingMode(.original) }
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Color(nsColor: selected?.color ?? .systemBlue))
+                    .frame(width: 7, height: 7)
+                Text(selected?.title ?? "Calendar")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(Capsule().fill(.white.opacity(0.12)))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Calendar")
+    }
+}
+
+/// Google Calendar's event colors for an edited event; nil is the calendar's.
+private struct EventColorPicker: View {
+    @Binding var color: GoogleEventColor?
+    let calendarColor: NSColor
+
+    var body: some View {
+        Menu {
+            Button {
+                color = nil
+            } label: {
+                Label { Text("Calendar color") } icon: { Image(nsImage: swatch(calendarColor)).renderingMode(.original) }
+                    .labelStyle(.titleAndIcon)
+            }
+            ForEach(GoogleEventColor.allCases, id: \.self) { option in
+                Button {
+                    color = option
+                } label: {
+                    Label { Text(option.name) } icon: { Image(nsImage: swatch(option.color)).renderingMode(.original) }
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(nsColor: color?.color ?? calendarColor))
+                    .frame(width: 9, height: 9)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 7)
+            .frame(height: 22)
+            .background(Capsule().fill(.white.opacity(0.12)))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Event color")
+    }
+}
+
+/// A colour swatch for a menu, which only shows images, not views.
+private func swatch(_ color: NSColor) -> NSImage {
+    NSImage(size: NSSize(width: 10, height: 10), flipped: false) { rect in
+        color.setFill()
+        NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+        return true
+    }
+}
+
 struct CardBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {

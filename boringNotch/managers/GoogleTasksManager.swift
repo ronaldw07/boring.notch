@@ -200,7 +200,8 @@ final class GoogleTasksManager: ObservableObject {
             }
             // Done tasks stay, crossed out, the way Google Calendar shows them.
             guard generation == reloadGeneration else { return }
-            if found != tasks { tasks = found }
+            let shown = found.filter { !hiddenTaskIDs.contains($0.id) }
+            if shown != tasks { tasks = shown }
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -214,7 +215,11 @@ final class GoogleTasksManager: ObservableObject {
     /// calendar shows them the moment it opens and on any day you go to.
     func startRefreshing() {
         guard refreshLoop == nil else { return }
+        let pending = Defaults[.googlePendingTaskDeletes]
+        hiddenTaskIDs.formUnion(pending.keys)
         refreshLoop = Task { [weak self] in
+            // Deletes left waiting when Chora last quit.
+            for (id, listID) in pending { await self?.deleteOnGoogle(id: id, listID: listID) }
             while !Task.isCancelled {
                 await self?.reload()
                 try? await Task.sleep(for: Self.refreshEvery)
@@ -291,19 +296,55 @@ final class GoogleTasksManager: ObservableObject {
         if let index = tasks.firstIndex(where: { $0.id == id }) { tasks[index] = task }
     }
 
-    /// Deletes the task on Google; true if it's gone.
-    func delete(_ task: GoogleTask) async -> Bool {
-        // Gone at once; back if Google refuses.
+    /// Deleted here but not yet on Google, so undo can still bring them back.
+    private var hiddenTaskIDs: Set<String> = []
+
+    /// Takes a task off screen at once. Google only deletes it in
+    /// `finishDelete`, once undo is no longer possible; until then it's kept
+    /// on this Mac too, so quitting Chora doesn't lose the delete.
+    func hide(_ task: GoogleTask) {
+        hiddenTaskIDs.insert(task.id)
+        var pending = Defaults[.googlePendingTaskDeletes]
+        pending[task.id] = task.listID
+        Defaults[.googlePendingTaskDeletes] = pending
         tasks.removeAll { $0.id == task.id }
-        Task {
-            do {
-                try await send("DELETE", task, body: nil)
-            } catch {
-                tasks.append(task)
-                statusMessage = error.localizedDescription
+    }
+
+    /// Undo of `hide`: the task was never deleted on Google.
+    func unhide(_ task: GoogleTask) {
+        hiddenTaskIDs.remove(task.id)
+        forgetPendingDelete(task.id)
+        if !tasks.contains(where: { $0.id == task.id }) { tasks.append(task) }
+    }
+
+    func finishDelete(_ task: GoogleTask) async {
+        await deleteOnGoogle(id: task.id, listID: task.listID)
+    }
+
+    /// Already gone counts as done. Anything else stays waiting for the next
+    /// launch, still hidden.
+    private func deleteOnGoogle(id: String, listID: String) async {
+        do {
+            let token = try await validAccessToken()
+            var request = URLRequest(url: URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listID)/tasks/\(id)")!)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status) || status == 404 || status == 410 else {
+                throw GoogleTasksError.server("Couldn't delete the task.")
             }
+            forgetPendingDelete(id)
+            hiddenTaskIDs.remove(id)
+        } catch {
+            NSLog("GoogleTasks: couldn't delete a task yet: \(error)")
         }
-        return true
+    }
+
+    private func forgetPendingDelete(_ id: String) {
+        var pending = Defaults[.googlePendingTaskDeletes]
+        pending[id] = nil
+        Defaults[.googlePendingTaskDeletes] = pending
     }
 
     private func send(_ method: String, _ task: GoogleTask, body: [String: Any]?) async throws {
@@ -322,7 +363,9 @@ final class GoogleTasksManager: ObservableObject {
         }
     }
 
-    func setCompleted(_ task: GoogleTask, _ completed: Bool) async {
+    /// True if Google took it.
+    @discardableResult
+    func setCompleted(_ task: GoogleTask, _ completed: Bool) async -> Bool {
         // Shown at once; Google confirms in the background.
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].isCompleted = completed
@@ -340,12 +383,14 @@ final class GoogleTasksManager: ObservableObject {
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                 throw GoogleTasksError.server("Couldn't update the task.")
             }
+            return true
         } catch {
             // Put it back.
             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[index].isCompleted = !completed
             }
             statusMessage = error.localizedDescription
+            return false
         }
     }
 

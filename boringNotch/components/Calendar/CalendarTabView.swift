@@ -682,8 +682,8 @@ struct CalendarTabView: View {
 
             Spacer(minLength: 0)
 
-            if calendarManager.undoFailed {
-                Text("Couldn't undo that")
+            if let problem = calendarManager.problem {
+                Text(problem)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.orange)
             }
@@ -1056,7 +1056,7 @@ struct CalendarTabView: View {
         if let first = tasks.first {
             HStack(spacing: 3) {
                 Button {
-                    Task { await googleTasks.setCompleted(first, !first.isCompleted) }
+                    toggleTask(first)
                 } label: {
                     Image(systemName: first.isCompleted ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 9))
@@ -1103,7 +1103,7 @@ struct CalendarTabView: View {
                 weather: weather.forecast?.days ?? [:],
                 onOpenDay: openDay,
                 onToggleTask: { task in
-                    Task { await googleTasks.setCompleted(task, !task.isCompleted) }
+                    toggleTask(task)
                 },
                 onOpenTask: { editingTask = $0 },
                 onHoverDay: { hoveredDay, isInside in
@@ -1326,7 +1326,7 @@ struct CalendarTabView: View {
                 ForEach(untimedTasks(on: day)) { task in
                     HStack(spacing: 5) {
                         Button {
-                            Task { await googleTasks.setCompleted(task, !task.isCompleted) }
+                            toggleTask(task)
                         } label: {
                             Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 11))
@@ -1991,9 +1991,21 @@ struct CalendarTabView: View {
                 TaskEditCard(
                     task: task,
                     onSave: { title, due, notes, done, minutes in
-                        await googleTasks.update(task, title: title, due: due, notes: notes, isCompleted: done, minutes: minutes)
+                        guard await googleTasks.update(task, title: title, due: due, notes: notes,
+                                                       isCompleted: done, minutes: minutes) else { return false }
+                        calendarManager.rememberGoogleChange("Edited \(title)") {
+                            await googleTasks.update(task, title: task.title, due: task.due, notes: task.notes ?? "",
+                                                     isCompleted: task.isCompleted, minutes: task.minutes)
+                        }
+                        return true
                     },
-                    onDelete: { await googleTasks.delete(task) },
+                    onDelete: {
+                        googleTasks.hide(task)
+                        calendarManager.rememberGoogleChange("Deleted \(task.title)",
+                                                             undo: { googleTasks.unhide(task); return true },
+                                                             finish: { await googleTasks.finishDelete(task) })
+                        return true
+                    },
                     onClose: { editingTask = nil }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -2006,11 +2018,17 @@ struct CalendarTabView: View {
                     .onTapGesture { selectedEvent = nil }
                 EventDetailsCard(
                     event: event,
+                    calendars: calendarManager.editableEventCalendars,
+                    eventColor: googleColor(of: event),
+                    canColor: hasGoogle(event),
+                    answer: event.externalID.flatMap {
+                        googleCalendar.answers[GoogleCalendarFormat.key(uid: $0, start: event.start)]
+                    },
                     onClose: { selectedEvent = nil },
                     onOpen: { open(event) },
                     onDelete: { scope in await calendarManager.deleteEvent(event, scope: scope) },
-                    onEdit: { edit, scope in
-                        await calendarManager.updateEvent(event, edit: edit, scope: scope)
+                    onEdit: { edit, scope, pick in
+                        await saveEdit(event, edit: edit, scope: scope, pick: pick)
                     },
                     onDuplicate: {
                         guard let copy = await calendarManager.duplicateEvent(event) else { return false }
@@ -2018,16 +2036,106 @@ struct CalendarTabView: View {
                         return true
                     },
                     onRespond: hasGoogle(event) ? { status in
-                        await googleCalendar.respond(to: event, with: status)
+                        await respond(to: event, with: status)
                     } : nil,
                     onSetColor: hasGoogle(event) ? { color in
-                        await googleCalendar.setColor(color, of: event)
+                        await recolor(event, to: color)
                     } : nil
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
             .transition(.opacity)
         }
+    }
+
+    // MARK: - Changes with undo
+
+    private func googleColor(of event: EventModel) -> GoogleEventColor? {
+        event.externalID.flatMap { googleCalendar.colors[GoogleCalendarFormat.key(uid: $0, start: event.start)] }
+    }
+
+    /// Ticks a task off, or back on, with undo. Shown at once.
+    private func toggleTask(_ task: GoogleTask) {
+        let done = !task.isCompleted
+        calendarManager.rememberGoogleChange(done ? "Done: \(task.title)" : "Not done: \(task.title)") {
+            await googleTasks.setCompleted(task, task.isCompleted)
+        }
+        Task {
+            if !(await googleTasks.setCompleted(task, done)) {
+                calendarManager.showProblem("Couldn't update the task on Google")
+            }
+        }
+    }
+
+    /// An answer to an invite, with undo back to the one before.
+    private func respond(to event: EventModel, with status: AttendanceStatus) async -> Bool {
+        let previous = event.externalID
+            .flatMap { googleCalendar.answers[GoogleCalendarFormat.key(uid: $0, start: event.start)] }
+            ?? event.participants.first(where: \.isCurrentUser)?.status ?? .pending
+        calendarManager.rememberGoogleChange(Self.answerMessage(status)) {
+            await googleCalendar.respond(to: event, with: previous)
+        }
+        return await googleCalendar.respond(to: event, with: status)
+    }
+
+    private static func answerMessage(_ status: AttendanceStatus) -> String {
+        switch status {
+        case .accepted: "Going"
+        case .maybe: "Maybe going"
+        case .declined: "Not going"
+        case .pending, .unknown: "Answer cleared"
+        }
+    }
+
+    /// The color from the bar beside an event's title, with undo.
+    private func recolor(_ event: EventModel, to color: GoogleEventColor?) async -> Bool {
+        let previous = googleColor(of: event)
+        calendarManager.rememberGoogleChange(Self.colorMessage(color)) {
+            await googleCalendar.setColor(previous, of: event)
+        }
+        guard await googleCalendar.setColor(color, of: event) else {
+            calendarManager.showProblem(Self.colorFailed)
+            return false
+        }
+        return true
+    }
+
+    private static func colorMessage(_ color: GoogleEventColor?) -> String {
+        color.map { "Color: \($0.name)" } ?? "Color: calendar's"
+    }
+
+    private static let colorFailed = "Couldn't change the color on Google"
+
+    /// Saves the edit box: the Mac's calendar takes the edit, then Google
+    /// the color, once it has the edited event. A move to a calendar in
+    /// another account can drop the color, so it's put back after a move.
+    /// One Undo takes back both.
+    private func saveEdit(_ event: EventModel, edit: EventEdit, scope: EventScope,
+                          pick: EventDetailsCard.ColorPick?) async -> Bool {
+        let previous = googleColor(of: event)
+        let isMoved = edit.calendarID != nil && edit.calendarID != event.calendar.id
+        let isEdited = edit != EventEdit(event)
+        let newColor: GoogleEventColor?? = pick.map { .some($0.color) } ?? (isMoved && previous != nil ? .some(previous) : nil)
+        guard hasGoogle(event), let uid = event.externalID, let newColor else {
+            return isEdited ? await calendarManager.updateEvent(event, edit: edit, scope: scope) : true
+        }
+        let destination = calendarManager.editableEventCalendars.first { $0.id == edit.calendarID } ?? event.calendar
+        let original = calendarManager.editableEventCalendars.first { $0.id == event.calendar.id } ?? event.calendar
+        let undoColor: () async -> Bool = {
+            await googleCalendar.setColor(previous, uid: uid, start: event.start, in: original, waitsForSync: true)
+        }
+        if isEdited {
+            guard await calendarManager.updateEvent(event, edit: edit, scope: scope, alsoUndo: undoColor) else { return false }
+        } else {
+            calendarManager.rememberGoogleChange(Self.colorMessage(newColor), undo: undoColor)
+        }
+        Task {
+            if !(await googleCalendar.setColor(newColor, uid: uid, start: edit.start, in: destination,
+                                               waitsForSync: isEdited)) {
+                calendarManager.showProblem(Self.colorFailed)
+            }
+        }
+        return true
     }
 
     /// Whether Google Calendar can find this event: signed in, and it came
@@ -2046,7 +2154,11 @@ struct CalendarTabView: View {
             location: details.location, notes: details.notes, guests: details.guests, addsMeet: details.addsMeet,
             repeats: details.repeats, reminderMinutes: details.reminderMinutes, color: details.color
         )
-        return await googleCalendar.create(in: googleID, body: body, addsMeet: details.addsMeet)
+        guard let eventID = await googleCalendar.create(in: googleID, body: body, addsMeet: details.addsMeet) else { return false }
+        calendarManager.rememberGoogleChange("Added \(details.title)") {
+            await googleCalendar.delete(eventID: eventID, in: googleID)
+        }
+        return true
     }
 
     private func open(_ event: EventModel) {

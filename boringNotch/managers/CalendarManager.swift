@@ -52,22 +52,27 @@ class CalendarManager: ObservableObject {
         case deleted(PendingDeletion)
         /// Added by typing; undo deletes it again.
         case created(id: String, start: Date)
+        /// Made on Google rather than in the Mac's calendar: how to take it
+        /// back, and anything left to do once it can't be (a waiting delete).
+        case google(undo: () async -> Bool, finish: (() async -> Void)?)
+        /// Saved together, so undone together.
+        indirect case both(Change, Change)
     }
 
     /// What the newest change did, e.g. "Moved to 4:00 PM", shown with an
     /// Undo button; nil when there's nothing to take back. Changes stay
     /// undoable, newest first, for as long as the Calendar tab stays open.
     @Published private(set) var undoMessage: String?
-    /// Shown briefly when an undo couldn't be carried out.
-    @Published private(set) var undoFailed = false
+    /// Shown briefly when an undo, or a change sent to Google, didn't go through.
+    @Published private(set) var problem: String?
     private var undoStack: [(change: Change, message: String)] = []
     /// Deletes that aren't done yet; their events stay off the timeline.
     private var hiddenDeletions: [PendingDeletion] = []
     /// What each waiting delete took off the screen, by its token.
     private var hiddenEvents: [UUID: [EventModel]] = [:]
-    private var undoFailedReset: Task<Void, Never>?
+    private var problemReset: Task<Void, Never>?
     private var terminateObserver: NSObjectProtocol?
-    private static let undoFailedDisplay: Duration = .seconds(3)
+    private static let problemDisplay: Duration = .seconds(3)
 
     private init() {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
@@ -349,15 +354,19 @@ class CalendarManager: ObservableObject {
         return true
     }
 
-    /// Saves an edit from the details box or a drag, with undo.
-    func updateEvent(_ event: EventModel, edit: EventEdit, scope: EventScope) async -> Bool {
+    /// Saves an edit from the details box or a drag, with undo. `alsoUndo`
+    /// takes back what was changed on Google in the same save.
+    func updateEvent(_ event: EventModel, edit: EventEdit, scope: EventScope,
+                     alsoUndo: (() async -> Bool)? = nil) async -> Bool {
         let previous = EventEdit(event)
         let changed = await calendarService.updateEvent(id: event.id, originalStart: event.start, edit: edit, scope: scope)
         if let changed {
             let message = edit.differsOnlyInTime(from: previous)
                 ? Self.describeMove(from: (previous.start, previous.end), to: (edit.start, edit.end))
                 : "Edited \(edit.title)"
-            remember(.changed(changed, previous: previous, scope: scope), message: message)
+            let change = Change.changed(changed, previous: previous, scope: scope)
+            // Undone second-first: the Mac's calendar goes back before Google is asked.
+            remember(alsoUndo.map { .both(.google(undo: $0, finish: nil), change) } ?? change, message: message)
         }
         await updateEvents()
         return changed != nil
@@ -390,38 +399,71 @@ class CalendarManager: ObservableObject {
         }
     }
 
+    /// A change made on Google (an answer, a color, a task), with how to
+    /// take it back. `finish` runs once undo is no longer possible.
+    func rememberGoogleChange(_ message: String, undo: @escaping () async -> Bool,
+                              finish: (() async -> Void)? = nil) {
+        remember(.google(undo: undo, finish: finish), message: message)
+    }
+
     /// Takes back the newest change.
     func undoLastChange() async {
         guard let change = undoStack.popLast()?.change else { return }
         undoMessage = undoStack.last?.message
+        await undo(change)
+        await updateEvents()
+    }
+
+    private func undo(_ change: Change) async {
         switch change {
         case .changed(let occurrence, let previous, let scope):
             let restored = await calendarService.updateEvent(id: occurrence.id, originalStart: occurrence.start, edit: previous, scope: scope)
-            if restored == nil { showUndoFailed() }
+            if restored == nil { showProblem(Self.undoFailedMessage) }
         case .deleted(let pending):
             hiddenDeletions.removeAll { $0.token == pending.token }
-            // Back on screen this instant; the refresh below only confirms it.
+            // Back on screen this instant; the refresh after only confirms it.
             if let restored = hiddenEvents.removeValue(forKey: pending.token) {
                 events = (events + restored.filter { r in !events.contains { $0.id == r.id && $0.start == r.start } })
                     .sorted { $0.start < $1.start }
             }
-            Task { await updateEvents() }
-            return
         case .created(let id, let start):
             // From the first occurrence on: the whole series, if it repeats.
             let removed = calendarService.deleteEventNow(id: id, originalStart: start, scope: .thisAndFollowing)
-            if !removed { showUndoFailed() }
+            if !removed { showProblem(Self.undoFailedMessage) }
+        case .google(let undo, _):
+            // Google can take a while; the undo bar doesn't wait on it.
+            Task {
+                if !(await undo()) { showProblem(Self.undoFailedMessage) }
+            }
+        case .both(let first, let second):
+            await undo(second)
+            await undo(first)
         }
-        await updateEvents()
+    }
+
+    private static let undoFailedMessage = "Couldn't undo that"
+
+    /// The single changes inside one, in the order they were made.
+    private static func parts(of change: Change) -> [Change] {
+        if case .both(let first, let second) = change { return parts(of: first) + parts(of: second) }
+        return [change]
     }
 
     /// Ends the chance to undo: waiting deletes are carried out now and the
     /// list clears. Runs when the Calendar tab closes (leaving the tab or
     /// closing the notch) or Chora quits.
     func closeUndoWindow() {
-        let pending = undoStack.compactMap { entry -> PendingDeletion? in
-            if case .deleted(let deletion) = entry.change { return deletion }
+        let changes = undoStack.flatMap { Self.parts(of: $0.change) }
+        let pending = changes.compactMap { change -> PendingDeletion? in
+            if case .deleted(let deletion) = change { return deletion }
             return nil
+        }
+        let finishes = changes.compactMap { change -> (() async -> Void)? in
+            if case .google(_, let finish) = change { return finish }
+            return nil
+        }
+        if !finishes.isEmpty {
+            Task { for finish in finishes { await finish() } }
         }
         undoStack.removeAll()
         undoMessage = nil
@@ -452,13 +494,14 @@ class CalendarManager: ObservableObject {
         return "Now \(new.start.formatted(time)) – \(new.end.formatted(time))"
     }
 
-    private func showUndoFailed() {
-        undoFailed = true
-        undoFailedReset?.cancel()
-        undoFailedReset = Task { [weak self] in
-            try? await Task.sleep(for: Self.undoFailedDisplay)
+    /// Says briefly that something didn't go through.
+    func showProblem(_ message: String) {
+        problem = message
+        problemReset?.cancel()
+        problemReset = Task { [weak self] in
+            try? await Task.sleep(for: Self.problemDisplay)
             guard !Task.isCancelled else { return }
-            self?.undoFailed = false
+            self?.problem = nil
         }
     }
 
