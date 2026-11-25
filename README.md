@@ -43,9 +43,10 @@ action, without opening anything.
 - **A calendar you can edit.** See one day, 4 days, a week or a month,
   with the weather for each. Drag events to move them, pull the bottom edge
   to change the time, drag the notch taller to see more, and undo any
-  change (⌘Z works too). Drag on an empty spot to create an event, or type
+  change, including ones sent to Google (⌘Z works too). Drag on an empty spot to create an event, or type
   one ("Lunch with Sam 1pm"), make it repeat on any schedule or remind you,
-  copy and paste it, duplicate it, or join its call from its details. A
+  copy and paste it, duplicate it, move it to another calendar or give it
+  a color, or join its call from its details. A
   heads-up beside the notch says when the next event starts in 5 minutes.
   Search a year of events, answer Google invites and add a Meet link.
   Google Tasks show on every day, and you can edit them and give them a
@@ -65,7 +66,7 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 26 versions since September 2026, each with a
+- **Small releases, often.** 27 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app

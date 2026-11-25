@@ -11,6 +11,21 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.9.4 — 2026-11-25
+
+### Added
+
+- **Change an event's calendar and color while editing it.** Click Edit on an event: next to Cancel and Save are the calendar menu and, for Google events, the color dot. On a repeating event a new calendar moves the whole series, as on Google.
+- **Undo more.** Picking a color, answering an invite, adding an event with guests, Meet or a color, and ticking off, editing or deleting a Google task all show in the bar at the bottom with Undo, and the undo reaches Google too.
+
+### Changed
+
+- **Saving an edit is instant.** The box closes the moment you click Save and the bar says what changed, while Google catches up in the background. If something doesn't go through, the bar says so and the change goes back.
+- **Deleting a Google task waits until the undo bar goes away**, so Undo can still bring it back. If Chora quits first, the delete happens the next time it opens.
+- **Color menus show each color's swatch.**
+
+---
+
 ## 0.9.3 — 2026-11-24
 
 ### Added
