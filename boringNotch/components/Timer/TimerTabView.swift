@@ -13,6 +13,7 @@ import Defaults
 import SwiftUI
 
 private let presetMinutes = [1, 5, 10, 25]
+private let maxRecentCount = 5
 
 private enum TimerLength {
     static let maxSeconds = 180 * 60
@@ -67,6 +68,12 @@ struct TimerTabView: View {
     private static let readoutSlotHeight: CGFloat = 88
     /// Fits "59:59", so the custom chip is the same width showing or editing.
     private static let customChipContentWidth: CGFloat = 34
+    private static let chipRowSpacing: CGFloat = 6
+    /// Two chip rows: presets and recents for the timer, laps for the stopwatch.
+    private static let choicesHeight: CGFloat = 18 * 2 + chipRowSpacing
+    /// The running-timers column; laid out in both modes so switching
+    /// modes doesn't move the readout.
+    private static let countdownListWidth: CGFloat = 92
 
     var body: some View {
         VStack(spacing: 8) {
@@ -106,12 +113,28 @@ struct TimerTabView: View {
                     // Always present rather than conditionally inserted, so
                     // stopwatch and countdown share one layout and switching
                     // between them only changes what's interactive.
-                    presetRow
-                        .opacity(showsPresetRow ? 1 : 0)
-                        .allowsHitTesting(showsPresetRow)
+                    VStack(spacing: Self.chipRowSpacing) {
+                        presetRow
+                        recentRow
+                    }
+                    .opacity(showsPresetRow ? 1 : 0)
+                    .allowsHitTesting(showsPresetRow)
+                    .frame(height: Self.choicesHeight)
+                    // An overlay takes the preset rows' size: on its own, a
+                    // sideways scroll view stretches to the full width and
+                    // pushes the readout off to the side.
+                    .overlay {
+                        if timer.mode == .stopwatch {
+                            lapRow
+                        }
+                    }
 
                     controls
                 }
+
+                countdownList
+                    .opacity(timer.mode == .countdown ? 1 : 0)
+                    .allowsHitTesting(timer.mode == .countdown)
             }
         }
         .padding(.horizontal, 14)
@@ -142,18 +165,30 @@ struct TimerTabView: View {
 
     private func readout(at date: Date) -> some View {
         let displayedSeconds = displayedSeconds(at: date)
-        return HStack(alignment: .lastTextBaseline, spacing: 1) {
-            Text(TimerManager.clockString(from: displayedSeconds))
-                .font(.system(size: timer.mode == .countdown ? 20 : 28, weight: .semibold, design: .monospaced))
+        return VStack(spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 1) {
+                Text(TimerManager.clockString(from: displayedSeconds))
+                    .font(.system(size: timer.mode == .countdown ? 20 : 28, weight: .semibold, design: .monospaced))
 
-            if timer.mode == .stopwatch {
-                Text(".\(TimerManager.centisecondsString(from: displayedSeconds))")
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                if timer.mode == .stopwatch {
+                    Text(".\(TimerManager.centisecondsString(from: displayedSeconds))")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.gray)
+                }
+            }
+            .foregroundStyle(timer.isFinished ? .red : .white)
+            .contentTransition(.numericText())
+
+            // The lap in progress, counting from the last flag. Before the
+            // first lap it would just repeat the total, so it waits for one.
+            if timer.mode == .stopwatch && !timer.laps.isEmpty {
+                let lap = timer.currentLapElapsed(at: date)
+                Text("Lap \(timer.laps.count + 1)  "
+                     + TimerManager.clockString(from: lap) + "." + TimerManager.centisecondsString(from: lap))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
             }
         }
-        .foregroundStyle(timer.justFinished != nil ? .red : .white)
-        .contentTransition(.numericText())
     }
 
     // MARK: - Mode picker
@@ -201,20 +236,51 @@ struct TimerTabView: View {
                     .labelsHidden()
                     .fixedSize()
             }
+        }
+        .onDisappear {
+            if isEditingCustom { commitCustomEdit() }
+        }
+    }
 
+    /// Lengths started lately, newest first. Kept laid out while empty so
+    /// the first one appearing doesn't move the presets.
+    private var recentRow: some View {
+        HStack(spacing: 6) {
             if !recentSeconds.isEmpty {
-                Image(systemName: "clock.arrow.circlepath")
+                Text("Recents:")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.gray)
-                    .padding(.leading, 4)
                 ForEach(recentSeconds, id: \.self) { seconds in
                     durationChip(seconds: seconds)
                 }
             }
         }
-        .onDisappear {
-            if isEditingCustom { commitCustomEdit() }
+        .frame(height: 18)
+        .help("Recent timers")
+    }
+
+    // MARK: - Laps
+
+    private var lapRow: some View {
+        let durations = TimerManager.lapDurations(timer.laps)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(durations.enumerated()), id: \.offset) { index, duration in
+                    HStack(spacing: 4) {
+                        Text("Lap \(durations.count - index)")
+                            .foregroundStyle(.gray)
+                        Text(TimerManager.clockString(from: duration)
+                             + "." + TimerManager.centisecondsString(from: duration))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                    }
+                    .modifier(ChipStyle(isSelected: index == 0))
+                }
+            }
         }
+        // A sideways scroll here is for the laps, not for switching tabs.
+        .onHover { vm.isHoveringCalendar = $0 }
+        .onDisappear { vm.isHoveringCalendar = false }
     }
 
     @ViewBuilder
@@ -250,7 +316,7 @@ struct TimerTabView: View {
                     if atCustomValue {
                         beginCustomEdit()
                     } else {
-                        timer.setTargetDuration(TimeInterval(customSeconds))
+                        timer.pickLength(TimeInterval(customSeconds))
                     }
                 } label: {
                     Text(TimerLength.label(customSeconds))
@@ -271,7 +337,7 @@ struct TimerTabView: View {
     private func stepCustom(up: Bool) {
         let next = TimerLength.stepped(Int(timer.targetDuration), up: up)
         customSeconds = next
-        timer.setTargetDuration(TimeInterval(next))
+        timer.pickLength(TimeInterval(next))
     }
 
     private func beginCustomEdit() {
@@ -286,7 +352,7 @@ struct TimerTabView: View {
         if !digits.isEmpty {
             customSeconds = min(max(TimerLength.seconds(fromDigits: digits), 1), TimerLength.maxSeconds)
             // Same value as before still counts as picking it.
-            timer.setTargetDuration(TimeInterval(customSeconds))
+            timer.pickLength(TimeInterval(customSeconds))
         }
         endCustomEdit()
     }
@@ -300,12 +366,9 @@ struct TimerTabView: View {
     private func durationChip(seconds: Int) -> some View {
         let isSelected = timer.targetDuration == TimeInterval(seconds)
         return Button {
-            // Picking the selected length again starts it over.
-            if isSelected {
-                withAnimation(.smooth) { timer.restartCountdown() }
-            } else {
-                timer.setTargetDuration(TimeInterval(seconds))
-            }
+            // Picking a paused or finished timer's length again starts it
+            // over; otherwise it sets up a new timer of that length.
+            withAnimation(.smooth) { timer.pickLength(TimeInterval(seconds)) }
         } label: {
             Text(TimerLength.label(seconds))
                 .foregroundStyle(isSelected ? .white : .gray)
@@ -314,42 +377,94 @@ struct TimerTabView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Running timers
+
+    /// Every countdown, each with its time left. Clicking one shows it in
+    /// the ring, where play, stop and reset act on it.
+    private var countdownList: some View {
+        TimelineView(.animation(minimumInterval: 0.25, paused: !timer.isAnythingRunning)) { timeline in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(timer.countdowns) { countdown in
+                        countdownRow(countdown, at: timeline.date)
+                    }
+                }
+            }
+        }
+        .frame(width: Self.countdownListWidth, height: Self.readoutSlotHeight)
+        // A vertical scroll here is for the list, not for closing the notch.
+        .onHover { vm.isHoveringCalendar = $0 }
+        .onDisappear { vm.isHoveringCalendar = false }
+    }
+
+    private func countdownRow(_ countdown: Countdown, at date: Date) -> some View {
+        let isSelected = countdown.id == timer.selectedCountdownID
+        let icon = countdown.isFinished ? "bell.fill" : countdown.isRunning ? "timer" : "pause.fill"
+        return HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+            Text(TimerManager.clockString(from: countdown.remainingForDisplay(at: date)))
+                .monospacedDigit()
+            Spacer(minLength: 0)
+            Button {
+                withAnimation(.smooth) { timer.removeCountdown(countdown.id) }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .help("Remove timer")
+        }
+        .foregroundStyle(countdown.isFinished ? .red : isSelected ? .white : .gray)
+        .modifier(ChipStyle(isSelected: isSelected))
+        .contentShape(Capsule())
+        .onTapGesture {
+            withAnimation(.smooth) { timer.selectCountdown(countdown.id) }
+        }
+    }
+
     // MARK: - Controls
 
     private var controls: some View {
         HStack(spacing: 14) {
-            Button(action: reset) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+            // A running stopwatch can't be cancelled, so the same spot laps it.
+            if showsLapButton {
+                Button(action: timer.lap) {
+                    Image(systemName: "flag.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+                }
+                .buttonStyle(.plain)
+                .help("Lap")
+            } else {
+                Button(action: cancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
+                }
+                .buttonStyle(.plain)
+                .help("Cancel")
+                .disabled(!canCancel)
+                .opacity(canCancel ? 1 : 0.4)
             }
-            .buttonStyle(.plain)
-            .disabled(!canReset)
-            .opacity(canReset ? 1 : 0.4)
 
-            Button(action: startTimer) {
-                Image(systemName: "play.fill")
+            // One button: pauses what's running, otherwise plays.
+            Button(action: timer.isRunning ? timer.pause : startTimer) {
+                Image(systemName: timer.isRunning ? "pause.fill" : "play.fill")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.effectiveAccent))
+                    .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
-            .disabled(timer.isRunning)
-            .opacity(timer.isRunning ? 0.4 : 1)
-
-            Button(action: timer.pause) {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.effectiveAccent))
-            }
-            .buttonStyle(.plain)
-            .disabled(!timer.isRunning)
-            .opacity(timer.isRunning ? 1 : 0.4)
+            .help(timer.isRunning ? "Pause" : "Play")
+            .disabled(!canPlayOrPause)
+            .opacity(canPlayOrPause ? 1 : 0.4)
 
             // Always laid out, so it appearing doesn't shift the buttons.
             Button {
@@ -362,7 +477,7 @@ struct TimerTabView: View {
                     .background(Circle().fill(Color(nsColor: .secondarySystemFill)))
             }
             .buttonStyle(.plain)
-            .help("Undo reset")
+            .help("Undo")
             .opacity(timer.canUndoReset ? 1 : 0)
             .allowsHitTesting(timer.canUndoReset)
             .animation(.smooth, value: timer.canUndoReset)
@@ -377,18 +492,22 @@ struct TimerTabView: View {
         timer.start()
     }
 
-    /// Newest first, one entry per length, presets left out since they're
-    /// already one tap away, and capped so the row never outgrows the tab.
+    /// Newest first, one entry per length, and capped so the row never
+    /// outgrows the tab.
     private func recordRecent() {
-        guard !timer.isRunning else { return }
+        guard timer.canStart else { return }
         let seconds = max(1, Int(timer.targetDuration))
-        guard !TimerLength.isPreset(seconds) else { return }
-        recentSeconds = Array(([seconds] + recentSeconds.filter { $0 != seconds }).prefix(4))
+        recentSeconds = Array(([seconds] + recentSeconds.filter { $0 != seconds }).prefix(maxRecentCount))
     }
 
-    private func reset() {
+    /// A countdown is removed; the stopwatch goes back to zero. Undoable.
+    private func cancel() {
         withAnimation(.smooth) {
-            timer.reset()
+            if timer.mode == .countdown, let selected = timer.selectedCountdown {
+                timer.removeCountdown(selected.id)
+            } else {
+                timer.reset()
+            }
         }
     }
 
@@ -399,25 +518,36 @@ struct TimerTabView: View {
     /// flash of "5:01" on a 5:00 timer) — hence the clamps.
     private func displayedSeconds(at date: Date) -> TimeInterval {
         timer.mode == .countdown
-            ? ceil(min(timer.targetDuration, timer.remaining(at: date)))
+            ? ceil(min(timer.currentLength, timer.remaining(at: date)))
             : max(0, timer.elapsed(at: date))
     }
 
     private func ringProgress(at date: Date) -> Double {
-        guard timer.targetDuration > 0 else { return 0 }
-        return max(0, min(1, timer.remaining(at: date) / timer.targetDuration))
+        guard timer.currentLength > 0 else { return 0 }
+        return max(0, min(1, timer.remaining(at: date) / timer.currentLength))
     }
 
     private var ringColor: Color {
-        timer.justFinished != nil ? .red : .effectiveAccent
+        timer.isFinished ? .red : .effectiveAccent
     }
 
-    private var canReset: Bool {
-        !timer.isRunning && (timer.elapsed(at: timer.now) > 0 || timer.justFinished != nil)
+    private var canCancel: Bool {
+        timer.mode == .countdown
+            ? timer.selectedCountdown != nil
+            : !timer.isRunning && timer.elapsed(at: timer.now) > 0
     }
 
+    private var canPlayOrPause: Bool {
+        timer.isRunning || timer.canStart
+    }
+
+    private var showsLapButton: Bool {
+        timer.mode == .stopwatch && timer.isRunning
+    }
+
+    /// Stays up while timers run: picking a length then starts another.
     private var showsPresetRow: Bool {
-        timer.mode == .countdown && !timer.isRunning
+        timer.mode == .countdown
     }
 }
 

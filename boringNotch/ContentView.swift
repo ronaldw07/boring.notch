@@ -433,7 +433,7 @@ struct ContentView: View {
                       } else if showsMusicAndTimer {
                           MusicAndTimerLiveActivity()
                               .frame(alignment: .center)
-                      } else if timerManager.isRunning && vm.notchState == .closed && !vm.hideOnClosed {
+                      } else if timerManager.isAnythingRunning && vm.notchState == .closed && !vm.hideOnClosed {
                           // A deliberately started timer is a more
                           // intentional signal than ambient background
                           // music, so it wins the closed-notch slot first.
@@ -692,9 +692,7 @@ struct ContentView: View {
                 .fill(.black)
                 .frame(width: vm.closedNotchSize.width + -cornerRadiusInsets.closed.top)
 
-            Text(TimerManager.clockString(from: timerManager.mode == .countdown
-                ? timerManager.remainingForDisplay(at: timerManager.now)
-                : timerManager.elapsed(at: timerManager.now)))
+            closedTimerText()
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -703,10 +701,19 @@ struct ContentView: View {
         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
 
+    /// The timer ending soonest (or the stopwatch), and "+1", "+2" for any
+    /// others running.
+    private func closedTimerText() -> Text {
+        let readout = timerManager.closedReadout(at: timerManager.now)
+        let clock = Text(TimerManager.clockString(from: readout.seconds))
+        guard readout.othersRunning > 0 else { return clock }
+        return clock + Text(" +\(readout.othersRunning)").font(.system(size: 9, weight: .semibold))
+    }
+
     @ViewBuilder
     func TimerLiveActivity() -> some View {
         HStack {
-            Image(systemName: timerManager.mode == .stopwatch ? "stopwatch.fill" : "timer")
+            Image(systemName: timerManager.closedReadout(at: timerManager.now).isStopwatch ? "stopwatch.fill" : "timer")
                 .font(.system(size: max(0, vm.effectiveClosedNotchHeight - 12) * 0.55))
                 .foregroundStyle(.white)
                 .frame(
@@ -718,9 +725,7 @@ struct ContentView: View {
                 .fill(.black)
                 .frame(width: vm.closedNotchSize.width - 20)
 
-            Text(TimerManager.clockString(from: timerManager.mode == .countdown
-                ? timerManager.remainingForDisplay(at: timerManager.now)
-                : timerManager.elapsed(at: timerManager.now)))
+            closedTimerText()
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -757,7 +762,7 @@ struct ContentView: View {
     /// With music and a timer sharing the closed notch, the half the cursor
     /// is over decides which one opens: left for music, right for the timer.
     private var showsMusicAndTimer: Bool {
-        timerManager.isRunning && !coordinator.expandingView.show && vm.notchState == .closed
+        timerManager.isAnythingRunning && !coordinator.expandingView.show && vm.notchState == .closed
             && (musicManager.isPlaying || !musicManager.isPlayerIdle)
             && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
     }

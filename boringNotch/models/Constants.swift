@@ -228,6 +228,12 @@ extension Defaults.Keys {
     static let timerTargetDuration = Key<TimeInterval>("timerTargetDuration", default: 5 * 60)
     static let timerCustomSeconds = Key<Int>("timerCustomSeconds", default: 15 * 60)
     static let timerRecentSeconds = Key<[Int]>("timerRecentSeconds", default: [])
+    /// Stopwatch elapsed time at each lap, oldest first.
+    static let timerLaps = Key<[TimeInterval]>("timerLaps", default: [])
+    /// The countdowns, each anchor-based the same way. The three keys above
+    /// (running, anchor, accumulated) now hold the stopwatch alone.
+    static let timerCountdowns = Key<[Countdown]>("timerCountdowns", default: [])
+    static let timerSelectedCountdown = Key<String?>("timerSelectedCountdown", default: nil)
 
     // A Google client pasted in before Chora had its own built in. Still
     // used when set, so those sign-ins keep working; the secret of a desktop
