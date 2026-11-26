@@ -165,7 +165,8 @@ class TemporaryFileStorageService {
                 let archiveURL = workingDir.appendingPathComponent(archiveName)
                 // Run zip from the parent directory so the folder is stored as top-level entry
                 let parent = src.deletingLastPathComponent()
-                let args = ["-r", "-q", archiveURL.path, baseName]
+                // "./" so a name starting with "-" can't be read as an option.
+                let args = ["-r", "-q", archiveURL.path, "./" + baseName]
                 let ok = runZip(arguments: args, currentDirectory: parent)
                 if ok {
                     return archiveURL
@@ -178,7 +179,7 @@ class TemporaryFileStorageService {
                 let archiveURL = workingDir.appendingPathComponent(archiveName)
                 let parent = src.deletingLastPathComponent()
                 // -j to junk paths and store only the file
-                let args = ["-j", "-q", archiveURL.path, baseName]
+                let args = ["-j", "-q", archiveURL.path, "./" + baseName]
                 let ok = runZip(arguments: args, currentDirectory: parent)
                 if ok {
                     return archiveURL
