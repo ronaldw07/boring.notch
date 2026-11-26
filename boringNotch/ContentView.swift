@@ -252,10 +252,10 @@ struct ContentView: View {
                     .onChange(of: vm.notchState) { updateTabKeys() }
                     .onChange(of: coordinator.currentView) { old, new in
                         updateTabKeys()
-                        // The calendar shrinks itself when it disappears, which
-                        // is only once the switch has finished animating; start
-                        // shrinking now, alongside the switch.
-                        if old == .calendar, new != .calendar {
+                        // The calendar and clipboard shrink themselves when they
+                        // disappear, which is only once the switch has finished
+                        // animating; start shrinking now, alongside the switch.
+                        if [.calendar, .clipboard].contains(old), new != old {
                             vm.setExtraContentHeight(0)
                         }
                     }
@@ -498,7 +498,13 @@ struct ContentView: View {
                 VStack {
                     switch coordinator.currentView {
                     case .home:
+                        // Coming from an expanded tab, the panel is still tall
+                        // while it shrinks; the album art sizes to the height it
+                        // gets, so without this it starts huge and shrinks.
+                        // The enlarged mirror is the one Home view that uses
+                        // the extra height.
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
+                            .padding(.bottom, vm.isMirrorEnlarged ? 0 : vm.extraContentHeight)
                     case .shelf:
                         ShelfView()
                     case .clipboard:
