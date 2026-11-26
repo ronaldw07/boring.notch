@@ -186,7 +186,9 @@ class SpotifyController: MediaControllerProtocol {
 
     playbackState = state
 
-        if !artworkURL.isEmpty, let url = URL(string: artworkURL) {
+        // Spotify reports artwork as http; the same host serves https, so the
+        // image can't be swapped by someone on the network.
+        if !artworkURL.isEmpty, let url = URL(string: artworkURL.replacingOccurrences(of: "http://", with: "https://")) {
             guard artworkURL != lastArtworkURL || state.artwork == nil else { return }
             artworkFetchTask?.cancel()
 
