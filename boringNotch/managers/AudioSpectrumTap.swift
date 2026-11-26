@@ -192,7 +192,35 @@ final class AudioSpectrumTap: ObservableObject {
     private var tappedBundleIdentifier: String?
     private let queue = DispatchQueue(label: "com.boringNotch.audioSpectrumTap", qos: .userInitiated)
 
-    private init() {}
+    private init() {
+        followOutputDevice()
+    }
+
+    /// The tap listens through the output device that was current when it
+    /// started. Switching output (AirPods connecting, a device unplugged)
+    /// leaves it on the old one, hearing nothing, so rebuild it on the new one.
+    private func followOutputDevice() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, .main
+        ) { [weak self] _, _ in
+            Task { @MainActor in self?.restartOnNewOutput() }
+        }
+        if status != noErr {
+            NSLog("AudioSpectrumTap: could not watch the output device (\(status))")
+        }
+    }
+
+    private func restartOnNewOutput() {
+        guard let bundleIdentifier = tappedBundleIdentifier else { return }
+        NSLog("AudioSpectrumTap: output device changed, tapping \(bundleIdentifier) again")
+        deactivate()
+        activate(for: bundleIdentifier)
+    }
 
     /// Points the tap at the given app, tearing down any previous tap. Passing
     /// nil stops capture entirely.
