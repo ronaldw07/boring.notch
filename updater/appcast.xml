@@ -3,33 +3,27 @@
     <channel>
         <title>Chora</title>
         <item>
-            <title>0.10.0</title>
-            <pubDate>Wed, 25 Nov 2026 17:04:48 -0800</pubDate>
+            <title>0.10.1</title>
+            <pubDate>Wed, 25 Nov 2026 17:46:16 -0800</pubDate>
             <link>https://github.com/ronaldw07/boring.notch/releases</link>
-            <sparkle:version>1474</sparkle:version>
-            <sparkle:shortVersionString>0.10.0</sparkle:shortVersionString>
+            <sparkle:version>1482</sparkle:version>
+            <sparkle:shortVersionString>0.10.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h3>Added</h3>
+            <description><![CDATA[<h3>Changed</h3>
 <ul>
-<li><strong>Run up to 5 timers at once.</strong> Pick a length and press play while another timer runs to start a second one. The list on the right shows each with its time left: click one to show it in the ring, or × to remove it (Undo brings it back). Each one rings when it ends, and the closed notch shows the one ending soonest, with +1 or +2 for the rest.</li>
-<li><strong>Stopwatch laps.</strong> While the stopwatch runs, the flag button marks a lap. Laps list above the buttons, newest first, and the lap in progress counts live under the time.</li>
-<li><strong>Close delay.</strong> Settings → General → Notch behavior has a slider for how long the notch stays open after the cursor leaves, from 0 to 3 seconds.</li>
-</ul>
-<h3>Changed</h3>
-<ul>
-<li><strong>Recent timer lengths have their own row</strong>, and every length you start counts, presets included.</li>
-<li><strong>One play/pause button and a cancel button</strong> replace play, stop and reset. Cancel removes the selected timer, or sets a paused stopwatch back to zero.</li>
-<li><strong>Switching between Timer and Stopwatch no longer resets either one</strong>, so both can run together.</li>
+<li><strong>Defaults for new installs:</strong> the notch closes the moment the cursor leaves (Close delay 0), the camera mirror is on, and the battery indicator is off. Existing settings are kept.</li>
 </ul>
 <h3>Fixed</h3>
 <ul>
-<li><strong>The visualizer keeps up when you switch output</strong>, to AirPods or a speaker, or when a device disconnects. It used to go flat until the next song.</li>
-<li><strong>Scrolling the clipboard no longer closes the notch</strong>, and its scroll pill shows and can be dragged.</li>
-<li><strong>Leaving the expanded clipboard shrinks the notch right away</strong>, and the music player on Home no longer starts oversized and shrinks into place.</li>
+<li><strong>Copied passwords are no longer saved.</strong> Clipboard history skips anything a password manager or another app marks as private.</li>
+<li><strong>Chora&#x27;s own icon</strong> shows in Settings and the welcome screen instead of the old boring.notch one.</li>
+<li><strong>Spotify album art loads over https</strong>, and the plain-http exception is gone.</li>
+<li><strong>Safer shelf zips</strong> for files whose names start with a dash.</li>
+<li><strong>Stronger protection for Chora itself:</strong> the app is now built with macOS&#x27;s hardened runtime, so other programs can&#x27;t inject code into it and borrow its camera, calendar or audio access.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.10.0/Chora.dmg" length="10240531" type="application/octet-stream" sparkle:edSignature="vg6cXSYWDtHxylDeuoIBci/xlbBVJHS1berHI6Wq2thJ/lvBXexZi2xn343bz86onxzgsoAE2w8JUdOzWcZVBw=="/>
+            <enclosure url="https://github.com/ronaldw07/boring.notch/releases/download/v0.10.1/Chora.dmg" length="10264463" type="application/octet-stream" sparkle:edSignature="YA0zQl03lhQO/LrgE1XisIGUjQCOu5LOO0d/u1sEq90CaDUxgNjVO3XKdTBcnUWCxvnUnojB77TGMexmDL1FCw=="/>
         </item>
     </channel>
 </rss>
