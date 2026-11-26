@@ -12,7 +12,6 @@ cd "$(dirname "$0")/.."
 
 REPO=ronaldw07/boring.notch
 TAG="v$VERSION"
-CACHE="$HOME/.cache/boringnotch-release"
 WORK="$(mktemp -d)"
 fail() { echo "error: $*" >&2; exit 1; }
 
@@ -36,12 +35,19 @@ pins = json.load(open("boringNotch.xcodeproj/project.xcworkspace/xcshareddata/sw
 print(next(p["state"]["version"] for p in pins if p["identity"] == "sparkle"))
 PY
 )
-TOOLS="$CACHE/sparkle-$SPARKLE_VERSION/bin"
-if [ ! -x "$TOOLS/generate_appcast" ]; then
-  mkdir -p "$CACHE/sparkle-$SPARKLE_VERSION"
-  curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" \
-    | tar -xJ -C "$CACHE/sparkle-$SPARKLE_VERSION"
-fi
+# Downloaded fresh into the temp dir and checked against a pinned SHA-256 every
+# time, rather than reused from a cache any process could have swapped: these
+# tools sign the update every installed copy trusts. Upgrading Sparkle means
+# updating the checksum (gh api repos/sparkle-project/Sparkle/releases/tags/<v>).
+SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
+[ "$SPARKLE_VERSION" = 2.9.6 ] || fail "Sparkle is $SPARKLE_VERSION; update SPARKLE_SHA256 in this script"
+curl -sfL -o "$WORK/sparkle.tar.xz" \
+  "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" \
+  || fail "couldn't download Sparkle's tools"
+echo "$SPARKLE_SHA256  $WORK/sparkle.tar.xz" | shasum -a 256 -c --status || fail "Sparkle's tools don't match the pinned checksum"
+mkdir -p "$WORK/sparkle"
+tar -xJf "$WORK/sparkle.tar.xz" -C "$WORK/sparkle"
+TOOLS="$WORK/sparkle/bin"
 
 # Sparkle only offers a build whose number is higher than the installed one.
 # The commit count only ever goes up, so no counter file to keep in sync.
@@ -60,7 +66,13 @@ APP="$WORK/build/Build/Products/Release/Chora.app"
 # so each update would ask everyone for them all over again.
 SIGN_IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')
 [ -n "$SIGN_IDENTITY" ] || fail "no Apple Development signing identity in the Keychain"
-codesign --deep --force --sign "$SIGN_IDENTITY" "$APP"
+# Hardened runtime everywhere, so no other process can inject code into Chora
+# and borrow its permissions. Nested code first, then the app itself again
+# with the entitlements it needs to keep camera, audio, calendar, location
+# and Apple Events working under the runtime. Not sandboxed (never has been).
+codesign --deep --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
+codesign --force --options runtime --entitlements scripts/release.entitlements --sign "$SIGN_IDENTITY" "$APP"
+codesign --verify --deep --strict "$APP" || fail "signature check failed"
 
 mkdir -p "$WORK/stage" "$WORK/feed"
 cp -R "$APP" "$WORK/stage/"
