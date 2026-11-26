@@ -891,15 +891,9 @@ struct ContentView: View {
         }
     }
 
-    /// How long the cursor can stay just outside the open notch before it closes.
-    private static let closeDelay: TimeInterval = 2
-    /// Farther out than this, it closes right away.
-    private static let closeFarDistance: CGFloat = 70
-
-    /// Closes once the cursor has been outside the notch for `closeDelay`,
-    /// or as soon as it is past `closeFarDistance`. Coming back cancels the
-    /// task (hover), so the wait starts over on the next exit. While a
-    /// popover or share picker is up it keeps waiting.
+    /// Closes once the cursor has been outside the notch for the Close delay
+    /// setting. Coming back cancels the task (hover), so the wait starts over
+    /// on the next exit. While a popover or share picker is up it keeps waiting.
     private func closeWhenCursorLeaves(startedAt start: Date = .now) {
         hoverTask = Task {
             try? await Task.sleep(for: .milliseconds(100))
@@ -910,8 +904,7 @@ struct ContentView: View {
                 let isBlocked = vm.isBatteryPopoverActive || vm.isResizingNotch
                     || SharingStateManager.shared.preventNotchClose
                     || NotchKeyboardFocus.holdsNotchOpen
-                let isOutsideLongEnough = Date.now.timeIntervalSince(start) >= Self.closeDelay
-                    || !vm.isMouseHovering(margin: Self.closeFarDistance)
+                let isOutsideLongEnough = Date.now.timeIntervalSince(start) >= Defaults[.closeDelay]
                 if !isBlocked && !vm.isMouseHovering() && isOutsideLongEnough {
                     vm.close()
                 } else {

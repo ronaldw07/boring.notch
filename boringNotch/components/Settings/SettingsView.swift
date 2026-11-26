@@ -145,6 +145,7 @@ struct GeneralSettings: View {
     @Default(.showEmojis) var showEmojis
     @Default(.gestureSensitivity) var gestureSensitivity
     @Default(.minimumHoverDuration) var minimumHoverDuration
+    @Default(.closeDelay) var closeDelay
     @Default(.nonNotchHeight) var nonNotchHeight
     @Default(.nonNotchHeightMode) var nonNotchHeightMode
     @Default(.notchHeight) var notchHeight
@@ -346,6 +347,14 @@ struct GeneralSettings: View {
                 .onChange(of: minimumHoverDuration) {
                     NotificationCenter.default.post(
                         name: Notification.Name.notchHeightChanged, object: nil)
+                }
+            }
+            Slider(value: $closeDelay, in: 0...3, step: 0.1) {
+                HStack {
+                    Text("Close delay")
+                    Spacer()
+                    Text("\(closeDelay, specifier: "%.1f")s")
+                        .foregroundStyle(.secondary)
                 }
             }
         } header: {
