@@ -23,16 +23,6 @@ private let expandButtonInset: CGFloat = 24
 /// below it instead of directly under it.
 private let listTopInset: CGFloat = expandButtonInset + 4
 
-private struct ScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-private struct ContentHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 struct ClipboardView: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject private var clipboard = ClipboardManager.shared
@@ -74,18 +64,15 @@ struct ClipboardView: View {
                                 .padding(.horizontal, 6)
                                 .padding(.top, listTopInset)
                                 .padding(.bottom, listVerticalPadding)
-                                .background(
-                                    GeometryReader { content in
-                                        Color.clear
-                                            .preference(key: ContentHeightKey.self, value: content.size.height)
-                                            .preference(key: ScrollOffsetKey.self,
-                                                        value: content.frame(in: .named("clipboardScroll")).minY)
-                                    }
-                                )
+                                // Measured with onGeometryChange: a preference set
+                                // inside a ScrollView never reaches outside it, which
+                                // left the height at 0 and the scroll thumb hidden.
+                                .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named("clipboardScroll")) }) { frame in
+                                    contentHeight = frame.height
+                                    scrollOffset = frame.minY
+                                }
                             }
                             .coordinateSpace(name: "clipboardScroll")
-                            .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
-                            .onPreferenceChange(ScrollOffsetKey.self) { scrollOffset = $0 }
                             .onChange(of: scrollTarget) { _, target in
                                 guard let target, let id = itemID(atFraction: target) else { return }
                                 proxy.scrollTo(id, anchor: .top)
@@ -97,6 +84,9 @@ struct ClipboardView: View {
                         scrollThumb
                     }
                 }
+                // A vertical scroll here is for the list, not for closing
+                // the notch.
+                .onHover { vm.isHoveringCalendar = $0 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -165,6 +155,7 @@ struct ClipboardView: View {
             }
             clearAllResetTask?.cancel()
             isConfirmingClearAll = false
+            vm.isHoveringCalendar = false
         }
     }
 
@@ -278,9 +269,9 @@ struct ClipboardView: View {
             let progress = min(max(-scrollOffset / scrollableHeight, 0), 1)
 
             Capsule()
-                .fill(.white.opacity(0.35))
-                .frame(width: 3, height: thumbHeight)
-                .position(x: geo.size.width - 3, y: thumbHeight / 2 + progress * maxTravel)
+                .fill(.white.opacity(0.6))
+                .frame(width: 5, height: thumbHeight)
+                .position(x: geo.size.width - 4, y: thumbHeight / 2 + progress * maxTravel)
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
