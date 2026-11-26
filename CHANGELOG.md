@@ -11,6 +11,28 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.10.0 — 2026-11-25
+
+### Added
+
+- **Run up to 5 timers at once.** Pick a length and press play while another timer runs to start a second one. The list on the right shows each with its time left: click one to show it in the ring, or × to remove it (Undo brings it back). Each one rings when it ends, and the closed notch shows the one ending soonest, with +1 or +2 for the rest.
+- **Stopwatch laps.** While the stopwatch runs, the flag button marks a lap. Laps list above the buttons, newest first, and the lap in progress counts live under the time.
+- **Close delay.** Settings → General → Notch behavior has a slider for how long the notch stays open after the cursor leaves, from 0 to 3 seconds.
+
+### Changed
+
+- **Recent timer lengths have their own row**, and every length you start counts, presets included.
+- **One play/pause button and a cancel button** replace play, stop and reset. Cancel removes the selected timer, or sets a paused stopwatch back to zero.
+- **Switching between Timer and Stopwatch no longer resets either one**, so both can run together.
+
+### Fixed
+
+- **The visualizer keeps up when you switch output**, to AirPods or a speaker, or when a device disconnects. It used to go flat until the next song.
+- **Scrolling the clipboard no longer closes the notch**, and its scroll pill shows and can be dragged.
+- **Leaving the expanded clipboard shrinks the notch right away**, and the music player on Home no longer starts oversized and shrinks into place.
+
+---
+
 ## 0.9.4 — 2026-11-25
 
 ### Added

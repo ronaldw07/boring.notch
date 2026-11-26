@@ -53,8 +53,10 @@ action, without opening anything.
   time. Events come from the Mac's
   own accounts (Google, iCloud, Outlook), so nobody signs in to see them,
   and the Google extras are one Sign in with Google click.
-- **A timer that forgives mistakes.** Lengths down to the second, recent
-  lengths one tap away, and undo after an accidental reset.
+- **Timers that keep up.** Run up to 5 countdowns at once, each in its
+  own list with its time left, lengths down to the second, recent lengths
+  one tap away, and undo after an accidental cancel. The stopwatch keeps
+  laps with a live lap time.
 - **Music that shares the space.** Album art, a live visualizer and synced
   lyrics, and it follows Spotify even when a paused browser tab is holding
   macOS's Now Playing. A running timer sits beside the music instead of
@@ -66,7 +68,7 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 27 versions since September 2026, each with a
+- **Small releases, often.** 28 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app
