@@ -68,7 +68,7 @@ action, without opening anything.
 
 ## How it's built and shipped
 
-- **Small releases, often.** 28 versions since September 2026, each with a
+- **Small releases, often.** 29 versions since September 2026, each with a
   plain-language entry in the [changelog](./CHANGELOG.md) that doubles as the
   in-app update note and the website's "What's new".
 - **Updates install themselves.** Signed releases go out through an in-app

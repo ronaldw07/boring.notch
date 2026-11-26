@@ -11,6 +11,22 @@ Newest first. Times are local (PDT).
 
 ---
 
+## 0.10.1 — 2026-11-25
+
+### Changed
+
+- **Defaults for new installs:** the notch closes the moment the cursor leaves (Close delay 0), the camera mirror is on, and the battery indicator is off. Existing settings are kept.
+
+### Fixed
+
+- **Copied passwords are no longer saved.** Clipboard history skips anything a password manager or another app marks as private.
+- **Chora's own icon** shows in Settings and the welcome screen instead of the old boring.notch one.
+- **Spotify album art loads over https**, and the plain-http exception is gone.
+- **Safer shelf zips** for files whose names start with a dash.
+- **Stronger protection for Chora itself:** the app is now built with macOS's hardened runtime, so other programs can't inject code into it and borrow its camera, calendar or audio access.
+
+---
+
 ## 0.10.0 — 2026-11-25
 
 ### Added
